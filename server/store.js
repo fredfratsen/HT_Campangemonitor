@@ -1,13 +1,13 @@
-// Shared app data: a handful of documents, each a flat map key -> value, kept in memory and written to a
-// JSON file (with daily backups, see jsonfile.js). One file is plenty for a team this size.
-import { jsonFile } from './jsonfile.js';
+// Shared app data: a handful of documents, each a flat map key -> value, kept as one JSON document (a file with
+// daily backups, or a Netlify Blob; see jsonfile.js). One document is plenty for a team this size.
 
 export const DOCS = new Set(['campaigns', 'rules', 'trIgnored', 'mktDemo', 'live.links', 'live.fb', 'live.actions', 'live.ignored', 'live.inactive', 'live.mkt', 'assignLog', 'inbox', 'ideas', 'seen', 'meta']);
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
-export function createStore(dir) {
-  const f = jsonFile(dir, 'campagnemonitor', { rev: 0, docs: {} });
-  console.log(f.isNew ? `[store] nieuw databestand: ${f.file}` : `[store] ${f.file} geladen (rev ${f.data.rev})`);
+/** @param docs  document factory from jsonfile.js (files or Netlify Blobs) */
+export function createStore(docs) {
+  const f = docs('campagnemonitor', () => ({ rev: 0, docs: {} }));
+  if (f.file) console.log(f.isNew ? `[store] nieuw databestand: ${f.file}` : `[store] ${f.file} geladen (rev ${f.data.rev})`);
   const state = f.data;
 
   /** Checks the shape of [{ doc, set: {key: value}, del: [key] }]. Throws on bad input. */

@@ -2,52 +2,38 @@
 // is on (required for Dev and Teamlead). Sessions are random ids in an HttpOnly cookie, stored server-side as
 // hashes, so logging out, deactivating an account or resetting a password takes effect immediately.
 // Also serves the one-time link pages: first setup, invites and password resets.
-import { sha256, randomToken, passwordProblem, otpauthUrl } from './crypto.js';
+//
+// Nothing here is kept in server memory between requests (pending logins and failure counters live in the
+// accounts document), so it works the same on one long-running server and on serverless functions.
+import { passwordProblem, otpauthUrl, sha256 } from './crypto.js';
 import { SESSION_DAYS, twoFactorRequired, normEmail, AccountError } from './accounts.js';
-import { loginPage, codePage, enrollPage, recoveryPage, invitePage, resetPage, messagePage, privacyPage } from './pages.js';
+import { loginPage, codePage, enrollPage, recoveryPage, invitePage, resetPage, messagePage, privacyPage, setupInfoPage } from './pages.js';
 
 const SID = 'htcm_sid', PENDING = 'htcm_pending', LEGACY = 'htcm_session';
-const WINDOW = 15 * 60 * 1000, MAX_FAILS = 10, PENDING_MS = 10 * 60 * 1000;
+const PENDING_MAX_AGE = 10 * 60;
 
-export function createAuth({ accounts, audit, secure }) {
+export function createAuth({ accounts, audit, secure, hosting = 'render' }) {
   const cookieAttrs = maxAge => `Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
   const readCookie = (req, name) => {
     const m = (req.headers.cookie || '').split(/;\s*/).find(c => c.startsWith(name + '='));
     return m ? decodeURIComponent(m.slice(name.length + 1)) : '';
   };
   const setCookies = (res, list) => res.setHeader('Set-Cookie', list);
-
-  // Brute-force protection: per IP address and per account, max 10 failures per 15 minutes.
-  const fails = new Map();
-  const blocked = k => { const f = fails.get(k); return f && Date.now() - f.since < WINDOW && f.n >= MAX_FAILS; };
-  const fail = k => {
-    if (fails.size > 5000) for (const [x, f] of fails) if (Date.now() - f.since >= WINDOW) fails.delete(x);
-    const f = fails.get(k);
-    if (!f || Date.now() - f.since >= WINDOW) fails.set(k, { n: 1, since: Date.now() }); else f.n++;
-    return blocked(k);
-  };
   const TOO_MANY = 'Te veel pogingen. Probeer het over een kwartier opnieuw.';
+  const ipKey = req => 'ip:' + req.ip;
 
-  // Between password and two-factor: a short-lived "pending" login, kept in memory.
-  const pending = new Map();
-  function startPending(res, account, stage, extraCookies = []) {
-    for (const [k, p] of pending) if (p.expires < Date.now()) pending.delete(k);
-    const raw = randomToken();
-    pending.set(sha256(raw), { accountId: account.id, stage, expires: Date.now() + PENDING_MS, attempts: 0 });
-    setCookies(res, [...extraCookies, `${PENDING}=${raw}; ${cookieAttrs(PENDING_MS / 1000)}`]);
+  // Between password and two-factor: a short-lived "pending" login.
+  function startPending(res, account, stage) {
+    const raw = accounts.startPending(account, stage);
+    setCookies(res, [`${PENDING}=${raw}; ${cookieAttrs(PENDING_MAX_AGE)}`]);
   }
-  function getPending(req) {
-    const raw = readCookie(req, PENDING), p = raw && pending.get(sha256(raw));
-    if (!p || p.expires < Date.now()) return null;
-    const account = accounts.get(p.accountId);
-    return account && account.status === 'active' ? { ...p, key: sha256(raw), account, ref: p } : null;
-  }
+  const getPending = req => accounts.getPending(readCookie(req, PENDING));
 
-  function finishLogin(req, res, account, { redirect = '/', extra = [] } = {}) {
+  function finishLogin(req, res, account, { redirect = '/' } = {}) {
     const raw = accounts.createSession(account, req.headers['user-agent']);
-    const pk = readCookie(req, PENDING); if (pk) pending.delete(sha256(pk));
+    const pk = readCookie(req, PENDING); if (pk) accounts.dropPending(sha256(pk));
     audit.log('login.ok', { actor: account, ip: req.ip });
-    setCookies(res, [`${SID}=${raw}; ${cookieAttrs(SESSION_DAYS * 86400)}`, `${PENDING}=; ${cookieAttrs(0)}`, `${LEGACY}=; ${cookieAttrs(0)}`, ...extra]);
+    setCookies(res, [`${SID}=${raw}; ${cookieAttrs(SESSION_DAYS * 86400)}`, `${PENDING}=; ${cookieAttrs(0)}`, `${LEGACY}=; ${cookieAttrs(0)}`]);
     if (redirect) res.redirect(redirect);
   }
   /** After a correct password (or a new account): straight in, or on to the two-factor step. */
@@ -78,16 +64,16 @@ export function createAuth({ accounts, audit, secure }) {
     },
     async login(req, res) {
       const email = normEmail(form(req).email), ip = req.ip;
-      if (blocked(ip) || blocked('acct:' + email)) return html(res, 429, loginPage({ error: TOO_MANY, email }));
+      if (accounts.blocked(ipKey(req)) || accounts.blocked('acct:' + email)) return html(res, 429, loginPage({ error: TOO_MANY, email }));
       const account = await accounts.checkPassword(email, String(form(req).password || ''));
       if (!account) {
         const known = accounts.byEmail(email);
         audit.log('login.fail', { target: known || null, ip, details: known ? {} : { reden: 'onbekend e-mailadres' } });
-        if (fail(ip)) audit.log('login.locked', { ip, details: { reden: 'te veel pogingen vanaf dit IP-adres' } });
-        if (known && fail('acct:' + email)) audit.log('login.locked', { target: known, ip, details: { reden: 'te veel pogingen voor dit account' } });
+        if (accounts.failed(ipKey(req))) audit.log('login.locked', { ip, details: { reden: 'te veel pogingen vanaf dit IP-adres' } });
+        if (known && accounts.failed('acct:' + email)) audit.log('login.locked', { target: known, ip, details: { reden: 'te veel pogingen voor dit account' } });
         return html(res, 401, loginPage({ error: 'E-mailadres of wachtwoord klopt niet.', email }));
       }
-      fails.delete('acct:' + email);
+      accounts.clearFails('acct:' + email);
       afterPassword(req, res, account);
     },
 
@@ -99,10 +85,10 @@ export function createAuth({ accounts, audit, secure }) {
     code(req, res) {
       const p = getPending(req);
       if (!p || p.stage !== 'code') return res.redirect('/login');
-      if (blocked(req.ip) || p.ref.attempts >= 5) { pending.delete(p.key); return html(res, 429, loginPage({ error: TOO_MANY })); }
+      if (accounts.blocked(ipKey(req)) || p.attempts >= 5) { accounts.dropPending(p.key); return html(res, 429, loginPage({ error: TOO_MANY })); }
       const kind = accounts.checkSecondFactor(p.account, form(req).code);
       if (!kind) {
-        p.ref.attempts++; fail(req.ip);
+        accounts.pendingAttempt(p.key); accounts.failed(ipKey(req));
         audit.log('login.2fa_fail', { target: p.account, ip: req.ip });
         return html(res, 401, codePage({ error: 'Die code klopt niet. Wacht op de volgende code en probeer het opnieuw.' }));
       }
@@ -123,14 +109,28 @@ export function createAuth({ accounts, audit, secure }) {
       try { codes = accounts.confirmTotp(p.account, form(req).code); }
       catch (e) {
         if (!(e instanceof AccountError)) throw e;
-        p.ref.attempts++;
-        if (p.ref.attempts >= 8) { pending.delete(p.key); return res.redirect('/login'); }
+        accounts.pendingAttempt(p.key);
+        if (p.attempts + 1 >= 8) { accounts.dropPending(p.key); return res.redirect('/login'); }
         const secret = accounts.startTotp(p.account);
         return html(res, 400, enrollPage({ error: e.message, secret, otpauth: otpauthUrl(secret, p.account.email), name: p.account.name }));
       }
       audit.log('2fa.enabled', { actor: p.account });
       finishLogin(req, res, p.account, { redirect: null });
       html(res, 200, recoveryPage({ codes }));
+    },
+
+    /**
+     * /setup without a link: writes a fresh setup link (or, with OWNER_RECOVERY=1, reset links for the Devs)
+     * to the server log, where only whoever runs the hosting can read it.
+     */
+    setupStart(req, res) {
+      const r = accounts.requestOwnerLinks({ recover: process.env.OWNER_RECOVERY === '1' });
+      const base = `${req.protocol}://${req.get('host')}`;
+      for (const x of r.links) {
+        console.log(`[campagnemonitor] ${x.type === 'setup' ? `Setuplink voor ${x.account.name} (1 uur geldig)` : `OWNER_RECOVERY: resetlink voor ${x.account.name} (24 uur geldig, wist ook 2FA)`}: ${base}/${x.type}/${x.raw}`);
+        audit.log(x.type === 'setup' ? 'setup.link_issued' : 'owner.recovery', { target: x.account, ip: req.ip });
+      }
+      html(res, 200, setupInfoPage({ state: r.state, hosting }));
     },
 
     // First setup (setup link) and invites use the same page.
@@ -147,13 +147,13 @@ export function createAuth({ accounts, audit, secure }) {
         if (!p) return html(res, 410, messagePage({ title: 'Link verlopen', text: 'Deze link is verlopen of al gebruikt. Vraag je teamlead om een nieuwe.' }));
         const { email, password, password2 } = form(req);
         const again = error => html(res, 400, invitePage({ error, account: p.account, email, setup: type === 'setup', action: req.originalUrl }));
-        if (blocked(req.ip)) return again(TOO_MANY);
+        if (accounts.blocked(ipKey(req))) return again(TOO_MANY);
         if (password !== password2) return again('De wachtwoorden zijn niet hetzelfde.');
         const problem = passwordProblem(password, email);
         if (problem) return again(problem);
         let account;
         try { account = await accounts.acceptInvite(req.params.token, { email, password }); }
-        catch (e) { if (e instanceof AccountError) { fail(req.ip); return again(e.message); } throw e; }
+        catch (e) { if (e instanceof AccountError) { accounts.failed(ipKey(req)); return again(e.message); } throw e; }
         audit.log('member.joined', { actor: account, ip: req.ip, details: { via: type === 'setup' ? 'setuplink' : 'uitnodiging' } });
         afterPassword(req, res, account);
       };
@@ -181,12 +181,12 @@ export function createAuth({ accounts, audit, secure }) {
     logout(req, res) {
       const s = current(req);
       if (s) { audit.log('logout', { actor: s.account }); accounts.endSession(readCookie(req, SID)); }
-      const pk = readCookie(req, PENDING); if (pk) pending.delete(sha256(pk));
+      const pk = readCookie(req, PENDING); if (pk) accounts.dropPending(sha256(pk));
       setCookies(res, [`${SID}=; ${cookieAttrs(0)}`, `${PENDING}=; ${cookieAttrs(0)}`, `${LEGACY}=; ${cookieAttrs(0)}`]);
       res.redirect('/login');
     },
 
-    privacy(req, res) { html(res, 200, privacyPage({ back: current(req) ? '/' : '/login' })); },
+    privacy(req, res) { html(res, 200, privacyPage({ back: current(req) ? '/' : '/login', hosting })); },
   };
 }
 

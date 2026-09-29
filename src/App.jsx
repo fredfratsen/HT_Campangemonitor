@@ -73,7 +73,7 @@ export default class App extends React.Component {
       onRejected: () => { if (Date.now() - (this._rejAt || 0) > 10000) { this._rejAt = Date.now(); this.flash('Niet opgeslagen: daar heb je geen rechten voor'); } }
     });
     let docs, who;
-    try { docs = await this.sync.start(); if (docs) who = await this.sync.me(); } catch (e) { this.setState({ bootError: 'De server is niet bereikbaar. Probeer het zo opnieuw.' }); return; }
+    try { docs = await this.sync.start(); if (docs) who = await this.sync.me(); } catch (e) { this.setState({ bootError: e.serverMessage || 'De server is niet bereikbaar. Probeer het zo opnieuw.' }); return; }
     if (!docs) return; // redirected to login
     const account = who ? who.account : LOCAL_ACCOUNT, members = who ? who.members : [];
     const va = lsGet(VIEW_AS_KEY, null), viewAs = account.rights.includes('dev') && members.some(m => m.id === va && m.rights) ? va : null;
@@ -954,7 +954,7 @@ export default class App extends React.Component {
         if (!window.confirm('Demo-data en health-regels terugzetten naar de beginstand? Dit geldt voor het hele team.')) return;
         this.setState({ campaigns: build(), rules: { ...DEF_RULES }, form: null, reminded: false }); this.flash('Demo-data hersteld');
       },
-      saveOffline: st.saveState === 'offline',
+      saveOffline: st.saveState === 'offline', isLocal: this.sync.mode === 'local',
       ...this.panelVals(me),
       hasToast: !!st.toast, toast: st.toast
     };
@@ -1027,6 +1027,7 @@ export default class App extends React.Component {
           <Sidebar v={v} />
           <main className="app-main">
             <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
+              {v.isLocal ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', marginBottom: '20px' }}><b>Lokale demo zonder server.</b> Inloggen en rechten staan uit, en wat je invult blijft alleen in deze browser; het team ziet het niet.</div> : null}
               {v.saveOffline ? <div style={{ background: '#FDECEA', color: '#D32F2F', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', fontWeight: 500, marginBottom: '20px' }}>Geen verbinding met de server. Je wijzigingen worden opgeslagen zodra de verbinding terug is; sluit dit tabblad nog niet.</div> : null}
               {v.user.isPreview ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '10px 16px', fontSize: '14px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span>Je bekijkt de app als <b>{v.user.name}</b> ({v.user.roleLabel}). Wat je opslaat, wordt opgeslagen als {v.authorName}.</span>

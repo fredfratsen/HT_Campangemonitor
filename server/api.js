@@ -11,7 +11,7 @@ import { testTrello } from './trello.js';
 
 const MONTH_OPTIONS = [0, 3, 6, 12, 24];
 
-export function apiRouter({ accounts, audit, secrets, store, privacy, trello }) {
+export function apiRouter({ accounts, audit, secrets, store, privacy, trello, pollMs = 15000 }) {
   const api = express.Router();
   const json = express.json({ limit: '100kb' });
   api.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -32,7 +32,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello }) 
   const fileName = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
   // ── App data ─────────────────────────────────────────────────────────
-  api.get('/config', (req, res) => res.json({ trello: !!secrets.get('trello'), auth: true }));
+  api.get('/config', (req, res) => res.json({ trello: !!secrets.get('trello'), auth: true, pollMs }));
   // The Dev also gets everyone's rights, for "Bekijk als".
   api.get('/me', (req, res) => res.json({
     account: accounts.selfView(req.account),
@@ -112,10 +112,10 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello }) 
     audit.log('session.revoke_all', { actor: req.account, target: req.account, details: { aantal: n } });
     res.json({ loggedOut: n });
   });
-  api.get('/me/export', (req, res) => {
+  api.get('/me/export', wrap(async (req, res) => {
     audit.log('privacy.export', { actor: req.account, target: req.account });
-    download(res, `mijn-gegevens-campagnemonitor-${new Date().toISOString().slice(0, 10)}.json`, privacy.exportFor(req.account, req.sessionId));
-  });
+    download(res, `mijn-gegevens-campagnemonitor-${new Date().toISOString().slice(0, 10)}.json`, await privacy.exportFor(req.account, req.sessionId));
+  }));
   api.post('/me/view-as', json, need('dev'), (req, res) => {
     const t = req.body && req.body.id ? accounts.get(req.body.id) : null;
     audit.log('dev.view_as', { actor: req.account, target: t, details: t ? {} : { gestopt: true } });
@@ -213,10 +213,10 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello }) 
   secrets.onChange(name => { if (name === 'trello') trello.clearCache(); });
 
   // ── Audit log ────────────────────────────────────────────────────────
-  api.get('/admin/audit', need('audit.view'), (req, res) => {
+  api.get('/admin/audit', need('audit.view'), wrap(async (req, res) => {
     const q = req.query;
-    res.json({ entries: audit.query({ before: q.before ? Number(q.before) : Infinity, type: String(q.type || ''), person: String(q.person || ''), limit: Math.min(200, Number(q.limit) || 100) }) });
-  });
+    res.json({ entries: await audit.query({ before: q.before ? Number(q.before) : Infinity, type: String(q.type || ''), person: String(q.person || ''), limit: Math.min(200, Number(q.limit) || 100) }) });
+  }));
 
   // ── Privacy ──────────────────────────────────────────────────────────
   const priv = express.Router();
@@ -233,13 +233,13 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello }) 
   priv.get('/export/:id', wrap(async (req, res) => {
     const a = target(req);
     audit.log('privacy.export', { actor: req.account, target: a });
-    download(res, `gegevens-${fileName(a.name)}-${new Date().toISOString().slice(0, 10)}.json`, privacy.exportFor(a));
+    download(res, `gegevens-${fileName(a.name)}-${new Date().toISOString().slice(0, 10)}.json`, await privacy.exportFor(a));
   }));
   priv.post('/anonymise/:id', wrap(async (req, res) => {
     const a = target(req);
     if (a.id === req.account.id) return bad(res, 'Je kunt je eigen account niet anonimiseren.');
     if (a.status !== 'deactivated') return bad(res, 'Deactiveer het account eerst.');
-    const r = privacy.anonymise(req.account, a);
+    const r = await privacy.anonymise(req.account, a);
     res.json({ ok: true, pseudonym: r.pseudonym });
   }));
   api.use('/admin/privacy', priv);

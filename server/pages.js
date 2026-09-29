@@ -129,7 +129,25 @@ export const messagePage = ({ title, text, link = '/login', linkLabel = 'Naar in
 <div><h1>${esc(title)}</h1><p>${esc(text)}</p></div>
 <a class="btn" href="${esc(link)}">${esc(linkLabel)}</a>` });
 
-export const privacyPage = ({ back = '/' } = {}) => page({ title: 'Privacy', wide: true, body: `
+/** Where the app runs, for the privacy notice. */
+const HOSTING = {
+  render: 'De app en de gegevens staan bij Render in Frankfurt (EU).',
+  netlify: 'De app draait bij Netlify. De gegevens staan in Frankfurt (EU); de serverfuncties die ze verwerken draaien in de VS (Ohio), tenzij er een EU-regio is ingesteld.',
+};
+const LOGS = {
+  render: 'Render: open de service en kies Logs.',
+  netlify: 'Netlify: open de site en kies Logs &amp; metrics › Functions › server.',
+};
+
+export const setupInfoPage = ({ state, hosting = 'render' }) => page({ title: 'Account instellen', body: `
+<div><h1>Dev-account instellen</h1>
+${state === 'owner-exists' ? '<p>Er is al een actief Dev-account. Log in met je e-mailadres, of vraag een resetlink aan als je je wachtwoord kwijt bent.</p>'
+  : state === 'throttled' ? `<p>Er is net al een link gemaakt. Die staat in de serverlog. ${LOGS[hosting] || LOGS.render}</p><p>Niet gevonden? Probeer het over een minuut opnieuw.</p>`
+  : `<p>Er staat een nieuwe link in de serverlog, 1 uur geldig. Alleen wie de hosting beheert kan die zien.</p><p>${LOGS[hosting] || LOGS.render}</p>`}
+</div>
+<a class="btn" href="/login">Naar inloggen</a>` });
+
+export const privacyPage = ({ back = '/', hosting = 'render' } = {}) => page({ title: 'Privacy', wide: true, body: `
 <div class="privacy" style="display:flex;flex-direction:column;gap:10px">
   <h1>Privacy in de Campagnemonitor</h1>
   <p class="note" style="margin:0">Concepttekst. Laat deze controleren door wie binnen Horeca Toppers verantwoordelijk is voor privacy, en vul de contactpersoon in.</p>
@@ -155,7 +173,7 @@ export const privacyPage = ({ back = '/' } = {}) => page({ title: 'Privacy', wid
     <li>Na uitdiensttreding wordt je account gedeactiveerd en na de ingestelde termijn geanonimiseerd: je naam wordt overal vervangen door een pseudoniem.</li>
   </ul>
   <h2>Waar?</h2>
-  <p>De app draait bij Render in Frankfurt (EU). Kandidaatgegevens blijven in Trello (Atlassian).</p>
+  <p>${HOSTING[hosting] || HOSTING.render} Kandidaatgegevens blijven in Trello (Atlassian).</p>
   <h2>Je rechten</h2>
   <p>Je kunt je eigen gegevens downloaden onder Instellingen › Mijn account. Voor inzage, correctie of verwijdering kun je terecht bij [contactpersoon privacy, Horeca Toppers].</p>
   <a class="btn" href="${esc(back)}" style="margin-top:12px">Terug</a>

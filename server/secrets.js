@@ -2,7 +2,6 @@
 // through environment variables. Values are encrypted on disk (AES-256-GCM, see crypto.js) and never sent to
 // the browser: the app only sees whether a key is set, its last 4 characters, and who changed it when.
 // Environment variables still work as a fallback, so existing setups keep running.
-import { jsonFile } from './jsonfile.js';
 import { encrypt, decrypt } from './crypto.js';
 
 export const INTEGRATIONS = {
@@ -16,8 +15,9 @@ export const INTEGRATIONS = {
   },
 };
 
-export function createSecrets(dir, key) {
-  const f = jsonFile(dir, 'secrets', { integrations: {} }, { mode: 0o600 });
+/** @param docs  document factory from jsonfile.js (files or Netlify Blobs) */
+export function createSecrets(docs, key) {
+  const f = docs('secrets', () => ({ integrations: {} }), { mode: 0o600 });
   const listeners = new Set();
 
   /** Plain values for server use: stored in the app first, else environment variables. */

@@ -1,8 +1,10 @@
 // Personal accounts: who can log in, with which role and rights, plus their sessions and one-time links
-// (setup, invites, password resets). Stored in DATA_DIR/accounts.json with daily backups. Passwords are scrypt
-// hashes; two-factor secrets are encrypted; sessions and links are stored as SHA-256 hashes, so a copy of the
-// file can't be used to log in.
-import { jsonFile } from './jsonfile.js';
+// (setup, invites, password resets). Stored as the "accounts" document (a JSON file, or a Netlify Blob; see
+// jsonfile.js). Passwords are scrypt hashes; two-factor secrets are encrypted; sessions and links are stored as
+// SHA-256 hashes, so a copy of the data can't be used to log in.
+//
+// Logins that are between the password and the two-factor step, and the failed-attempt counters, are kept here
+// too (not in server memory), so on Netlify any instance can handle the next request.
 import {
   sha256, randomToken, hashPassword, verifyPassword, encrypt, decrypt, newTotpSecret, verifyTotp,
   newRecoveryCodes, normRecovery,
@@ -11,7 +13,7 @@ import { ROLES, levelOf, rightsOf, manageError, overridesFor } from '../src/lib/
 
 export const SESSION_DAYS = 30;
 export const TTL = { invite: 7 * 864e5, reset: 864e5, setup: 36e5 };
-const MAX_SESSIONS = 20;
+const MAX_SESSIONS = 20, PENDING_MS = 10 * 60 * 1000, FAIL_WINDOW = 15 * 60 * 1000, MAX_FAILS = 10;
 
 // The team as it was hard-coded before accounts existed. Same ids, so earlier data ("seen", notifications)
 // stays linked. Everyone starts as "invited": a link from Instellingen › Leden lets them set a password.
@@ -34,15 +36,17 @@ const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 60);
 export class AccountError extends Error {}
 const fail = msg => { throw new AccountError(msg); };
 
-export function createAccounts(dir, secretsKey) {
-  const f = jsonFile(dir, 'accounts', () => {
+/** @param docs  document factory from jsonfile.js (files or Netlify Blobs) */
+export function createAccounts(docs, secretsKey) {
+  const f = docs('accounts', () => {
     const now = Date.now(), accounts = {};
     for (const s of SEED) accounts[s.id] = blank({ ...s, createdAt: now, createdBy: null });
     return { accounts, sessions: {}, tokens: {}, settings: { anonymiseAfterMonths: 12 } };
   }, { mode: 0o600 });
   const db = f.data;
-  if (f.isNew) console.log(`[accounts] nieuw accountbestand met ${SEED.length} teamleden: ${f.file}`);
+  if (f.isNew && f.file) console.log(`[accounts] nieuw accountbestand met ${SEED.length} teamleden: ${f.file}`);
   const save = () => f.save();
+  const bag = k => db[k] || (db[k] = {});
 
   function blank(o) {
     return { id: o.id, name: o.name, email: o.email || null, role: o.role, recName: o.recName || null, grants: [], revokes: [], status: 'invited',
@@ -77,8 +81,10 @@ export function createAccounts(dir, secretsKey) {
   }
 
   // ── One-time links ───────────────────────────────────────────────────
-  function issueToken(type, accountId, createdBy = null) {
-    for (const [h, t] of Object.entries(db.tokens)) if (t.accountId === accountId && t.type === type) delete db.tokens[h];
+  /** A new one-time link. Earlier links of the same type for this account stop working, unless `keep` (max 3). */
+  function issueToken(type, accountId, createdBy = null, { keep = false } = {}) {
+    const same = Object.entries(db.tokens).filter(([, t]) => t.accountId === accountId && t.type === type).sort((a, b) => a[1].createdAt - b[1].createdAt);
+    for (const [h] of keep ? same.slice(0, Math.max(0, same.length - 2)) : same) delete db.tokens[h];
     const raw = randomToken();
     db.tokens[sha256(raw)] = { type, accountId, createdAt: Date.now(), expiresAt: Date.now() + TTL[type], createdBy };
     save();
@@ -114,6 +120,7 @@ export function createAccounts(dir, secretsKey) {
     const a = p.account;
     a.pw = await hashPassword(password); a.pwChangedAt = Date.now();
     if (p.token.clear2fa) a.totp = null;
+    if (a.email) clearFails('acct:' + a.email);
     dropToken(raw); revokeAll(a.id); save();
     return a;
   }
@@ -307,6 +314,37 @@ export function createAccounts(dir, secretsKey) {
     revokeAll(a.id); dropTokensOf(a.id); save();
   }
 
+  // ── Logins between password and two-factor ───────────────────────────
+  function startPending(account, stage) {
+    const raw = randomToken();
+    bag('pending')[sha256(raw)] = { accountId: account.id, stage, expires: Date.now() + PENDING_MS, attempts: 0 };
+    save();
+    return raw;
+  }
+  /** { key, stage, attempts, account } for a valid pending login, else null. */
+  function getPending(raw) {
+    if (!raw) return null;
+    const key = sha256(raw), p = bag('pending')[key];
+    if (!p || p.expires < Date.now()) return null;
+    const account = get(p.accountId);
+    return account && account.status === 'active' ? { key, stage: p.stage, attempts: p.attempts, account } : null;
+  }
+  const pendingAttempt = key => { const p = bag('pending')[key]; if (p) { p.attempts++; save(); } };
+  const dropPending = key => { if (key && bag('pending')[key]) { delete db.pending[key]; save(); } };
+
+  // ── Failed attempts (brute-force protection) ─────────────────────────
+  // Keyed by a hash of "ip:1.2.3.4" or "acct:email", so no IP addresses are stored.
+  const fk = k => sha256('fail:' + k);
+  const blocked = k => { const x = bag('fails')[fk(k)]; return !!x && Date.now() - x.since < FAIL_WINDOW && x.n >= MAX_FAILS; };
+  /** Counts a failure; returns true when this key is now blocked. */
+  function failed(k) {
+    const F = bag('fails'), h = fk(k), x = F[h];
+    if (!x || Date.now() - x.since >= FAIL_WINDOW) F[h] = { n: 1, since: Date.now() }; else x.n++;
+    save();
+    return blocked(k);
+  }
+  const clearFails = k => { const h = fk(k); if (bag('fails')[h]) { delete db.fails[h]; save(); } };
+
   // ── Housekeeping ─────────────────────────────────────────────────────
   /** Names of accounts whose two-factor secret can't be decrypted (SECRETS_KEY changed). */
   const unreadableTotp = () => all().filter(a => a.totp && a.totp.secret && !decrypt(secretsKey, a.totp.secret)).map(a => a.name);
@@ -314,6 +352,8 @@ export function createAccounts(dir, secretsKey) {
     const now = Date.now();
     for (const [h, s] of Object.entries(db.sessions)) if (s.expiresAt < now) delete db.sessions[h];
     for (const [h, t] of Object.entries(db.tokens)) if (t.expiresAt < now) delete db.tokens[h];
+    for (const [h, p] of Object.entries(bag('pending'))) if (p.expires < now) delete db.pending[h];
+    for (const [h, x] of Object.entries(bag('fails'))) if (now - x.since >= FAIL_WINDOW) delete db.fails[h];
     save();
   }
 
@@ -322,10 +362,10 @@ export function createAccounts(dir, secretsKey) {
    * link for the first Dev account (creating one if needed). With `recover`, returns reset links (which also
    * clear two-factor) for the active Devs, for when the owner is locked out.
    */
-  function ownerAccess({ recover = false } = {}) {
+  function ownerAccess({ recover = false, keep = false } = {}) {
     if (recover && activeOwners().length) {
       return activeOwners().map(a => {
-        const raw = issueToken('reset', a.id, null);
+        const raw = issueToken('reset', a.id, null, { keep });
         db.tokens[sha256(raw)].clear2fa = true; save();
         return { account: a, type: 'reset', raw };
       });
@@ -337,7 +377,20 @@ export function createAccounts(dir, secretsKey) {
       if (db.accounts[a.id]) a.id = 'u-dev-' + randomToken(4).toLowerCase();
       db.accounts[a.id] = a;
     }
-    return [{ account: a, type: 'setup', raw: issueToken('setup', a.id, null) }];
+    return [{ account: a, type: 'setup', raw: issueToken('setup', a.id, null, { keep }) }];
+  }
+  /**
+   * The /setup page: makes a setup (or, with OWNER_RECOVERY, reset) link and returns it for the server log.
+   * At most one per minute, so the page can't be used to flood the log or push out a link that was just made.
+   */
+  function requestOwnerLinks({ recover = false } = {}) {
+    const meta = bag('meta'), kind = recover ? 'reset' : 'setup', last = meta.lastOwnerLink || (meta.lastOwnerLink = {});
+    if (!recover && activeOwners().length) return { state: 'owner-exists', links: [] };
+    if (last[kind] && Date.now() - last[kind] < 60000) return { state: 'throttled', links: [] };
+    const links = ownerAccess({ recover, keep: true });
+    if (!links.length) return { state: 'owner-exists', links: [] };
+    last[kind] = Date.now(); save();
+    return { state: 'issued', links };
   }
 
   return {
@@ -347,7 +400,9 @@ export function createAccounts(dir, secretsKey) {
     hasTotp, startTotp, confirmTotp, checkSecondFactor, newRecovery, disableTotp,
     createSession, sessionFor, endSession, revokeAll, sessionsOf,
     invite, update, setStatus, removeInvited, linkFor, resetTwoFactor, anonymise,
-    cleanup, ownerAccess, unreadableTotp,
+    startPending, getPending, pendingAttempt, dropPending, blocked, failed, clearFails,
+    cleanup, ownerAccess, requestOwnerLinks, unreadableTotp,
+    get meta() { return bag('meta'); },
     get settings() { return db.settings; },
     saveSettings(s) { Object.assign(db.settings, s); save(); },
     flush: f.flush,

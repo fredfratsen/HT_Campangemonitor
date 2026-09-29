@@ -79,9 +79,10 @@ export const normRecovery = s => String(s || '').toLowerCase().replace(/[^a-z0-9
  * the data folder (fine for development; in production set SECRETS_KEY so the key isn't stored next to the data).
  * When both exist, the file key stays usable for decrypting, so setting SECRETS_KEY later doesn't lock anything.
  */
+export const deriveKey = raw => crypto.createHash('sha256').update('htcm-secrets-v1:' + raw).digest();
 export function loadSecretsKey(dataDir, prod) {
   const f = path.join(dataDir, '.secrets-key');
-  const derive = raw => crypto.createHash('sha256').update('htcm-secrets-v1:' + raw).digest();
+  const derive = deriveKey;
   const fileKey = () => fs.existsSync(f) ? derive(fs.readFileSync(f, 'utf8').trim()) : null;
   if (process.env.SECRETS_KEY) return [derive(process.env.SECRETS_KEY), fileKey()].filter(Boolean);
   if (!fs.existsSync(f)) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(f, crypto.randomBytes(32).toString('hex'), { mode: 0o600 }); }

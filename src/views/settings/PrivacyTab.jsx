@@ -51,7 +51,7 @@ export default function PrivacyTab({ s }) {
         <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '14px', lineHeight: 1.5 }}>
           <li>De <a href="/privacy">privacytekst</a> laten controleren en de contactpersoon invullen (in <code>server/pages.js</code>).</li>
           <li>De Campagnemonitor opnemen in het verwerkingsregister van Horeca Toppers.</li>
-          <li>Verwerkersovereenkomsten met Render (hosting, Frankfurt) en Atlassian (Trello).</li>
+          <li>Verwerkersovereenkomsten met de hostingpartij (Render of Netlify) en Atlassian (Trello).</li>
         </ul>
       </Section>
       <Err>{a.error}</Err>

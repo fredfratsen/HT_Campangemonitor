@@ -147,8 +147,9 @@ variable afterwards.
 
 - **Frontend:** React 18, built with Vite
 - **Server:** Express 5 on Node.js 20+, only built-in crypto (scrypt, AES-GCM, TOTP)
-- **Storage:** JSON files on disk (no database)
-- **Hosting:** Render, set up by the Blueprint in `render.yaml`
+- **Storage:** JSON documents: files on disk (Render, local), or Netlify Blobs (Netlify). No database.
+- **Hosting:** Render (`render.yaml`) or Netlify (`netlify.toml`). The same server code runs on both; see
+  [Deploy to Render](#deploy-to-render) and [Deploy to Netlify](#deploy-to-netlify).
 
 ## Getting started
 
@@ -176,7 +177,7 @@ NODE_ENV=production SECRETS_KEY=something-long-and-random npm start   # http://l
 | `npm run build` | Builds the frontend into `dist/` |
 | `npm start` | Starts the server, which serves `dist/` and the API |
 | `npm run preview` | Build, then start |
-| `npm test` | Rights, crypto and an end-to-end test of login, invites, reset, lockout and recovery |
+| `npm test` | Rights, crypto, and an end-to-end test of login, invites, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
 
 ## Configuration
 
@@ -185,12 +186,12 @@ shell or in Render's **Environment** tab. `.env.example` lists them all.
 
 | Variable | Needed | What it does |
 |---|---|---|
-| `SECRETS_KEY` | yes, in production | Encrypts stored API keys and two-factor secrets. Render generates it. Without it, a key file is created in the data folder. **Don't change it** once set: stored keys and two-factor would have to be set up again. |
+| `SECRETS_KEY` | yes, in production; always on Netlify | Encrypts stored API keys and two-factor secrets. Render generates it; on Netlify you set it yourself. Locally, without it, a key file is created in the data folder. **Don't change it** once set: stored keys and two-factor would have to be set up again. |
 | `DATA_DIR` | yes, on Render | Folder for the data files. Default `./data`; on Render `/var/data` (the persistent disk). |
 | `NODE_ENV` | in production | Set to `production` for secure (HTTPS-only) cookies. |
 | `APP_URL` | no | Base URL for the setup and recovery links printed at startup. Default: Render's `RENDER_EXTERNAL_URL`, else `http://localhost:PORT` (`npm run dev` sets `http://localhost:5173`). |
 | `TRELLO_KEY`, `TRELLO_TOKEN` | no | Fallback for the Trello keys when none are stored under Instellingen › Integraties. |
-| `OWNER_RECOVERY` | only when locked out | `1` prints reset links for the Dev accounts at startup. See [First start](#first-start-the-dev-account). |
+| `OWNER_RECOVERY` | only when locked out | `1` prints reset links for the Dev accounts at startup (on Netlify: when you open `/setup`). See [First start](#first-start-the-dev-account). |
 | `PORT` | no | Default `3000`. Render sets it automatically. |
 
 `APP_PASSWORD` and `SESSION_SECRET` are no longer used and can be removed.
@@ -207,15 +208,55 @@ The Blueprint uses the **Starter** plan with a 1 GB persistent disk (about $7/mo
 region. The disk is what keeps the team's data: on the free plan, the data would be wiped on every deploy or
 restart. Every push to the main branch deploys automatically.
 
-**Moving an existing deployment from the team password:**
+**Moving an existing Render deployment from the team password:**
 
 1. Check that `SECRETS_KEY` exists in the Environment tab. A Blueprint sync adds it; otherwise add a long random
    value yourself.
 2. Deploy. The team password stops working right away.
 3. Take the setup link from the logs, set up the Dev account, and send everyone their invite link.
 
+## Deploy to Netlify
+
+Netlify only serves static files, so the server runs as a Netlify Function (`netlify/functions/server.mjs`,
+built from `server/netlify.js`), and the data lives in **Netlify Blobs** instead of files. `netlify.toml` sets up
+the build, the function and the security headers.
+
+1. In Netlify, open the site and go to **Site configuration › Environment variables**. Add `SECRETS_KEY` with
+   a long random value, for example the output of `openssl rand -hex 32`. Keep it somewhere safe and **don't change
+   it** later. Without it, the login pages show what's missing.
+2. Deploy: push to GitHub, or use **Deploys › Trigger deploy** (a new environment variable needs a new deploy).
+3. Open `https://<your-site>/setup`. The setup link is then written to the function log: **Logs & metrics ›
+   Functions › server** (valid 1 hour; open the log first if it only shows new lines). Set up the Dev account and
+   two-factor.
+4. Invite the team from Instellingen › Leden, and set the Trello keys under Instellingen › Integraties.
+
+How it works:
+
+- **Data location:** Blobs are stored in Frankfurt (`eu-central-1`). On Netlify's free plan the function itself
+  runs in the US (Ohio); on a Pro plan you can set the functions region to Frankfurt (Site configuration ›
+  Functions › Region). The privacy page says this; arrange a data processing agreement with Netlify.
+- **Every request** loads the data fresh from Blobs and saves changed documents only if nobody else changed them
+  in the meantime. Otherwise it reruns on the fresh data, so simultaneous saves never overwrite each other.
+  Login steps, lockouts and one-time links are stored the same way, so any function instance can continue them.
+- **Housekeeping** (expired sessions, automatic anonymisation, old audit months, a daily backup copy under
+  `backups/` in the store, last 14 days) runs on the first request after an hour, since functions have no timers.
+- **Polling:** the app checks for other people's changes every 60 seconds instead of 15, to stay within the free
+  plan's credits.
+- **Separate data:** Netlify and Render each have their own data; nothing is copied between them, or from your
+  local `./data`.
+
+To try the Netlify setup locally (after `npm run build`):
+
+```bash
+SECRETS_KEY=dev PORT=8888 BLOB_FILE=/tmp/htcm-blobs.json node test/netlify-harness.js
+```
+
+Then open <http://localhost:8888/setup>; the link appears in that terminal.
+
 ## How data works
 
+- On Render and locally, everything is in files in `DATA_DIR`, described below. On Netlify, the same documents
+  are blobs in the `campagnemonitor` store (see [Deploy to Netlify](#deploy-to-netlify)).
 - Shared data (campaigns, feedback, rules, assignments, notifications, ideas) lives on the server in
   `DATA_DIR/campagnemonitor.json`.
 - Accounts, sessions and one-time links live in `DATA_DIR/accounts.json`. Passwords are scrypt hashes; sessions and
@@ -261,14 +302,16 @@ seconds. That way, when several people open the app at once, they share a single
   An email service (for example Brevo, EU-based) can be added as an integration.
 - **Everyone with campaign access sees all clients.** Access per client (like Trello board membership) and guest
   accounts are planned for later.
-- **One instance only.** Data is held in memory and written to files, so don't scale the service to more than one
-  instance.
+- **One instance only on Render.** There, data is held in memory and written to files, so don't scale the service
+  to more than one instance. (The Netlify function is built for many instances.)
 
 ## Project layout
 
 ```
 server/
-  index.js        Express app: security headers, routes, startup (setup link), hourly housekeeping
+  app.js          the Express app: security headers, routes, all parts wired together
+  index.js        long-running server (Render, local): files, startup setup link, hourly housekeeping
+  netlify.js      Netlify Function: Blobs, load → handle → conditional save → rerun on conflict
   auth.js         login, two-factor, sessions, setup/invite/reset pages
   accounts.js     accounts, sessions, one-time links, two-factor (DATA_DIR/accounts.json)
   authorize.js    which right each change to the shared data needs
@@ -279,14 +322,15 @@ server/
   privacy.js      data export and anonymisation
   crypto.js       scrypt, TOTP, AES-GCM helpers
   pages.js        server-rendered pages (login, 2FA, invite, reset, privacy)
-  jsonfile.js     JSON file with daily backups
+  jsonfile.js     document storage: files with daily backups, or Netlify Blobs with conditional writes
   trello.js       read-only Trello proxy with fixed fields and a short cache
 src/
   App.jsx         app logic (from the design); renderVals() feeds the views
   views/          one component per screen; views/settings/ holds Instellingen
   lib/            rights (permissions.js), week math, demo data, health rules, sync with the server
   styles/         design tokens, app styles, fonts
-test/             node:test suites (npm test)
+netlify/functions/server.mjs   the Netlify Function (routes its paths to server/netlify.js)
+test/             node:test suites (npm test), a fake Blobs store and a local Netlify harness
 public/           logo, favicon, self-hosted fonts
 scripts/dev.js    runs the API server and Vite together
 render.yaml       Render Blueprint
@@ -299,6 +343,7 @@ Campagnemonitor.html   original Claude Design export (reference only)
 |---|---|---|
 | GET | `/healthz` | Health check (no login needed) |
 | GET, POST | `/login`, `/login/code`, `/login/2fa-instellen` | Login, two-factor code, two-factor setup |
+| GET | `/setup` | Writes a new setup link (or with `OWNER_RECOVERY=1` reset links) to the server log, at most once a minute |
 | GET, POST | `/setup/:token`, `/invite/:token`, `/reset/:token` | One-time links |
 | POST | `/logout` | Log out |
 | GET | `/privacy` | Privacy notice (no login needed) |

@@ -32,7 +32,17 @@
       "Bash(SP=__TRACKED_VAR__ node e2e.mjs)",
       "Bash(/private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/restart.sh)",
       "Bash(sed -i '' 's/'\\\\''robbin zijn wachtwoord'\\\\''/'\\\\''de teamlead zijn wachtwoord'\\\\''/g' /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/e2e.mjs)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(node /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/casecheck.cjs /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/clean)",
+      "WebFetch(domain:www.netlify.com)",
+      "Bash(awk '{print $2, $11, $12, $13, $14}')",
+      "Bash(ps -o pid,ppid,etime,command -p 60219)",
+      "Bash(ps -o pid,ppid,etime,command -p 60204)",
+      "Bash(node --test --test-name-pattern=\"netlify\" test/server.test.js)",
+      "Bash(node --test test/netlify.test.js)",
+      "Bash(grep -E \"^esbuild$|rolldown\")",
+      "Bash(sed -i '' 's#  external_node_modules = \\\\[\"express\"\\\\]#  external_node_modules = [\"express\", \"serverless-http\", \"qrcode-generator\", \"@netlify/blobs\"]#' netlify.toml)",
+      "Bash(npx --yes esbuild@0.25.10 netlify/functions/server.mjs --bundle --platform=node --format=esm --target=node20 --external:express --external:serverless-http --external:qrcode-generator --external:@netlify/blobs --outfile=.bundle-check/server.mjs)"
     ]
   }
 }

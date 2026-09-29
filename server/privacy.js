@@ -6,7 +6,7 @@ const eq = (names, v) => typeof v === 'string' && names.has(v);
 
 export function createPrivacy({ accounts, store, audit }) {
   /** Everything about one account, as a JSON-able object. */
-  function exportFor(a, currentSessionId = null) {
+  async function exportFor(a, currentSessionId = null) {
     const names = new Set([a.name, a.recName].filter(Boolean)), D = store.docs;
     const camps = Object.values(D.campaigns || {}), links = D['live.links'] || {}, fb = D['live.fb'] || {};
     const label = c => `${c.client} – ${c.vac}`;
@@ -38,7 +38,7 @@ export function createPrivacy({ accounts, store, audit }) {
       toewijzingen: Object.values(D.assignLog || {}).filter(e => eq(names, e.to) || eq(names, e.from) || eq(names, e.by)),
       ideeen: Object.values(D.ideas || {}).filter(i => eq(names, i.by)),
       stemmen: Object.values(D.ideas || {}).filter(i => (i.voters || []).some(v => eq(names, v))).map(i => ({ id: i.id, tekst: i.text })),
-      auditlog: audit.query({ person: a.id, limit: 5000 }),
+      auditlog: await audit.query({ person: a.id, limit: 5000 }),
     };
   }
 
@@ -50,7 +50,7 @@ export function createPrivacy({ accounts, store, audit }) {
       + Object.values(D['live.links'] || {}).filter(l => !inactive[l.boardId] && eq(names, l.rec)).length;
   }
 
-  function anonymise(actor, a) {
+  async function anonymise(actor, a) {
     if (a.status !== 'deactivated') throw new Error('Deactiveer het account eerst.');
     const n = accounts.all().filter(x => x.status === 'anonymised').length + 1;
     let pseudonym = `Oud-teamlid ${n}`;
@@ -71,17 +71,17 @@ export function createPrivacy({ accounts, store, audit }) {
     });
     const oldName = a.name;
     accounts.anonymise(a, pseudonym);
-    audit.rename(a.id, pseudonym);
+    await audit.rename(a.id, pseudonym);
     audit.log('member.anonymised', { actor, target: a, details: actor ? {} : { automatisch: true } });
     return { pseudonym, oldName };
   }
 
   /** Anonymises accounts that have been deactivated longer than the retention setting. */
-  function autoAnonymise() {
+  async function autoAnonymise() {
     const months = accounts.settings.anonymiseAfterMonths;
     if (!months) return;
     const cut = Date.now() - months * 30.44 * 864e5;
-    for (const a of accounts.all()) if (a.status === 'deactivated' && a.deactivatedAt && a.deactivatedAt < cut) anonymise(null, a);
+    for (const a of accounts.all()) if (a.status === 'deactivated' && a.deactivatedAt && a.deactivatedAt < cut) await anonymise(null, a);
   }
 
   return { exportFor, openWork, anonymise, autoAnonymise };

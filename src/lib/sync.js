@@ -8,6 +8,7 @@
 // `rejected`: those keys are not sent again this session, and the server's version is loaded instead.
 //
 // Without a server (e.g. the built files opened as a static site) it falls back to this browser's localStorage.
+// A server that is there but fails (5xx) is an error, not a reason to fall back.
 import { DEF_RULES } from './constants.js';
 import { lsGet, lsSet } from './helpers.js';
 
@@ -92,7 +93,11 @@ export class Sync {
       body: body ? JSON.stringify(body) : undefined,
     });
     if (r.status === 401) throw new AuthLost();
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      const err = new Error(d.message || 'HTTP ' + r.status); err.status = r.status; err.serverMessage = d.message || '';
+      throw err;
+    }
     return r.json();
   }
 
@@ -112,6 +117,7 @@ export class Sync {
       this.mode = 'server';
     } catch (e) {
       if (e instanceof AuthLost) { this.authLost(); return null; }
+      if (e.status >= 500) throw e;
       this.mode = 'local';
     }
     let docs;
@@ -130,7 +136,7 @@ export class Sync {
     this.ready = true;
     this.changed();
     if (this.mode !== 'server') return;
-    this.timer = setInterval(() => { if (!document.hidden) this.pull(); }, POLL_MS);
+    this.timer = setInterval(() => { if (!document.hidden) this.pull(); }, this.config.pollMs || POLL_MS);
     this.onVisible = () => { if (!document.hidden) this.pull(); };
     document.addEventListener('visibilitychange', this.onVisible);
     window.addEventListener('focus', this.onVisible);
