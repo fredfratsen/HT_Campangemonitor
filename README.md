@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Campagnemonitor · Horeca Toppers
 
 An internal web app for the Horeca Toppers recruitment team. It puts weekly campaign feedback, campaign health,
@@ -180,3 +181,6 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | GET | `/api/state?rev=` | All shared data, or `unchanged` if `rev` is current |
 | POST | `/api/state/patch` | Apply changes: `{ patches: [{ doc, set, del }] }` |
 | GET | `/api/trello/…` | Read-only Trello proxy (`members/me`, `members/me/boards`, `boards/:id`) |
+=======
+# HT_Campangemonitor
+>>>>>>> 0bc42ec3ed5939b3a83aa0abc6f77cdb952fd750
