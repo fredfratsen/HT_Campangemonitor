@@ -1,0 +1,35 @@
+/* App-level styles from the design export, plus layout classes so the shell can adapt on small screens. */
+body{margin:0;background:#FDFBF8;color:#1D1D1B;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#1B1B63;text-decoration:none}
+a:hover{color:#E09000}
+textarea,input,select,button{font-family:inherit;color:inherit}
+textarea:focus,input:focus,select:focus{outline:2px solid rgba(27,27,99,.3);outline-offset:0;border-color:#1B1B63}
+button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
+
+/* Hover states (the design's style-hover; !important because the base styles are inline) */
+.hov-lift:hover{box-shadow:0 4px 16px rgba(29,29,27,.12) !important}
+.hov-row:hover{background:#FDFBF8 !important}
+
+/* Shell */
+.app-shell{display:grid;grid-template-columns:228px minmax(0,1fr);min-height:100vh}
+.app-aside{position:sticky;top:0;height:100vh;overflow-y:auto;background:#FFFFFF;border-right:1px solid #E4E1DE;display:flex;flex-direction:column;gap:28px;padding:24px 14px}
+.app-nav{display:flex;flex-direction:column;gap:2px}
+.app-aside-foot{margin-top:auto;display:flex;flex-direction:column;gap:14px;padding:0 12px}
+.app-main{padding:32px 40px 80px;min-width:0}
+.link-btn{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:500;color:#1B1B63;cursor:pointer;text-align:left}
+.link-btn:hover{color:#E09000}
+
+.boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#5C5C5A;font-size:14px}
+.boot img{height:34px}
+
+@media (max-width: 900px){
+  .app-shell{grid-template-columns:minmax(0,1fr)}
+  .app-aside{position:static;height:auto;overflow:visible;border-right:0;border-bottom:1px solid #E4E1DE;gap:14px;padding:16px}
+  .app-nav{flex-direction:row;flex-wrap:wrap;gap:4px}
+  .app-nav > div:first-child{flex-basis:100%;padding-bottom:2px !important}
+  .app-aside-foot{margin-top:0;padding:0 4px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));align-items:start}
+  .app-main{padding:24px 16px 64px}
+  .span-2{grid-column:auto !important}
+  h1{font-size:32px !important}
+}

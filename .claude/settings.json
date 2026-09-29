@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node poll.mjs)",
+      "Bash(sed -e \"s#const errors = \\\\[\\\\];#const errors = []; let LOG = false;#\" -e \"s#page.on\\('pageerror'#page.on\\('request', r => { if \\(LOG \\\\&\\\\& r.url\\(\\).includes\\('/api/'\\)\\) console.log\\('[' + name + '] ' + r.method\\(\\) + ' ' + r.url\\(\\).replace\\(BASE, ''\\) + ' ' + \\(r.postData\\(\\) || ''\\).slice\\(0, 160\\)\\); }\\); page.on\\('pageerror'#\" -e \"s#await firstNum.fill\\('5'\\);#LOG = true; await firstNum.fill\\('5'\\);#\" e2e.mjs)",
+      "Bash(OUT=../shots2 node e2e-log.mjs)",
+      "Bash(OUT=../shots node e2e-log.mjs)",
+      "Bash(node orig.mjs)",
+      "Bash(curl -s -o /dev/null -w \"app: %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s -w \"  api: %{http_code}\\\\n\" http://localhost:5173/api/config)",
+      "Bash(lsof -nP -iTCP:3000 -sTCP:LISTEN)",
+      "Bash(lsof -nP -iTCP:5173 -sTCP:LISTEN)",
+      "Read(//Users/tsjerk/**)",
+      "Bash(PORT=3000 node server/index.js)",
+      "Bash(curl -s -o /dev/null -w \"localhost:3000 -> %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(curl -s -w \"  \\(api %{http_code}\\)\\\\n\" http://localhost:3000/api/config)",
+      "Bash(awk '{print \"port 3000 still served by PID\", $2}')",
+      "Bash(git -C . log --oneline -3)",
+      "Bash(head -20 ~/README.md; echo \"--- mail grep ---\"; grep -rn -i \"mail\\\\|herinnering\" src server --include=*.js --include=*.jsx | head -10)",
+      "Bash(grep -n -o -E \"remind[A-Za-z]*|Bijsturing[^<'\\\\\"]*|Kwaliteit[^<'\\\\\"]{0,40}|placeholder=\\\\\"[^\\\\\"]*\\\\\"|>[A-Z][a-z][^<{]{6,60}<\" src/views/CheckinView.jsx src/views/WeekView.jsx src/views/DetailView.jsx)"
+    ]
+  }
+}

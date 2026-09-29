@@ -1,0 +1,206 @@
+/**
+ * Horeca Toppers — Design Tokens (overgenomen uit het design-export)
+ * Colors & Typography CSS Custom Properties
+ *
+ * Fonts: Poppins (Medium, SemiBold, Bold) + Inter (Regular–SemiBold), lokaal gehost in /public/fonts.
+ */
+
+:root {
+  /* ─── Brand Colors ─── */
+  /* Primary gradient: yellow → orange (the logo mark) */
+  --color-primary-start: #F9CE00;   /* exact from SVG: gradient start (golden yellow) */
+  --color-primary-end:   #FB8915;   /* exact from SVG: gradient end (warm orange) */
+  --color-primary:       #F9A800;   /* solid midpoint; fallback for gradient */
+  --color-primary-dark:  #E09000;   /* hover/pressed state */
+  --color-primary-light: #FFF8E0;   /* tint; alert backgrounds */
+  --color-primary-gradient: linear-gradient(135deg, #F9CE00 0%, #FB8915 100%);
+
+  /* Accent: deep navy blue (wordmark color) */
+  --color-accent:        #1B1B63;   /* exact navy from logo wordmark */
+  --color-accent-dark:   #12124A;   /* darker navy; hover */
+  --color-accent-light:  #E7E7F0;   /* tint */
+
+  /* ─── Neutrals ─── */
+  --color-dark:          #1D1D1B;   /* near-black (from PDF swatch) */
+  --color-dark-80:       #3C3C3A;   /* secondary text */
+  --color-dark-60:       #5C5C5A;   /* tertiary text */
+  --color-dark-40:       #8C8C8A;   /* placeholder text */
+  --color-dark-20:       #C0BDB9;   /* disabled */
+  --color-dark-10:       #E4E1DE;   /* dividers */
+
+  --color-mid:           #F5F2ED;   /* warm off-white; section bg */
+  --color-light:         #FDFBF8;   /* page background */
+  --color-white:         #FFFFFF;
+
+  /* ─── Semantic Colors ─── */
+  --color-bg:            var(--color-white);
+  --color-bg-subtle:     var(--color-mid);
+  --color-bg-dark:       var(--color-accent);
+  --color-fg:            var(--color-dark);
+  --color-fg-muted:      var(--color-dark-60);
+  --color-fg-faint:      var(--color-dark-40);
+  --color-border:        var(--color-dark-10);
+  --color-border-strong: var(--color-dark-20);
+  --color-link:          var(--color-accent);
+  --color-focus-ring:    rgba(27, 27, 99, 0.3);
+
+  /* Status */
+  --color-success:       #1A7A4A;
+  --color-success-bg:    #E6F4ED;
+  --color-warning:       #B45309;
+  --color-warning-bg:    #FEF3C7;
+  --color-error:         #D32F2F;
+  --color-error-bg:      #FDECEA;
+
+  /* ─── Typography ─── */
+  --font-display:  'Poppins', system-ui, sans-serif;
+  --font-body:     'Inter', system-ui, sans-serif;
+
+  /* Weights */
+  --fw-regular:    400; /* @kind font */
+  --fw-medium:     500; /* @kind font */
+  --fw-semibold:   600; /* @kind font */
+  --fw-bold:       700; /* @kind font */
+
+  /* Scale — Desktop */
+  --text-hero:     clamp(2.5rem, 5vw, 4rem);      /* ~64px max */
+  --text-h1:       clamp(2rem, 3.5vw, 3.5rem);    /* ~56px max */
+  --text-h2:       clamp(1.5rem, 2.5vw, 2.5rem);  /* ~40px max */
+  --text-h3:       clamp(1.2rem, 2vw, 1.75rem);   /* ~28px max */
+  --text-h4:       1.25rem;   /* 20px */
+  --text-body-lg:  1.125rem;  /* 18px */
+  --text-body:     1rem;      /* 16px */
+  --text-sm:       0.875rem;  /* 14px */
+  --text-xs:       0.75rem;   /* 12px */
+
+  /* Line heights */
+  --lh-tight:      1.1; /* @kind other */
+  --lh-snug:       1.2; /* @kind other */
+  --lh-normal:     1.4; /* @kind other */
+  --lh-relaxed:    1.6; /* @kind other */
+  --lh-loose:      1.8; /* @kind other */
+
+  /* Letter spacing */
+  --ls-tight:      -0.02em; /* @kind other */
+  --ls-normal:     0; /* @kind other */
+  --ls-wide:       0.04em; /* @kind other */
+  --ls-wider:      0.08em; /* @kind other */
+
+  /* ─── Spacing ─── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* ─── Border Radius ─── */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  24px;
+  --radius-pill: 999px;
+
+  /* ─── Shadows ─── */
+  --shadow-xs:  0 1px 2px rgba(29, 29, 27, 0.05);
+  --shadow-sm:  0 1px 4px rgba(29, 29, 27, 0.07);
+  --shadow-md:  0 2px 8px rgba(29, 29, 27, 0.09);
+  --shadow-lg:  0 4px 16px rgba(29, 29, 27, 0.12);
+  --shadow-xl:  0 8px 32px rgba(29, 29, 27, 0.15);
+
+  /* ─── Transitions ─── */
+  --transition-fast:   150ms cubic-bezier(0.25, 0.1, 0.25, 1); /* @kind other */
+  --transition-normal: 220ms cubic-bezier(0.25, 0.1, 0.25, 1); /* @kind other */
+  --transition-slow:   350ms cubic-bezier(0.25, 0.1, 0.25, 1); /* @kind other */
+
+  /* ─── Layout ─── */
+  --max-width:      1240px;
+  --content-width:  780px;
+  --gutter:         var(--space-6);
+}
+
+/* ─── Base Semantic Styles ─── */
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--color-fg);
+}
+
+h2, .h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--ls-tight);
+  color: var(--color-fg);
+}
+
+h3, .h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-normal);
+  color: var(--color-fg);
+}
+
+h4, .h4 {
+  font-family: var(--font-display);
+  font-size: var(--text-h4);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-normal);
+  color: var(--color-fg);
+}
+
+p, .body {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-relaxed);
+  color: var(--color-fg);
+}
+
+.body-lg {
+  font-size: var(--text-body-lg);
+  line-height: var(--lh-relaxed);
+}
+
+small, .text-sm {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: var(--lh-normal);
+}
+
+.label, .caption {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--color-fg-muted);
+}
+
+a {
+  color: var(--color-link);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover { color: var(--color-primary-dark); }
+
+code, .mono {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.9em;
+  background: var(--color-mid);
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-sm);
+}

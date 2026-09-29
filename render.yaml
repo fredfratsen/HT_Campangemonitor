@@ -1,0 +1,31 @@
+# Render Blueprint: New > Blueprint in the Render dashboard, then pick this repository.
+# The persistent disk keeps the team's data across deploys and restarts; it requires a paid instance (Starter).
+services:
+  - type: web
+    name: ht-campagnemonitor
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: APP_PASSWORD
+        sync: false
+      - key: TRELLO_KEY
+        sync: false
+      - key: TRELLO_TOKEN
+        sync: false
