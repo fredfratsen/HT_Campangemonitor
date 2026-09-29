@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../components/Button.jsx';
 
 export default function WeekView({ v }) {
-  const { emptyHint, goCampaigns, goTrello, groups, isLead, liveEmpty, remind, remindLabel, sum, wk } = v;
+  const { canLinkTrello, canRemind, emptyHint, goCampaigns, goTrello, groups, liveEmpty, remind, remindLabel, sum, wk } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '36px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
@@ -42,7 +42,7 @@ export default function WeekView({ v }) {
                   <span style={{ color: '#1D1D1B' }}>{m.client} – {m.vac}</span>
                   <span style={{ color: '#8C8C8A', flex: 'none' }}>{m.rec}</span>
                 </button>)}
-              <button onClick={remind} style={{ marginTop: '6px', alignSelf: 'flex-start', border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>{remindLabel}</button>
+              {canRemind ? <button onClick={remind} style={{ marginTop: '6px', alignSelf: 'flex-start', border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>{remindLabel}</button> : null}
             </div> : null}
         </div>
       </div>
@@ -51,7 +51,7 @@ export default function WeekView({ v }) {
             <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px' }}>Nog geen campagnes gekoppeld</div>
             <div style={{ fontSize: '14px', color: '#5C5C5A' }}>{emptyHint}</div>
           </div>
-          {isLead ? <Button variant="primary" onClick={goTrello}>Naar Klanten uit Trello</Button> : null}
+          {canLinkTrello ? <Button variant="primary" onClick={goTrello}>Naar Klanten uit Trello</Button> : null}
         </div> : null}
       {groups.map((g, i) => <section key={i} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>

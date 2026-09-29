@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../components/Button.jsx';
 
 export default function SidePanel({ v }) {
-  const { closePanel, idea, inbox, isIdea, isInbox, isNews, news, panelTitle, setIdeaText, submitIdea, user } = v;
+  const { authorName, closePanel, idea, inbox, isIdea, isInbox, isNews, news, panelTitle, setIdeaText, submitIdea, user } = v;
   return (
     <>
       <div onClick={closePanel} style={{ position: 'fixed', inset: '0', background: 'rgba(29,29,27,.12)', zIndex: '20' }} />
@@ -45,7 +45,7 @@ export default function SidePanel({ v }) {
                 </div>
                 <textarea value={idea.text ?? ''} onChange={setIdeaText} rows="4" placeholder={idea.placeholder} style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', lineHeight: '1.5', resize: 'vertical', background: '#FFFFFF' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Scherm: {idea.page} · door {user.name}</span>
+                  <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Scherm: {idea.page} · door {authorName}</span>
                   <Button variant="primary" size="sm" onClick={submitIdea}>Versturen</Button>
                 </div>
               </div>

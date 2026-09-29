@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../components/Button.jsx';
 
 export default function TrelloView({ v }) {
-  const { goTrelloTest, syncDot, tr } = v;
+  const { goTrelloTest, recNames, syncDot, tr } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
@@ -59,10 +59,7 @@ export default function TrelloView({ v }) {
                     <input value={l.vac ?? ''} onChange={l.setVac} placeholder="Functie" style={{ width: '140px', height: '34px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '13px' }} />
                     <select value={l.sel ?? ''} onChange={l.setRec} style={{ height: '34px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
                       <option value="">Kies recruiter</option>
-                      <option value="Robin">Robin</option>
-                      <option value="Tsjerk">Tsjerk</option>
-                      <option value="Kim">Kim</option>
-                      <option value="Juul">Juul</option>
+                      {recNames.map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                     <Button variant="accent" size="sm" onClick={l.link}>Koppelen</Button>
                     {l.showIgnore ? <button onClick={l.ignore} style={{ border: '0', background: 'none', padding: '0 4px', fontSize: '13px', color: '#5C5C5A', cursor: 'pointer' }}>Geen functie</button> : null}

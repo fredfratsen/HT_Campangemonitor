@@ -1,14 +1,7 @@
-// Team, statuses, rules and copy that the whole app shares.
+// Statuses, rules and copy that the whole app shares. The team itself lives in the accounts (server/accounts.js).
 
-export const RECS = ['Robin', 'Tsjerk', 'Kim', 'Juul'];
-export const MKTS = ['Danielle', 'Molina', 'Mare'];
+// Recruiter names in older demo data, renamed on load.
 export const RENAME = { Sanne: 'Robin', Mehmet: 'Tsjerk', Lotte: 'Kim', Joris: 'Juul' };
-export const USERS = [
-  { id: 'robbin', name: 'Robbin', role: 'teamlead' },
-  { id: 'danielle', name: 'Danielle', role: 'marketeer' }, { id: 'molina', name: 'Molina', role: 'marketeer' }, { id: 'mare', name: 'Mare', role: 'marketeer' },
-  { id: 'r-robin', name: 'Robin', role: 'recruiter', rec: 'Robin' }, { id: 'r-tsjerk', name: 'Tsjerk', role: 'recruiter', rec: 'Tsjerk' },
-  { id: 'r-kim', name: 'Kim', role: 'recruiter', rec: 'Kim' }, { id: 'r-juul', name: 'Juul', role: 'recruiter', rec: 'Juul' }
-];
 export const STAT = [
   { label: 'Goed', fg: '#1A7A4A', bg: '#E6F4ED' },
   { label: 'Monitoren', fg: '#B45309', bg: '#FEF3C7' },
@@ -53,6 +46,7 @@ export const cardTs = id => parseInt(id.slice(0, 8), 16) * 1000;
 export const REASONS = ['Te weinig ervaring', 'Afstand', 'Taalbarrière', 'Geen interesse', 'Geen reactie', 'No show', 'Foutieve contactgegevens', 'Ander aanbod', 'Salaris te laag', 'Overgekwalificeerd', 'Overig'];
 
 export const NEWS = [
+  { id: 8, date: '29 sep', tag: 'Nieuw', title: 'Eigen accounts en rechten', text: 'Iedereen logt nu in met een eigen account in plaats van het teamwachtwoord. Wat je ziet en mag, hangt af van je rol en rechten. Onder Instellingen beheer je je wachtwoord, tweestapsverificatie en je gegevens.' },
   { id: 7, date: '28 sep', tag: 'Nieuw', title: 'Meldingen, nieuws en ideeën', text: 'Herinneringen voor open feedback komen binnen onder Meldingen. Via ‘Bug of idee melden’ kan iedereen aangeven wat niet werkt of beter kan.' },
   { id: 6, date: '28 sep', tag: 'Nieuw', title: 'Opvolging ‘Niet actief’', text: 'In Toewijzing kan een klant op Niet actief. De klant verdwijnt dan uit alle schermen en het belwerk.' },
   { id: 5, date: '28 sep', tag: 'Nieuw', title: 'Toewijzing voor de teamlead', text: 'Per klant een recruiter en Recruitment Marketeer kiezen, met het aantal klanten per persoon.' },
@@ -63,5 +57,5 @@ export const NEWS = [
 ];
 export const IDEA_TYPES = { bug: ['Bug', '#FDECEA', '#D32F2F', 'Wat ging er mis? Wat deed je, en wat verwachtte je?'], idee: ['Idee', '#E7E7F0', '#1B1B63', 'Wat zou je handig vinden?'], verbetering: ['Verbetering', '#FEF3C7', '#B45309', 'Wat werkt nu onhandig, en hoe zou het beter kunnen?'] };
 export const IDEA_STATUS = { nieuw: ['Nieuw', '#5C5C5A'], opgepakt: ['Opgepakt', '#B45309'], opgelost: ['Opgelost', '#1A7A4A'], niet: ['Doen we niet', '#8C8C8A'] };
-export const VIEW_NAMES = { week: 'Weekoverzicht', campaigns: 'Campagnes', klant: 'Feedback klant', trello: 'Klanten uit Trello', 'trello-test': 'Trello-koppeling testen', toewijzing: 'Toewijzing', history: 'Historie & analyse', rules: 'Health-regels', detail: 'Campagnedetail', checkin: 'Wekelijkse feedback recruiter', live: 'Live campagnes', mine: 'Mijn campagnes' };
+export const VIEW_NAMES = { settings: 'Instellingen', week: 'Weekoverzicht', campaigns: 'Campagnes', klant: 'Feedback klant', trello: 'Klanten uit Trello', 'trello-test': 'Trello-koppeling testen', toewijzing: 'Toewijzing', history: 'Historie & analyse', rules: 'Health-regels', detail: 'Campagnedetail', checkin: 'Wekelijkse feedback recruiter', live: 'Live campagnes', mine: 'Mijn campagnes' };
 export const ACT_TYPES = ['Advertentie', 'Doelgroep', 'Budget', 'Vacaturetekst', 'Screening', 'Klantafspraak', 'Besluit'];

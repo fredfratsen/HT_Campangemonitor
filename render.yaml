@@ -1,5 +1,6 @@
 # Render Blueprint: New > Blueprint in the Render dashboard, then pick this repository.
-# The persistent disk keeps the team's data across deploys and restarts; it requires a paid instance (Starter).
+# The persistent disk keeps the team's data and accounts across deploys and restarts; it requires a paid
+# instance (Starter). After the first deploy, the setup link for the Dev account is in the Logs.
 services:
   - type: web
     name: ht-campagnemonitor
@@ -21,10 +22,8 @@ services:
         value: production
       - key: DATA_DIR
         value: /var/data
-      - key: SESSION_SECRET
+      - key: SECRETS_KEY
         generateValue: true
-      - key: APP_PASSWORD
-        sync: false
       - key: TRELLO_KEY
         sync: false
       - key: TRELLO_TOKEN

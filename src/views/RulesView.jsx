@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../components/Button.jsx';
 
 export default function RulesView({ v }) {
-  const { isLead, resetRules, ruleGroups, rulesLocked, sum } = v;
+  const { resetRules, ruleGroups, rulesLocked, sum } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '860px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
@@ -10,9 +10,9 @@ export default function RulesView({ v }) {
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Instellingen</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Campagne health</h1>
           <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '560px', textWrap: 'pretty' }}>Eén regel die afgaat bepaalt de status. Rood gaat vóór oranje. Wijzigingen gelden direct voor alle schermen.</div>
-          {rulesLocked ? <div style={{ marginTop: '12px', display: 'inline-flex', background: '#F5F2ED', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', color: '#3C3C3A' }}>Alleen de teamlead kan de regels aanpassen.</div> : null}
+          {rulesLocked ? <div style={{ marginTop: '12px', display: 'inline-flex', background: '#F5F2ED', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', color: '#3C3C3A' }}>Je hebt geen recht om de regels aan te passen.</div> : null}
         </div>
-        {isLead ? <Button variant="ghost" onClick={resetRules}>Standaard herstellen</Button> : null}
+        {!rulesLocked ? <Button variant="ghost" onClick={resetRules}>Standaard herstellen</Button> : null}
       </header>
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
         {sum.levels.map((l, i) => <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', padding: '8px 14px', borderRadius: '999px', background: l.bg, color: l.fg, fontWeight: '600' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: l.fg }} />{l.n} {l.label}</span>)}

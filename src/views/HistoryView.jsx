@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../components/Button.jsx';
 
 export default function HistoryView({ v }) {
-  const { effects, exportCsv, hist, histCols, histKpis, histN, histRows, histWeeks, setHistPeriod, setHistRec, setHistStatus, wk } = v;
+  const { effects, exportCsv, hist, histCols, histKpis, histN, histRows, histWeeks, recOptions, setHistPeriod, setHistRec, setHistStatus, wk } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
@@ -17,11 +17,7 @@ export default function HistoryView({ v }) {
             <option value="ended">Afgerond</option>
           </select>
           <select value={hist.rec ?? ''} onChange={setHistRec} style={{ height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '14px', background: '#FFFFFF' }}>
-            <option value="all">Alle recruiters</option>
-            <option value="Robin">Robin</option>
-            <option value="Tsjerk">Tsjerk</option>
-            <option value="Kim">Kim</option>
-            <option value="Juul">Juul</option>
+            {recOptions.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
           <select value={hist.period ?? ''} onChange={setHistPeriod} style={{ height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '14px', background: '#FFFFFF' }}>
             <option value="12">Laatste 12 weken</option>

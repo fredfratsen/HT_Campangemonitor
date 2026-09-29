@@ -1,40 +1,17 @@
 // Shared app data: a handful of documents, each a flat map key -> value, kept in memory and written to a
-// JSON file. One file is plenty for a team this size. A dated copy is kept per day (last 14 days) as a safety net.
-import fs from 'node:fs';
-import path from 'node:path';
+// JSON file (with daily backups, see jsonfile.js). One file is plenty for a team this size.
+import { jsonFile } from './jsonfile.js';
 
 export const DOCS = new Set(['campaigns', 'rules', 'trIgnored', 'mktDemo', 'live.links', 'live.fb', 'live.actions', 'live.ignored', 'live.inactive', 'live.mkt', 'assignLog', 'inbox', 'ideas', 'seen', 'meta']);
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const KEEP_BACKUPS = 14;
 
 export function createStore(dir) {
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, 'campagnemonitor.json');
-  let state = { rev: 0, docs: {} };
-  if (fs.existsSync(file)) {
-    state = JSON.parse(fs.readFileSync(file, 'utf8'));
-    console.log(`[store] ${file} geladen (rev ${state.rev})`);
-  } else {
-    console.log(`[store] nieuw databestand: ${file}`);
-  }
+  const f = jsonFile(dir, 'campagnemonitor', { rev: 0, docs: {} });
+  console.log(f.isNew ? `[store] nieuw databestand: ${f.file}` : `[store] ${f.file} geladen (rev ${f.data.rev})`);
+  const state = f.data;
 
-  let timer = null;
-  function writeNow() {
-    clearTimeout(timer); timer = null;
-    const tmp = file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(state));
-    fs.renameSync(tmp, file);
-    const day = new Date().toISOString().slice(0, 10), backup = path.join(dir, `campagnemonitor.${day}.json`);
-    if (!fs.existsSync(backup)) {
-      fs.copyFileSync(file, backup);
-      const old = fs.readdirSync(dir).filter(f => /^campagnemonitor\.\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -KEEP_BACKUPS);
-      for (const f of old) fs.unlinkSync(path.join(dir, f));
-    }
-  }
-  const scheduleWrite = () => { if (!timer) timer = setTimeout(writeNow, 300); };
-
-  /** Validates and applies [{ doc, set: {key: value}, del: [key] }]. Throws on bad input without changing anything. */
-  function patch(patches) {
+  /** Checks the shape of [{ doc, set: {key: value}, del: [key] }]. Throws on bad input. */
+  function validate(patches) {
     if (!Array.isArray(patches) || patches.length > 50) throw new Error('patches must be an array');
     for (const p of patches) {
       if (!p || !DOCS.has(p.doc)) throw new Error('unknown doc ' + (p && p.doc));
@@ -44,20 +21,41 @@ export function createStore(dir) {
         if (typeof k !== 'string' || k.length > 300 || BAD_KEYS.has(k)) throw new Error('bad key');
       }
     }
-    for (const p of patches) {
-      const d = state.docs[p.doc] || (state.docs[p.doc] = {});
-      for (const [k, v] of Object.entries(p.set || {})) d[k] = v;
-      for (const k of p.del || []) delete d[k];
-    }
-    state.rev++;
-    scheduleWrite();
-    return state.rev;
   }
+
+  /**
+   * Applies validated patches. `authorize(doc, key, before, after)` returns '' to allow a change, or a reason to
+   * reject it; it may also return { value } to store a corrected value (e.g. the author name filled in by the
+   * server). Rejected keys are skipped, the rest is applied. Returns { rev, rejected: [{doc, key, reason}], applied }.
+   */
+  function patch(patches, authorize = () => '') {
+    validate(patches);
+    const rejected = [], applied = [];
+    for (const p of patches) {
+      const d = state.docs[p.doc] || {};
+      const changes = [...Object.entries(p.set || {}).map(([k, v]) => [k, v]), ...(p.del || []).map(k => [k, undefined])];
+      for (const [k, v] of changes) {
+        const before = Object.prototype.hasOwnProperty.call(d, k) ? d[k] : undefined;
+        if (JSON.stringify(before) === JSON.stringify(v)) continue;
+        const res = authorize(p.doc, k, before, v);
+        if (typeof res === 'string' && res) { rejected.push({ doc: p.doc, key: k, reason: res }); continue; }
+        const value = res && typeof res === 'object' && 'value' in res ? res.value : v;
+        const doc = state.docs[p.doc] || (state.docs[p.doc] = {});
+        if (value === undefined) delete doc[k]; else doc[k] = value;
+        applied.push({ doc: p.doc, key: k, before, after: value });
+      }
+    }
+    if (applied.length) { state.rev++; f.save(); }
+    return { rev: state.rev, rejected, applied };
+  }
+
+  /** Server-side edits (anonymisation): fn(docs) changes documents in place. */
+  function mutate(fn) { fn(state.docs); state.rev++; f.save(); }
 
   return {
     get rev() { return state.rev; },
     get docs() { return state.docs; },
-    patch,
-    flush() { if (timer) writeNow(); },
+    patch, mutate,
+    flush: f.flush,
   };
 }

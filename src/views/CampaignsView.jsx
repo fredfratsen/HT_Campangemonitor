@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function CampaignsView({ v }) {
-  const { campTitle, f, isMarketeer, list, listCount, listEmpty, setRecFilter, setSearch, setSort, statusTabs, sum, wk } = v;
+  const { campTitle, f, showRecFilter, list, listCount, listEmpty, recOptions, setRecFilter, setSearch, setSort, statusTabs, sum, wk } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
@@ -16,12 +16,8 @@ export default function CampaignsView({ v }) {
         <div style={{ display: 'flex', gap: '2px', background: '#F5F2ED', borderRadius: '999px', padding: '3px', flexWrap: 'wrap' }}>
           {statusTabs.map((t, i) => <button key={i} onClick={t.onClick} style={{ border: '0', borderRadius: '999px', padding: '7px 14px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', background: t.bg, color: t.fg, boxShadow: t.sh, display: 'flex', gap: '6px', alignItems: 'center' }}>{t.dot ? <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: t.dot }} /> : null}{t.label} <span style={{ color: '#8C8C8A' }}>{t.n}</span></button>)}
         </div>
-        {isMarketeer ? <select value={f.rec ?? ''} onChange={setRecFilter} style={{ height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '14px', background: '#FFFFFF' }}>
-            <option value="all">Alle recruiters</option>
-            <option value="Robin">Robin</option>
-            <option value="Tsjerk">Tsjerk</option>
-            <option value="Kim">Kim</option>
-            <option value="Juul">Juul</option>
+        {showRecFilter ? <select value={f.rec ?? ''} onChange={setRecFilter} style={{ height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '14px', background: '#FFFFFF' }}>
+            {recOptions.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select> : null}
         <select value={f.sort ?? ''} onChange={setSort} style={{ height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '14px', background: '#FFFFFF' }}>
           <option value="status">Sorteer: prioriteit</option>

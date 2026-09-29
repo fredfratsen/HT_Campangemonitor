@@ -3,12 +3,14 @@
 import React from 'react';
 import { CUR, MON, wl, range, rangeLong, todayLong, stamp, weekOf, isoDate, mondayOf } from './lib/weeks.js';
 import {
-  RECS, MKTS, RENAME, USERS, STAT, DEF_RULES, LABEL_COLORS, TR_EXTRA, TR_INACTIVE, TCOL, TCOLHEX, RANK, stageOf, cardTs,
+  RENAME, STAT, DEF_RULES, LABEL_COLORS, TR_EXTRA, TR_INACTIVE, TCOL, TCOLHEX, RANK, stageOf, cardTs,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES
 } from './lib/constants.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
+import { ROLES, LEVELS, RIGHT_KEYS } from './lib/permissions.js';
+import { api } from './lib/api.js';
 
 import Sidebar from './views/Sidebar.jsx';
 import TopActions from './views/TopActions.jsx';
@@ -24,9 +26,12 @@ import DetailView from './views/DetailView.jsx';
 import HistoryView from './views/HistoryView.jsx';
 import RulesView from './views/RulesView.jsx';
 import SidePanel from './views/SidePanel.jsx';
+import SettingsView from './views/settings/SettingsView.jsx';
 
-// Per-browser settings (who you are, chosen data source, news read)
-const USER_KEY = 'ht-cm-user', SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen';
+// Per-browser settings (chosen data source, news read, "Bekijk als")
+const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as';
+// Without a server (the built files opened as a static site) there are no accounts: everything is allowed.
+const LOCAL_ACCOUNT = { id: 'local', name: 'Lokaal', role: 'dev', recName: null, level: 'owner', rights: RIGHT_KEYS, grants: [], revokes: [] };
 const prepCampaigns = cs => rollForward(cs.map(c => RENAME[c.rec] ? { ...c, rec: RENAME[c.rec] } : c).map(ensureReasons));
 
 class TrelloError extends Error {}
@@ -36,13 +41,13 @@ export default class App extends React.Component {
   state = this.initState();
 
   initState() {
-    const uid = lsGet(USER_KEY, 'robbin'), u = USERS.find(x => x.id === uid) || USERS[0];
     return {
       loaded: false, saveState: 'ok', config: { trello: false, auth: false },
-      user: u.id, view: u.role === 'recruiter' ? 'live' : (this.props.startView || 'week'), sel: 'c1', back: u.role === 'recruiter' ? 'live' : 'week', kform: null,
+      account: null, members: [], viewAs: null, settingsTab: 'account',
+      view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null,
       campaigns: null, rules: { ...DEF_RULES },
       f: { q: '', status: 'all', rec: 'all', sort: 'status' },
-      ci: { rec: u.rec || 'all' }, form: null,
+      ci: { rec: 'all' }, form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
       act: { type: 'Advertentie', text: '', w: CUR },
       toast: null, reminded: false, trTab: 'open', trSel: {}, trVac: {}, asg: { tab: 'open', q: '' }, mktDemo: null, seen: null, panel: null,
@@ -63,10 +68,15 @@ export default class App extends React.Component {
     };
     window.addEventListener('keydown', this._k);
 
-    this.sync = new Sync({ getState: () => this.state, apply: (docs, done) => this.applyShared(docs, done), onStatus: s => this.setState({ saveState: s }) });
-    let docs;
-    try { docs = await this.sync.start(); } catch (e) { this.setState({ bootError: 'De server is niet bereikbaar. Probeer het zo opnieuw.' }); return; }
+    this.sync = new Sync({
+      getState: () => this.state, apply: (docs, done) => this.applyShared(docs, done), onStatus: s => this.setState({ saveState: s }),
+      onRejected: () => { if (Date.now() - (this._rejAt || 0) > 10000) { this._rejAt = Date.now(); this.flash('Niet opgeslagen: daar heb je geen rechten voor'); } }
+    });
+    let docs, who;
+    try { docs = await this.sync.start(); if (docs) who = await this.sync.me(); } catch (e) { this.setState({ bootError: 'De server is niet bereikbaar. Probeer het zo opnieuw.' }); return; }
     if (!docs) return; // redirected to login
+    const account = who ? who.account : LOCAL_ACCOUNT, members = who ? who.members : [];
+    const va = lsGet(VIEW_AS_KEY, null), viewAs = account.rights.includes('dev') && members.some(m => m.id === va && m.rights) ? va : null;
     const sh = fromDocs(docs), cfg = this.sync.config;
     const meta = sh.meta || {};
     let campaigns = sh.campaigns, assignLog = sh.assignLog;
@@ -77,13 +87,16 @@ export default class App extends React.Component {
     campaigns = prepCampaigns(campaigns);
     const source = this.state.source || (cfg.trello ? 'trello' : 'demo');
     this.setState({
+      account, members, viewAs,
       loaded: true, config: cfg, source, rules: sh.rules, trIgnored: sh.trIgnored, mktDemo: sh.mktDemo, live: sh.live,
       assignLog, inbox: sh.inbox, ideas: sh.ideas, seen: sh.seen, meta: { ...meta, seeded: true },
       ...(source === 'trello' ? { demoCampaigns: campaigns, campaigns: [] } : { campaigns })
     }, () => {
+      const me = this.me(), home = this.homeView(me);
+      this.setState({ view: home, back: home, ci: { rec: me.rec || 'all' } });
       this.sync.begin();
-      this.touchLogin(this.state.user);
-      this._seenTimer = setInterval(() => this.setState(s => { const me = s.seen[s.user]; return me ? { seen: { ...s.seen, [s.user]: { ...me, last: Date.now() } } } : null; }), 60000);
+      this.touchLogin(account.id);
+      this._seenTimer = setInterval(() => this.setState(s => { const id = s.account.id, mine = s.seen[id]; return mine ? { seen: { ...s.seen, [id]: { ...mine, last: Date.now() } } } : null; }), 60000);
       if (this.state.view === 'checkin') this.enterCheckin();
       if (this.state.view === 'klant') this.enterKlant();
       if (this.state.source === 'trello') this.startLive();
@@ -105,6 +118,7 @@ export default class App extends React.Component {
 
   componentDidUpdate() {
     if (!this.state.loaded) return;
+    if (!this.viewOk(this.state.view)) { this.setState({ view: this.homeView() }); return; }
     this.syncLive();
     this.sync.changed();
   }
@@ -112,15 +126,16 @@ export default class App extends React.Component {
   componentWillUnmount() { window.removeEventListener('keydown', this._k); clearInterval(this._seenTimer); if (this.sync) this.sync.stop(); }
 
   // ── Trello ───────────────────────────────────────────────────────────
-  async tget(path, q = '') {
+  /** Trello data via the server, which also decides which fields are fetched. */
+  async tget(path) {
     let r;
-    try { r = await fetch(`/api/trello${path}?${q.replace(/^&/, '')}`, { credentials: 'same-origin' }); } catch (e) { throw new TrelloError('Kon de server niet bereiken.'); }
+    try { r = await fetch(`/api/trello${path}`, { credentials: 'same-origin' }); } catch (e) { throw new TrelloError('Kon de server niet bereiken.'); }
     if (r.status === 401) { window.location.href = '/login'; throw new TrelloError('Sessie verlopen.'); }
-    if (r.status === 429) { await new Promise(res => setTimeout(res, 2000)); return this.tget(path, q); }
+    if (r.status === 429) { await new Promise(res => setTimeout(res, 2000)); return this.tget(path); }
     if (r.ok) return r.json();
     const body = await r.json().catch(() => ({}));
-    if (body.error === 'trello_unauthorized') throw new TrelloError('Trello-token ongeldig of verlopen. Maak een nieuw token aan via de testpagina.');
-    if (body.error === 'trello_not_configured') throw new TrelloError('Trello is nog niet ingesteld op de server.');
+    if (body.error === 'trello_unauthorized') throw new TrelloError('Trello-token ongeldig of verlopen. Stel een nieuw token in onder Instellingen › Integraties.');
+    if (body.error === 'trello_not_configured') throw new TrelloError('Trello is nog niet gekoppeld (Instellingen › Integraties).');
     if (body.error === 'trello_unreachable') throw new TrelloError('Kon Trello niet bereiken.');
     throw new TrelloError(`Trello gaf een fout (${body.status || r.status}).`);
   }
@@ -130,7 +145,7 @@ export default class App extends React.Component {
     const run = (this._run || 0) + 1; this._run = run;
     this.setState({ sync: { state: 'loading', done: 0, total: 0 } });
     try {
-      const boards = await this.tget('/members/me/boards', '&filter=open&fields=name,dateLastActivity');
+      const boards = await this.tget('/members/me/boards');
       if (this._run !== run) return;
       const lim = Date.now() - 30 * 864e5, linked = new Set(this.state.live.links.map(l => l.boardId));
       const todo = boards.filter(b => linked.has(b.id) || new Date(b.dateLastActivity).getTime() >= lim).sort((a, b) => linked.has(b.id) - linked.has(a.id));
@@ -146,7 +161,7 @@ export default class App extends React.Component {
       while (i < list.length) {
         if (this._run !== run) return;
         const b = list[i++];
-        try { this._bd[b.id] = await this.tget(`/boards/${b.id}`, '&fields=name&lists=open&list_fields=name&labels=all&label_fields=name,color&cards=all&card_fields=idList,idLabels,closed&card_customFieldItems=true&customFields=true'); }
+        try { this._bd[b.id] = await this.tget(`/boards/${b.id}`); }
         catch (e) { this._bd[b.id] = { error: e.message }; }
         n++;
         if (n % 6 === 0 || n === total) this.setState({ boardData: { ...this._bd }, sync: { state: 'loading', done: n, total } }, () => this.rebuildLive());
@@ -247,7 +262,16 @@ export default class App extends React.Component {
   }
 
   // ── Toewijzing ───────────────────────────────────────────────────────
-  mktOf(c) { return this.state.source === 'trello' ? ((this.state.live.mkt || {})[c.boardId] || '') : (this.state.mktDemo[c.client] ?? MKTS[Math.floor(rnd(c.client) * MKTS.length)]); }
+  /** Recruiter names (as used in campaigns) and marketeer names, from the team's accounts. */
+  recs() {
+    const m = this.state.members.filter(x => x.recName && x.status !== 'deactivated').map(x => x.recName);
+    return m.length ? m : [...new Set((this.state.campaigns || []).map(c => c.rec))];
+  }
+  mkts() {
+    const m = this.state.members.filter(x => x.role === 'marketeer' && x.status !== 'deactivated').map(x => x.name);
+    return m.length ? m : [...new Set(Object.values(this.state.mktDemo || {}))];
+  }
+  mktOf(c) { const M = this.mkts(); return this.state.source === 'trello' ? ((this.state.live.mkt || {})[c.boardId] || '') : (this.state.mktDemo[c.client] ?? (M[Math.floor(rnd(c.client) * M.length)] || '')); }
   assignData() {
     const st = this.state, live = st.source === 'trello', A = st.asg;
     const opt = (list, cur, extra) => [{ v: '', l: '— Kies —' }, ...(cur === '__multi' ? [{ v: '__multi', l: 'Meerdere' }] : []), ...list.map(x => ({ v: x, l: x })), ...(extra ? [{ v: '__inactive', l: 'Niet actief' }] : [])];
@@ -282,9 +306,9 @@ export default class App extends React.Component {
     return {
       open, empty: shown.length === 0, hasNotice: live && st.sync.state === 'loading', notice: this.syncInfo().text,
       tabs: [tab('open', 'Niet volledig toegewezen', open), tab('all', 'Alle klanten', items.length)],
-      recChips: [...RECS.map(r => ({ name: r, n: cnt('rec', r) })), { name: 'Niet actief', n: cnt('rec', '__inactive') }], mktChips: MKTS.map(m => ({ name: m, n: cnt('mkt', m) })),
+      recChips: [...this.recs().map(r => ({ name: r, n: cnt('rec', r) })), { name: 'Niet actief', n: cnt('rec', '__inactive') }], mktChips: this.mkts().map(m => ({ name: m, n: cnt('mkt', m) })),
       rows: shown.map(x => { const ina = x.rec === '__inactive'; return { name: x.name, funcs: ina ? 'Niet actief · geen opvolging' : x.funcs, last: x.last, rec: x.rec, mkt: x.mkt,
-        recOpts: opt(RECS, x.rec, true), mktOpts: opt(MKTS, x.mkt), op: ina ? 0.55 : 1,
+        recOpts: opt(this.recs(), x.rec, true), mktOpts: opt(this.mkts(), x.mkt), op: ina ? 0.55 : 1,
         recBorder: x.rec ? '#E4E1DE' : '#F9A800', mktBorder: x.mkt || ina ? '#E4E1DE' : '#F9A800',
         onRec: e => x.setRec(e.target.value), onMkt: e => x.setMkt(e.target.value) }; })
     };
@@ -304,18 +328,18 @@ export default class App extends React.Component {
   }
 
   // ── Meldingen, nieuws, ideeën ────────────────────────────────────────
-  panelVals(me, isRec) {
-    const st = this.state, P = st.panel;
-    const mineN = st.inbox.filter(n => n.to === (isRec ? me.rec : me.name));
+  panelVals(me) {
+    const st = this.state, P = st.panel, au = this.author();
+    const mineN = st.inbox.filter(n => n.to === me.name || (me.rec && n.to === me.rec));
     const openFb = new Set(st.campaigns.filter(c => !c.ended && c.weeks[c.weeks.length - 1].q == null).map(c => `${c.client} – ${c.vac}`));
     const setP = p => () => {
       const upd = { panel: st.panel === p ? null : p };
-      if (p === 'inbox') upd.inbox = st.inbox.map(n => mineN.includes(n) && !n.read ? { ...n, read: true } : n);
+      if (p === 'inbox' && !me.isPreview) upd.inbox = st.inbox.map(n => mineN.includes(n) && !n.read ? { ...n, read: true } : n);
       if (p === 'news') { upd.newsSeen = NEWS[0].id; lsSet(NEWS_KEY, NEWS[0].id); }
       this.setState(upd);
     };
     const I = st.idea, saveIdeas = ideas => this.setState({ ideas });
-    const canSet = me.role === 'teamlead';
+    const canSet = me.rights.has('ideas.manage');
     const shown = st.ideas.filter(x => I.filter === 'all' || (I.filter === 'open' ? (x.status === 'nieuw' || x.status === 'opgepakt') : x.type === I.filter));
     const pill = (on) => ({ bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#1D1D1B' : '#5C5C5A', sh: on ? '0 1px 4px rgba(29,29,27,.07)' : 'none' });
     return {
@@ -328,7 +352,7 @@ export default class App extends React.Component {
         unread: mineN.filter(n => !n.read).length, hasUnread: mineN.some(n => !n.read), empty: mineN.length === 0,
         items: mineN.map(n => ({ from: `Van ${n.from}`, at: n.at, title: n.title, bg: n.read ? '#FFFFFF' : '#FFF8E0',
           lines: (n.items || []).map(t => n.kind === 'reminder' ? { t: (openFb.has(t) ? '○ ' : '✓ ') + t, fg: openFb.has(t) ? '#1D1D1B' : '#8C8C8A' } : { t, fg: '#5C5C5A' }),
-          hasAction: isRec && n.kind === 'reminder', actLabel: 'Feedback invullen', act: () => { this.setState({ panel: null }); this.go('checkin'); } }))
+          hasAction: me.rights.has('feedback.own') && n.kind === 'reminder', actLabel: 'Feedback invullen', act: () => { this.setState({ panel: null }); this.go('checkin'); } }))
       },
       news: { hasNew: st.newsSeen < NEWS[0].id, items: NEWS.map(n => ({ ...n, tagBg: n.tag === 'Nieuw' ? '#FFF8E0' : '#E7E7F0', tagFg: n.tag === 'Nieuw' ? '#B45309' : '#1B1B63' })) },
       idea: {
@@ -337,25 +361,25 @@ export default class App extends React.Component {
         filters: [['all', 'Alles'], ['open', 'Open'], ['bug', 'Bugs'], ['idee', 'Ideeën'], ['verbetering', 'Verbeteringen']].map(([k, l]) => ({ label: l,
           n: k === 'all' ? st.ideas.length : k === 'open' ? st.ideas.filter(x => x.status === 'nieuw' || x.status === 'opgepakt').length : st.ideas.filter(x => x.type === k).length,
           bg: I.filter === k ? '#F5F2ED' : '#FFFFFF', border: I.filter === k ? '#C0BDB9' : '#E4E1DE', onClick: () => this.setState(s => ({ idea: { ...s.idea, filter: k } })) })),
-        items: shown.map(x => { const T = IDEA_TYPES[x.type], S = IDEA_STATUS[x.status], voted = (x.voters || []).includes(me.name);
+        items: shown.map(x => { const T = IDEA_TYPES[x.type], S = IDEA_STATUS[x.status], voted = (x.voters || []).includes(au);
           return { type: T[0], tBg: T[1], tFg: T[2], by: x.by, at: x.at, page: x.page, text: x.text, status: x.status, statusLabel: S[0], sFg: S[1], canSet, showStatus: !canSet,
             votes: (x.voters || []).length, vBg: voted ? '#1B1B63' : '#FFFFFF', vBorder: voted ? '#1B1B63' : '#E4E1DE', vFg: voted ? '#FFFFFF' : '#1D1D1B',
             setStatus: e => { const v = e.target.value; saveIdeas(this.state.ideas.map(y => y.id === x.id ? { ...y, status: v } : y)); },
-            vote: () => saveIdeas(this.state.ideas.map(y => y.id !== x.id ? y : { ...y, voters: voted ? y.voters.filter(n => n !== me.name) : [...(y.voters || []), me.name] })) }; })
+            vote: () => saveIdeas(this.state.ideas.map(y => y.id !== x.id ? y : { ...y, voters: voted ? y.voters.filter(n => n !== au) : [...(y.voters || []), au] })) }; })
       },
       setIdeaText: e => { const v = e.target.value; this.setState(s => ({ idea: { ...s.idea, text: v } })); },
       submitIdea: () => {
         if (!I.text.trim()) { this.flash('Beschrijf eerst wat je wilt melden'); return; }
-        saveIdeas([{ id: Date.now(), type: I.type, text: I.text.trim(), by: me.name, at: stamp(), page: VIEW_NAMES[st.view] || st.view, status: 'nieuw', voters: [] }, ...st.ideas]);
+        saveIdeas([{ id: Date.now(), type: I.type, text: I.text.trim(), by: au, at: stamp(), page: VIEW_NAMES[st.view] || st.view, status: 'nieuw', voters: [] }, ...st.ideas]);
         this.setState(s => ({ idea: { ...s.idea, text: '', filter: 'all' } })); this.flash('Bedankt, je melding is opgeslagen');
       }
     };
   }
   logAssign(client, from, to) {
     if (!to || to === from || to === '__inactive' || to === '__multi') return;
-    const me = this.me(), at = Date.now();
-    const e = { id: at + Math.random(), mode: this.state.source, client, from: from && from !== '__multi' ? from : '', to, at, by: me.name };
-    const note = { id: e.id, to, from: me.name, at: stamp(), read: false, kind: 'assign', title: e.from ? `${client} is aan jou overgedragen` : `Nieuw bedrijf voor jou: ${client}`, items: e.from ? [`Eerder opgevolgd door ${e.from}`] : [] };
+    const au = this.author(), at = Date.now();
+    const e = { id: at + Math.random(), mode: this.state.source, client, from: from && from !== '__multi' ? from : '', to, at, by: au };
+    const note = { id: e.id, to, from: au, at: stamp(), read: false, kind: 'assign', title: e.from ? `${client} is aan jou overgedragen` : `Nieuw bedrijf voor jou: ${client}`, items: e.from ? [`Eerder opgevolgd door ${e.from}`] : [] };
     this.setState(s => ({ assignLog: [e, ...s.assignLog].slice(0, 500), inbox: [note, ...s.inbox] }));
   }
   placeholder() { return { id: 'none', client: '—', vac: 'Nog geen campagnes', rec: '', start: CUR, ended: false, actions: [], weeks: [{ w: CUR, leads: 0, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: 0, gescreend: 0, voorgesteld: 0, gesprek: 0, geplaatst: 0 } }] }; }
@@ -477,15 +501,55 @@ export default class App extends React.Component {
       return { seen: { ...st.seen, [uid]: { ...s, prev: fresh ? (s.last || now - 864e5) : s.prev, last: now } } };
     });
   }
-  me() { return USERS.find(x => x.id === this.state.user) || USERS[0]; }
-  go(view) { this.setState({ view }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0); }
-  setUser(id) {
-    const u = USERS.find(x => x.id === id); if (!u) return;
-    const rec = u.role === 'recruiter';
-    lsSet(USER_KEY, id);
-    this.touchLogin(id);
-    this.setState(s => ({ user: id, ci: { rec: u.rec || 'all' }, f: { ...s.f, rec: 'all', status: 'all' }, form: null, kform: null, view: rec ? 'live' : 'week', back: rec ? 'live' : 'week' }));
-    window.scrollTo(0, 0);
+  /**
+   * Who the app is shown for: the logged-in account, or with "Bekijk als" (Dev only) another team member.
+   * Saving always happens as the logged-in account; the server checks its real rights.
+   */
+  me() {
+    const st = this.state, acc = st.account;
+    const other = st.viewAs && acc.rights.includes('dev') ? st.members.find(m => m.id === st.viewAs && m.rights) : null;
+    const src = other || acc;
+    return { id: src.id, name: src.name, role: src.role, rec: src.recName || null, rights: new Set(src.rights), isPreview: !!other,
+      roleLabel: ROLES[src.role].label, levelLabel: LEVELS[ROLES[src.role].level].label };
+  }
+  /** Name written into what you save (feedback, notifications, ideas). */
+  author() { return this.state.account.name; }
+  homeView(me = this.me()) {
+    if (me.rights.has('campaigns.all')) return 'week';
+    if (me.rec && me.rights.has('feedback.own')) return 'live';
+    if (me.rights.has('feedback.client')) return 'klant';
+    return 'settings';
+  }
+  viewOk(view, me = this.me()) {
+    const r = k => me.rights.has(k), rec = !!me.rec && r('feedback.own');
+    return ({ week: r('campaigns.all'), campaigns: r('campaigns.all'), history: r('campaigns.all'), rules: r('campaigns.all'),
+      klant: r('feedback.client'), trello: r('trello.link'), 'trello-test': r('trello.link') || r('integrations'), toewijzing: r('assign'),
+      live: rec, checkin: rec || r('feedback.all'), mine: rec, detail: r('campaigns.all') || rec, settings: true })[view] || false;
+  }
+  /** Can `me` fill in the recruiter feedback of campaign c? */
+  canFeedback(c, me = this.me()) { return me.rights.has('feedback.all') || (me.rights.has('feedback.own') && !!me.rec && c.rec === me.rec); }
+  go(view) {
+    if (!this.viewOk(view)) view = this.homeView();
+    this.setState({ view }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0);
+  }
+  setViewAs(id) {
+    lsSet(VIEW_AS_KEY, id || null);
+    api('POST', '/api/me/view-as', { id: id || null }).catch(() => {});
+    this.setState({ viewAs: id || null }, () => {
+      const me = this.me(), home = this.homeView(me);
+      this.setState(s => ({ ci: { rec: me.rec || 'all' }, f: { ...s.f, rec: 'all', status: 'all' }, form: null, kform: null, view: home, back: home, panel: null }));
+      window.scrollTo(0, 0);
+    });
+  }
+  /** Reloads the account and team (after changes in Instellingen). */
+  async reloadMe() {
+    try { const r = await api('GET', '/api/me'); this.setState({ account: r.account, members: r.members }); } catch (e) { /* keep what we have */ }
+  }
+  async reloadConfig() {
+    try {
+      const cfg = await api('GET', '/api/config');
+      this.setState({ config: cfg }, () => { if (this.state.source === 'trello') this.startLive(); });
+    } catch (e) { /* ignore */ }
   }
 
   // ── Feedback klant ───────────────────────────────────────────────────
@@ -508,10 +572,9 @@ export default class App extends React.Component {
   saveKlant() {
     const k = this.state.kform; if (!k) return;
     if (!k.klant.trim()) { this.skipKlant(); return; }
-    const me = this.me();
     const campaigns = this.state.campaigns.map(c => {
       if (c.id !== k.id) return c;
-      const ws = c.weeks.slice(); ws[ws.length - 1] = { ...ws[ws.length - 1], klant: k.klant.trim(), klantBy: me.name };
+      const ws = c.weeks.slice(); ws[ws.length - 1] = { ...ws[ws.length - 1], klant: k.klant.trim(), klantBy: this.author() };
       return { ...c, weeks: ws };
     });
     const c = campaigns.find(x => x.id === k.id);
@@ -526,7 +589,8 @@ export default class App extends React.Component {
   open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR } })); window.scrollTo(0, 0); }
   flash(t) { this.setState({ toast: t }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2400); }
   queue(st = this.state) {
-    return st.campaigns.filter(c => !c.ended && (st.ci.rec === 'all' || c.rec === st.ci.rec))
+    const me = this.me(), rec = me.rights.has('feedback.all') ? st.ci.rec : me.rec;
+    return st.campaigns.filter(c => !c.ended && (rec === 'all' || c.rec === rec))
       .sort((a, b) => (a.weeks[a.weeks.length - 1].q == null ? 0 : 1) - (b.weeks[b.weeks.length - 1].q == null ? 0 : 1));
   }
   enterCheckin(id) {
@@ -550,7 +614,7 @@ export default class App extends React.Component {
     const campaigns = this.state.campaigns.map(c => {
       if (c.id !== f.id) return c;
       const ws = c.weeks.slice(), cur = ws[ws.length - 1];
-      ws[ws.length - 1] = { ...cur, leads: +f.leads || 0, q: f.q, rec: f.rec.trim(), recBy: this.me().name, note: f.note.trim(), needsAction: f.needsAction, at: stamp() };
+      ws[ws.length - 1] = { ...cur, leads: +f.leads || 0, q: f.q, rec: f.rec.trim(), recBy: this.author(), note: f.note.trim(), needsAction: f.needsAction, at: stamp() };
       return { ...c, weeks: ws };
     });
     const c = campaigns.find(x => x.id === f.id);
@@ -615,7 +679,7 @@ export default class App extends React.Component {
 
   // ── Everything the views render ──────────────────────────────────────
   renderVals() {
-    const st = this.state, R = st.rules, me = this.me(), isRec = me.role === 'recruiter';
+    const st = this.state, R = st.rules, me = this.me(), acc = st.account, can = r => me.rights.has(r), recMode = !!me.rec && can('feedback.own');
     const active = st.campaigns.filter(c => !c.ended);
     const D = active.map(c => this.deco(c));
     const cnt = [0, 1, 2].map(l => D.filter(d => d.lvl === l).length);
@@ -625,11 +689,19 @@ export default class App extends React.Component {
 
     const klantOpen = active.filter(c => !c.weeks[c.weeks.length - 1].klant).length;
     const myOpen = active.filter(c => c.rec === me.rec && c.weeks[c.weeks.length - 1].q == null).length;
-    const navDefs = isRec
-      ? [['live', 'Live campagnes'], ['checkin', 'Wekelijkse feedback recruiter', myOpen], ['mine', 'Mijn campagnes']]
-      : [['week', 'Weekoverzicht'], ['campaigns', 'Campagnes'], ['klant', 'Feedback klant'], ...(me.role === 'teamlead' ? [['trello', 'Klanten uit Trello', this.trelloData().open], ['toewijzing', 'Toewijzing', this.assignData().open]] : []), ['history', 'Historie & analyse'], ['rules', 'Health-regels']];
+    // Menu: one section per kind of work, each item only when you have the right for it.
     const navActive = st.view === 'detail' ? st.back : st.view;
-    const nav = navDefs.map(([k, label, badge]) => ({ label, badge, hasBadge: !!badge, bg: navActive === k ? '#F5F2ED' : 'transparent', fg: navActive === k ? '#1B1B63' : '#3C3C3A', fw: navActive === k ? 600 : 500, onClick: () => this.go(k) }));
+    const navItem = ([k, label, badge]) => ({ label, badge, hasBadge: !!badge, bg: navActive === k ? '#F5F2ED' : 'transparent', fg: navActive === k ? '#1B1B63' : '#3C3C3A', fw: navActive === k ? 600 : 500, onClick: () => this.go(k) });
+    const navSections = [
+      recMode && { title: 'Recruiter', items: [['live', 'Live campagnes'], ['checkin', 'Wekelijkse feedback recruiter', myOpen], ['mine', 'Mijn campagnes']] },
+      { title: 'Campagnemonitor', items: [
+        ...(can('campaigns.all') ? [['week', 'Weekoverzicht'], ['campaigns', 'Campagnes']] : []),
+        ...(can('feedback.client') ? [['klant', 'Feedback klant']] : []),
+        ...(can('trello.link') ? [['trello', 'Klanten uit Trello', this.trelloData().open]] : []),
+        ...(can('assign') ? [['toewijzing', 'Toewijzing', this.assignData().open]] : []),
+        ...(can('campaigns.all') ? [['history', 'Historie & analyse'], ['rules', 'Health-regels']] : [])] },
+      { title: '', items: [['settings', 'Instellingen']] }
+    ].filter(x => x && x.items.length).map(x => ({ title: x.title, items: x.items.map(navItem) }));
 
     const levels = [2, 1, 0].map(l => ({ n: cnt[l], label: STAT[l].label, fg: STAT[l].fg, bg: STAT[l].bg, pct: (cnt[l] / Math.max(D.length, 1) * 100) + '%', onClick: () => { setF({ status: String(l) }); this.go('campaigns'); } }));
     const sum = {
@@ -648,7 +720,7 @@ export default class App extends React.Component {
 
     // dashboard
     const q = st.f.q.trim().toLowerCase();
-    const recF = isRec ? me.rec : st.f.rec;
+    const recF = st.view === 'mine' ? me.rec : st.f.rec;
     let list = D.filter(d => (!q || (d.client + ' ' + d.vac).toLowerCase().includes(q)) && (recF === 'all' || d.rec === recF));
     const tabCount = k => k === 'all' ? list.length : k === 'missing' ? list.filter(d => d.missing).length : list.filter(d => d.lvl === +k).length;
     const statusTabs = [['all', 'Alle', null], ['2', 'Actie nodig', STAT[2].fg], ['1', 'Monitoren', STAT[1].fg], ['0', 'Goed', STAT[0].fg], ['missing', 'Geen feedback', null]].map(([k, label, dot]) => ({
@@ -663,7 +735,7 @@ export default class App extends React.Component {
       client: (a, b) => a.client.localeCompare(b.client)
     };
     list = list.slice().sort(sorters[st.f.sort] || sorters.status);
-    const recOptions = [{ v: 'all', l: 'Alle recruiters' }, ...RECS.map(r => ({ v: r, l: r }))];
+    const recNames = this.recs(), recOptions = [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: r }))];
 
     // check-in
     const queue = this.queue();
@@ -698,6 +770,9 @@ export default class App extends React.Component {
     const tot = k => ws.reduce((s, w) => s + w.tr[k], 0);
     const funnelDefs = [['nieuw', 'Nieuw'], ['gescreend', 'Gescreend'], ['voorgesteld', 'Voorgesteld'], ['gesprek', 'Gesprek'], ['geplaatst', 'Geplaatst']];
     const cw = ws[n - 1];
+    // Main button on a campaign: your own feedback if it's your campaign, else client feedback, else correcting the recruiter's.
+    const canFb = this.canFeedback(selC, me), ownC = !!me.rec && selC.rec === me.rec;
+    const fillMode = canFb && ownC ? 'rec' : can('feedback.client') ? 'klant' : canFb ? 'rec' : null;
     const d = {
       ...dd, mkt: this.mktOf(selC) || 'nog niet toegewezen',
       kpis: [
@@ -713,7 +788,7 @@ export default class App extends React.Component {
         w: w.w, wl: wl(w.w), range: range(w.w), leads: w.leads, qText: w.q == null ? 'Geen score' : `Kwaliteit ${w.q}/10`, qBg: qb(w.q), qFg: qc(w.q),
         missing: w.q == null, hasFb: w.q != null, rec: w.rec || '—',
         klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A',
-        canFill: isRec && w.w === CUR && selC.rec === me.rec, canAddKlant: !isRec && !w.klant && w.w === CUR && !selC.ended, addKlant: () => this.startKlant(selC.id),
+        canFill: canFb && w.w === CUR && !selC.ended, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !selC.ended, addKlant: () => this.startKlant(selC.id),
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
         trText: `${w.tr.voorgesteld} voorgesteld · ${w.tr.gesprek} ${w.tr.gesprek === 1 ? 'gesprek' : 'gesprekken'}${w.tr.geplaatst ? ` · ${w.tr.geplaatst} geplaatst` : ''}`,
         reasons: reasonList(w.tr.reasons), hasReasons: reasonList(w.tr.reasons).length > 0, rejN: Object.values(w.tr.reasons || {}).reduce((a, b) => a + b, 0),
@@ -730,8 +805,9 @@ export default class App extends React.Component {
       ...(() => { const agg = {}; ws.forEach(w => Object.entries(w.tr.reasons || {}).forEach(([k, v]) => { agg[k] = (agg[k] || 0) + v; })); const l = reasonList(agg), mx = Math.max(1, ...l.map(x => x.n)), tot = l.reduce((a, x) => a + x.n, 0);
         return { rej: l.map(x => ({ ...x, pct: (x.n / mx * 100) + '%', share: Math.round(x.n / Math.max(tot, 1) * 100) + '%' })), hasRej: l.length > 0, rejTotal: tot }; })(),
       funnel: funnelDefs.map(([k, label]) => ({ label, n: tot(k), pct: (tot(k) / Math.max(tot('nieuw'), 1) * 100) + '%' })),
-      fill: isRec ? () => this.startCheckin(selC.id) : () => this.startKlant(selC.id),
-      fillLabel: isRec ? `Mijn feedback week ${wl(CUR)}` : `Feedback klant week ${wl(CUR)}`
+      hasFill: !!fillMode && !selC.ended,
+      fill: fillMode === 'rec' ? () => this.startCheckin(selC.id) : () => this.startKlant(selC.id),
+      fillLabel: fillMode === 'rec' ? `${ownC ? 'Mijn feedback' : 'Recruiterfeedback'} week ${wl(CUR)}` : `Feedback klant week ${wl(CUR)}`
     };
     const zone = {
       red: R.qRedOn ? ((R.qRed + 0.5) * 10) + '%' : '0%',
@@ -778,7 +854,7 @@ export default class App extends React.Component {
 
     // rules
     const hits = k => { const n = active.filter(c => health(c, R).reasons.some(r => r.k === k)).length; return n === 1 ? '1 campagne' : `${n} campagnes`; };
-    const lead = me.role === 'teamlead';
+    const lead = can('rules.edit');
     const rule = (onKey, pre, valKey, post, hitKey) => ({
       pre, post, hasVal: !!valKey, val: valKey ? R[valKey] : '', fg: R[onKey] ? '#1D1D1B' : '#8C8C8A',
       locked: !lead, cursor: lead ? 'pointer' : 'default', op: lead ? 1 : 0.6,
@@ -812,19 +888,24 @@ export default class App extends React.Component {
     }
     return {
       wk: { n: wl(CUR), today: todayLong(), range: rangeLong(CUR), histRange: `Week ${wl(hw[0])} – ${wl(CUR)}` },
-      user: { id: me.id, name: me.name, roleLabel: { recruiter: 'Recruiter', marketeer: 'Recruitment Marketeer', teamlead: 'Teamlead' }[me.role] }, isMarketeer: !isRec,
-      setUser: e => this.setUser(tv(e)), navTitle: isRec ? 'Recruiter' : 'Campagnemonitor',
-      campTitle: isRec ? 'Mijn campagnes' : 'Actieve campagnes',
+      user: { id: me.id, name: me.name, roleLabel: me.roleLabel, isPreview: me.isPreview }, authorName: this.author(),
+      account: { name: acc.name, roleLabel: ROLES[acc.role].label, levelLabel: LEVELS[ROLES[acc.role].level].label },
+      viewAs: this.viewAsVals(), navSections, goSettings: () => { this.setState({ settingsTab: 'account' }); this.go('settings'); },
+      isSettings: st.view === 'settings', settings: this.settingsVals(me),
+      showRecFilter: st.view !== 'mine', recNames,
+      campTitle: st.view === 'mine' ? 'Mijn campagnes' : 'Actieve campagnes',
       isKlant: st.view === 'klant', goKlant: () => this.go('klant'), goMine: () => this.go('mine'),
       hasKform: !!kC, kform: st.kform || {}, kc, skipKlant: () => this.skipKlant(),
       sourceTabs: [['demo', 'Demo-data'], ['trello', 'Trello live']].map(([k, label]) => ({ label, bg: st.source === k ? '#FFFFFF' : 'transparent', fg: st.source === k ? '#1D1D1B' : '#5C5C5A', sh: st.source === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => this.setSource(k) })),
       syncText: this.syncInfo().text, syncDot: this.syncInfo().dot,
       reloadTrello: () => { if (st.source === 'trello') this.startLive(); },
-      liveEmpty: st.source === 'trello' && active.length === 0, emptyHint: me.role === 'teamlead' ? 'Koppel eerst de actieve Trello-borden aan een functie en recruiter.' : 'De teamlead koppelt de Trello-borden aan klanten en recruiters. Daarna verschijnen ze hier.', goTrello: () => this.go('trello'),
-      isLead: me.role === 'teamlead', goTrelloTest: () => this.go('trello-test'),
-      isTrello: st.view === 'trello' && me.role === 'teamlead', tr: this.trelloData(),
-      isTrelloTest: st.view === 'trello-test' && me.role === 'teamlead', trelloConfigured: st.config.trello, goTrelloLive: () => { this.setSource('trello'); this.go('trello'); },
-      isAssign: st.view === 'toewijzing' && me.role === 'teamlead', asg: this.assignData(), asgQ: st.asg.q,
+      liveEmpty: st.source === 'trello' && active.length === 0, emptyHint: can('trello.link') ? 'Koppel eerst de actieve Trello-borden aan een functie en recruiter.' : 'De teamlead koppelt de Trello-borden aan klanten en recruiters. Daarna verschijnen ze hier.', goTrello: () => this.go('trello'),
+      canLinkTrello: can('trello.link'), canRemind: can('reminders.send'), canActions: can('campaign.changes'),
+      canTrelloTest: this.viewOk('trello-test', me), goTrelloTest: () => this.go('trello-test'),
+      canIntegrations: acc.rights.includes('integrations'), goIntegrations: () => { this.setState({ settingsTab: 'integrations' }); this.go('settings'); },
+      isTrello: st.view === 'trello' && can('trello.link'), tr: this.trelloData(),
+      isTrelloTest: st.view === 'trello-test' && this.viewOk('trello-test', me), trelloConfigured: st.config.trello, goTrelloLive: () => { this.setSource('trello'); this.go('trello'); },
+      isAssign: st.view === 'toewijzing' && can('assign'), asg: this.assignData(), asgQ: st.asg.q,
       setAsgQ: e => { const v = e.target.value; this.setState(s => ({ asg: { ...s.asg, q: v } })); },
       isLive: st.view === 'live', live: this.liveData(me), goCheckin: () => this.go('checkin'),
       kq: { doneText: `${kq0.length - kOpen} van ${kq0.length} klanten gaven feedback deze week`, total: kq0.length, open: kOpen, done: kq0.length - kOpen, pct: ((kq0.length - kOpen) / Math.max(kq0.length, 1) * 100) + '%',
@@ -832,19 +913,19 @@ export default class App extends React.Component {
           return { client: c.client, vac: c.vac, bg: sel ? '#FFF8E0' : '#FFFFFF', mark: has ? '✓' : '', markBg: has ? '#E6F4ED' : '#F5F2ED', markBorder: '0', onClick: () => this.loadKlant(c.id) }; }) },
       setKformText: e => { const v = tv(e); this.setState(s => ({ kform: { ...s.kform, klant: v } })); },
       saveKlant: () => this.saveKlant(), kSaveLabel: kOpen > 1 ? 'Opslaan & volgende' : 'Feedback opslaan',
-      nav, sum, groups, list, listCount: list.length, listEmpty: list.length === 0, statusTabs, recOptions, f: st.f,
+      sum, groups, list, listCount: list.length, listEmpty: list.length === 0, statusTabs, recOptions, f: st.f,
       isWeek: st.view === 'week', isCampaigns: st.view === 'campaigns' || st.view === 'mine', isCheckin: st.view === 'checkin', isDetail: st.view === 'detail', isHistory: st.view === 'history', isRules: st.view === 'rules',
       goCampaigns: () => { setF({ status: 'all' }); this.go('campaigns'); }, goWeek: () => this.go('week'),
-      goBack: () => this.go(st.back || 'campaigns'), backLabel: { toewijzing: 'Toewijzing', trello: 'Klanten uit Trello', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', mine: 'Mijn campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: 'Mijn feedback', rules: 'Health-regels' }[st.back] || 'Campagnes',
+      goBack: () => this.go(st.back || 'campaigns'), backLabel: { settings: 'Instellingen', toewijzing: 'Toewijzing', trello: 'Klanten uit Trello', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', mine: 'Mijn campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: 'Mijn feedback', rules: 'Health-regels' }[st.back] || 'Campagnes',
       remind: () => {
         const byRec = {};
         missingD.forEach(m => { (byRec[m.rec] = byRec[m.rec] || []).push(`${m.client} – ${m.vac}`); });
-        const add = Object.entries(byRec).map(([rec, items]) => ({ id: Date.now() + rec, to: rec, from: me.name, at: stamp(), read: false, kind: 'reminder', title: `Nog ${items.length} ${items.length === 1 ? 'campagne' : 'campagnes'} zonder feedback voor week ${wl(CUR)}`, items }));
+        const add = Object.entries(byRec).map(([rec, items]) => ({ id: Date.now() + rec, to: rec, from: this.author(), at: stamp(), read: false, kind: 'reminder', title: `Nog ${items.length} ${items.length === 1 ? 'campagne' : 'campagnes'} zonder feedback voor week ${wl(CUR)}`, items }));
         this.setState(s => ({ reminded: true, inbox: [...add, ...s.inbox] })); this.flash(`Herinnering gestuurd naar ${Object.keys(byRec).join(', ')}`);
       },
       remindLabel: st.reminded ? 'Herinnering verstuurd ✓' : 'Herinnering sturen',
       setSearch: e => setF({ q: tv(e) }), setRecFilter: e => setF({ rec: tv(e) }), setSort: e => setF({ sort: tv(e) }),
-      ci: st.ci, ciRecOptions: [{ v: 'all', l: 'Alle recruiters' }, ...RECS.map(r => ({ v: r, l: 'Ingevuld door ' + r }))],
+      ci: st.ci, ciRecOptions: [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: 'Ingevuld door ' + r }))],
       setCiRec: e => { const v = tv(e); this.setState(s => ({ ci: { ...s.ci, rec: v } }), () => this.enterCheckin()); },
       queue: queue.map(c => {
         const cur = c.weeks[c.weeks.length - 1], doneQ = cur.q != null, sel = f && f.id === c.id;
@@ -867,15 +948,34 @@ export default class App extends React.Component {
       setHistRec: e => { const v = tv(e); this.setState(s => ({ hist: { ...s.hist, rec: v } })); },
       setHistPeriod: e => { const v = tv(e); this.setState(s => ({ hist: { ...s.hist, period: v } })); },
       exportCsv: () => this.exportCsv(),
-      ruleGroups, rulesLocked: me.role !== 'teamlead', resetRules: () => { this.setState({ rules: { ...DEF_RULES } }); this.flash('Standaardregels hersteld'); },
-      canResetDemo: st.source === 'demo',
+      ruleGroups, rulesLocked: !lead, resetRules: () => { this.setState({ rules: { ...DEF_RULES } }); this.flash('Standaardregels hersteld'); },
+      canResetDemo: st.source === 'demo' && can('dev'),
       resetDemo: () => {
         if (!window.confirm('Demo-data en health-regels terugzetten naar de beginstand? Dit geldt voor het hele team.')) return;
         this.setState({ campaigns: build(), rules: { ...DEF_RULES }, form: null, reminded: false }); this.flash('Demo-data hersteld');
       },
-      authEnabled: st.config.auth, saveOffline: st.saveState === 'offline',
-      ...this.panelVals(me, isRec),
+      saveOffline: st.saveState === 'offline',
+      ...this.panelVals(me),
       hasToast: !!st.toast, toast: st.toast
+    };
+  }
+  /** The "Bekijk als" picker (Dev only): team members grouped by role. */
+  viewAsVals() {
+    const st = this.state, acc = st.account;
+    const list = st.members.filter(m => m.rights && m.id !== acc.id && m.status !== 'deactivated');
+    return {
+      enabled: acc.rights.includes('dev') && list.length > 0, value: st.viewAs || '', active: !!st.viewAs,
+      onChange: e => this.setViewAs(e.target.value),
+      groups: Object.keys(ROLES).map(r => ({ label: ROLES[r].label, members: list.filter(m => m.role === r) })).filter(g => g.members.length)
+    };
+  }
+  settingsVals(me) {
+    const st = this.state;
+    return {
+      tab: st.settingsTab, setTab: t => { this.setState({ settingsTab: t }); window.scrollTo(0, 0); },
+      account: st.account, members: st.members, canReal: r => st.account.rights.includes(r),
+      flash: t => this.flash(t), reloadMe: () => this.reloadMe(), reloadConfig: () => this.reloadConfig(),
+      isPreview: me.isPreview, previewName: me.name
     };
   }
   liveData(me) {
@@ -906,7 +1006,7 @@ export default class App extends React.Component {
     const sum = k => rows.reduce((s, r) => s + r[k], 0);
     return {
       sinceText: (() => { const d = new Date(since); const today = new Date().toDateString() === d.toDateString(); return `Sinds je vorige login (${today ? 'vandaag' : d.getDate() + ' ' + MON[d.getMonth()]} ${hhmm(since)}) · minstens 24 uur zichtbaar`; })(),
-      markSeen: () => this.setState(s => ({ seen: { ...s.seen, [me.id]: { ...(s.seen[me.id] || {}), dismissed: Date.now() } } })),
+      markSeen: () => { if (me.isPreview) { this.flash('Dat kan niet in Bekijk als'); return; } this.setState(s => ({ seen: { ...s.seen, [me.id]: { ...(s.seen[me.id] || {}), dismissed: Date.now() } } })); },
       count: mine.length, rows, isEmpty: mine.length === 0, changes, hasChanges: changes.length > 0, chTitle, hasOpen: open > 0, openText: open === 1 ? '1 campagne wacht op je feedback' : `${open} campagnes wachten op je feedback`,
       kpis: [
         { label: 'Vandaag te bellen', value: sum('total'), sub: 'nieuw + contactpogingen', fg: '#FFFFFF', lfg: 'rgba(255,255,255,.8)', bg: '#1B1B63', border: '#1B1B63' },
@@ -928,18 +1028,23 @@ export default class App extends React.Component {
           <main className="app-main">
             <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
               {v.saveOffline ? <div style={{ background: '#FDECEA', color: '#D32F2F', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', fontWeight: 500, marginBottom: '20px' }}>Geen verbinding met de server. Je wijzigingen worden opgeslagen zodra de verbinding terug is; sluit dit tabblad nog niet.</div> : null}
+              {v.user.isPreview ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '10px 16px', fontSize: '14px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span>Je bekijkt de app als <b>{v.user.name}</b> ({v.user.roleLabel}). Wat je opslaat, wordt opgeslagen als {v.authorName}.</span>
+                <button onClick={() => this.setViewAs('')} className="link-btn">Stoppen</button>
+              </div> : null}
               <TopActions v={v} />
               {v.isWeek ? <WeekView v={v} /> : null}
               {v.isCampaigns ? <CampaignsView v={v} /> : null}
               {v.isCheckin ? <CheckinView v={v} /> : null}
               {v.isLive ? <LiveView v={v} /> : null}
               {v.isTrello ? <TrelloView v={v} /> : null}
-              {v.isTrelloTest ? <TrelloTestView v={v} tget={(p, q) => this.tget(p, q)} /> : null}
+              {v.isTrelloTest ? <TrelloTestView v={v} tget={p => this.tget(p)} /> : null}
               {v.isAssign ? <AssignView v={v} /> : null}
               {v.isKlant ? <KlantView v={v} /> : null}
               {v.isDetail ? <DetailView v={v} /> : null}
               {v.isHistory ? <HistoryView v={v} /> : null}
               {v.isRules ? <RulesView v={v} /> : null}
+              {v.isSettings ? <SettingsView s={v.settings} /> : null}
             </div>
           </main>
         </div>

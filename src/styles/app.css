@@ -23,6 +23,13 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
 .boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#5C5C5A;font-size:14px}
 .boot img{height:34px}
 
+/* Settings › Leden: one row per member; stacked on phones */
+.member-row{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) auto}
+@media (max-width: 640px){
+  .member-row{grid-template-columns:minmax(0,1fr);gap:6px !important}
+  .member-row > span:last-child{justify-content:flex-start !important}
+}
+
 @media (max-width: 900px){
   .app-shell{grid-template-columns:minmax(0,1fr)}
   .app-aside{position:static;height:auto;overflow:visible;border-right:0;border-bottom:1px solid #E4E1DE;gap:14px;padding:16px}

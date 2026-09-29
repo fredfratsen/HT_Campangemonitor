@@ -18,7 +18,21 @@
       "Bash(awk '{print \"port 3000 still served by PID\", $2}')",
       "Bash(git -C . log --oneline -3)",
       "Bash(head -20 ~/README.md; echo \"--- mail grep ---\"; grep -rn -i \"mail\\\\|herinnering\" src server --include=*.js --include=*.jsx | head -10)",
-      "Bash(grep -n -o -E \"remind[A-Za-z]*|Bijsturing[^<'\\\\\"]*|Kwaliteit[^<'\\\\\"]{0,40}|placeholder=\\\\\"[^\\\\\"]*\\\\\"|>[A-Z][a-z][^<{]{6,60}<\" src/views/CheckinView.jsx src/views/WeekView.jsx src/views/DetailView.jsx)"
+      "Bash(grep -n -o -E \"remind[A-Za-z]*|Bijsturing[^<'\\\\\"]*|Kwaliteit[^<'\\\\\"]{0,40}|placeholder=\\\\\"[^\\\\\"]*\\\\\"|>[A-Z][a-z][^<{]{6,60}<\" src/views/CheckinView.jsx src/views/WeekView.jsx src/views/DetailView.jsx)",
+      "Bash(sort -k2)",
+      "Bash(BASE=http://localhost:3911 LOG=/private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/d1.log OUT=/private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/flow-out.json node /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/flow.mjs)",
+      "Bash(BASE=http://localhost:3911 OUT=/private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/flow-out.json node /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/kim.mjs)",
+      "Bash(pkill -f \"server/index.js\")",
+      "Bash(cd /Users/tsjerk/Webdesign && ls; ls HT_Campagnemonitor/node_modules | grep -i playwright; ls */node_modules 2>/dev/null | grep -i playwright | head; ls ~/Library/Caches/ms-playwright 2>/dev/null | head)",
+      "Read(//Users/tsjerk/Webdesign/**)",
+      "Bash(SP=/private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad timeout 180 node /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/e2e.mjs)",
+      "Bash(SP=/private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad node /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/e2e.mjs)",
+      "Bash(chmod +x restart.sh)",
+      "Bash(./restart.sh)",
+      "Bash(SP=__TRACKED_VAR__ node e2e.mjs)",
+      "Bash(/private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/restart.sh)",
+      "Bash(sed -i '' 's/'\\\\''robbin zijn wachtwoord'\\\\''/'\\\\''de teamlead zijn wachtwoord'\\\\''/g' /private/tmp/claude-501/-Users-tsjerk-Webdesign-HT-Campagnemonitor/e0f6023d-8b55-4cdb-835d-445b552a645e/scratchpad/e2e.mjs)",
+      "Bash(npm test *)"
     ]
   }
 }

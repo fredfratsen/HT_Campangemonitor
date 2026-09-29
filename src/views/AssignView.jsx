@@ -5,7 +5,7 @@ export default function AssignView({ v }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header>
-        <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Teamlead</div>
+        <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Beheer</div>
         <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Toewijzing</h1>
         <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '640px', textWrap: 'pretty' }}>Wijs per klant een recruiter en een Recruitment Marketeer toe, of zet de opvolging op ‘Niet actief’. De recruiter geldt voor alle functies van de klant. Een klant die nog niet gekoppeld is, wordt meteen gekoppeld als ‘Alle functies’; per label splitsen kan daarna in Klanten uit Trello.</div>
       </header>

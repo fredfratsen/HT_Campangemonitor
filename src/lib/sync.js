@@ -4,6 +4,9 @@
 // change only the entries that actually changed are sent, so two people saving different campaigns at the same
 // moment never overwrite each other. Other people's changes arrive by polling.
 //
+// The server checks every change against the rights of whoever is logged in. Changes it refuses come back as
+// `rejected`: those keys are not sent again this session, and the server's version is loaded instead.
+//
 // Without a server (e.g. the built files opened as a static site) it falls back to this browser's localStorage.
 import { DEF_RULES } from './constants.js';
 import { lsGet, lsSet } from './helpers.js';
@@ -73,11 +76,13 @@ export class Sync {
    * @param {() => object} o.getState   current app state
    * @param {(docs: object, done: () => void) => void} o.apply   put remote documents into app state, call done() once applied
    * @param {(status: 'ok'|'offline') => void} o.onStatus
+   * @param {(rejected: {doc: string, key: string}[]) => void} [o.onRejected]   changes the server refused
    */
-  constructor({ getState, apply, onStatus }) {
-    this.getState = getState; this.apply = apply; this.onStatus = onStatus;
+  constructor({ getState, apply, onStatus, onRejected = () => {} }) {
+    this.getState = getState; this.apply = apply; this.onStatus = onStatus; this.onRejected = onRejected;
     this.mode = 'local'; this.config = { trello: false, auth: false }; this.rev = 0; this.base = {};
     this.ready = false; this.busy = false; this.again = false; this.pullSoon = false; this.failures = 0; this.lastRefs = null;
+    this.blocked = new Set(); this.full = false;
   }
 
   async req(method, url, body) {
@@ -92,6 +97,13 @@ export class Sync {
   }
 
   authLost() { window.location.href = '/login'; }
+
+  /** The logged-in account and the team, or null without a server. */
+  async me() {
+    if (this.mode !== 'server') return null;
+    try { return await this.req('GET', '/api/me'); }
+    catch (e) { if (e instanceof AuthLost) this.authLost(); throw e; }
+  }
 
   /** Detects the server and loads the shared documents. */
   async start() {
@@ -148,10 +160,11 @@ export class Sync {
       if (!m) continue;
       const b = this.base[name] || {}, set = {}, json = {}, del = [];
       for (const k of Object.keys(m)) {
+        if (this.blocked.has(name + '/' + k)) continue;
         const j = JSON.stringify(m[k]);
         if (j !== undefined && b[k] !== j) { set[k] = m[k]; json[k] = j; }
       }
-      for (const k of Object.keys(b)) if (!(k in m)) del.push(k);
+      for (const k of Object.keys(b)) if (!(k in m) && !this.blocked.has(name + '/' + k)) del.push(k);
       if (del.length || Object.keys(set).length) patches.push({ doc: name, set, del, json });
     }
     return patches;
@@ -177,6 +190,11 @@ export class Sync {
         // If someone else saved in between, keep the old rev so the next pull fetches their changes too.
         if (r.rev === this.rev + 1) this.rev = r.rev; else this.pullSoon = true;
         this.commit(patches);
+        if (r.rejected && r.rejected.length) {
+          for (const x of r.rejected) this.blocked.add(x.doc + '/' + x.key);
+          this.full = true; this.pullSoon = true;
+          this.onRejected(r.rejected);
+        }
       } else {
         this.commit(patches);
         const docs = toDocs(this.getState()), out = {};
@@ -202,12 +220,12 @@ export class Sync {
     if (this.busy) { this.pullSoon = true; return; }
     if (this.diff().length) { this.pullSoon = true; this.flush(); return; }
     try {
-      const r = await this.req('GET', '/api/state?rev=' + this.rev);
+      const r = await this.req('GET', this.full ? '/api/state' : '/api/state?rev=' + this.rev);
       if (this.failures) { this.failures = 0; this.onStatus('ok'); }
       if (r.unchanged) return;
       if (this.busy || this.diff().length) { this.pullSoon = true; return; }
       // Only move the baseline once React has applied the new state, so a save in between can't send stale data.
-      this.apply(r.docs, () => { this.base = serialize(r.docs); this.rev = r.rev; this.changed(); });
+      this.apply(r.docs, () => { this.base = serialize(r.docs); this.rev = r.rev; this.full = false; this.changed(); });
     } catch (e) {
       if (e instanceof AuthLost) this.authLost();
       else { this.failures++; this.onStatus('offline'); }

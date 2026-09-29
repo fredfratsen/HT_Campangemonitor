@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../components/Button.jsx';
 
 export default function DetailView({ v }) {
-  const { act, addAction, backLabel, d, goBack, isMarketeer, setActText, setActType, setActWeek, showTrello, zone } = v;
+  const { act, addAction, backLabel, canActions, d, goBack, setActText, setActType, setActWeek, showTrello, zone } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -17,7 +17,7 @@ export default function DetailView({ v }) {
               <span style={{ fontSize: '13px', color: '#8C8C8A', marginLeft: '6px' }}>Recruiter {d.rec} · Marketeer {d.mkt} · gestart week {d.startLabel}</span>
             </div>
           </div>
-          <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button>
+          {d.hasFill ? <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button> : null}
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px' }}>
@@ -127,7 +127,7 @@ export default function DetailView({ v }) {
         <div style={{ flex: '1 1 300px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Acties & campagnewijzigingen</div>
-            {isMarketeer ? <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {canActions ? <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <select value={act.type ?? ''} onChange={setActType} style={{ flex: '1', height: '38px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
                     <option value="Advertentie">Advertentie</option>

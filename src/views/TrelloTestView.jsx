@@ -1,12 +1,11 @@
-// Trello-koppeling testen (teamlead). Replaces the design's separate "Trello-koppeling test" page: the API key
-// and token now live on the server, so this page checks the connection and whether a board follows the
-// conventions the monitor relies on (list names, labels, custom fields).
+// Trello-koppeling testen. Replaces the design's separate "Trello-koppeling test" page: the API key and token
+// live on the server (Instellingen › Integraties), so this page checks the connection and whether a board follows
+// the conventions the monitor relies on (list names, labels, custom fields).
 import React, { useEffect, useState } from 'react';
 import Button from '../components/Button.jsx';
 import { stageOf } from '../lib/constants.js';
 import { agoTxt } from '../lib/helpers.js';
 
-const BOARD_Q = '&fields=name&lists=open&list_fields=name&labels=all&label_fields=name,color&cards=all&card_fields=idList,idLabels,closed&card_customFieldItems=true&customFields=true';
 const STAGES = {
   nieuw: ['Nieuw', 'nog bellen; telt mee in “Vandaag te bellen”', '#1B1B63'],
   contact: ['Contactpoging', 'opnieuw bellen; telt mee in “Vandaag te bellen”', '#B45309'],
@@ -24,7 +23,6 @@ const h2 = { margin: 0, fontFamily: 'Poppins,sans-serif', fontWeight: 600, fontS
 const eyebrow = { fontSize: '11px', fontWeight: 500, letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A' };
 const dot = c => ({ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: c });
 const row = { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', flexWrap: 'wrap' };
-const code = { fontFamily: "'SF Mono','Fira Code',Consolas,monospace", fontSize: '12.5px', background: '#F5F2ED', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' };
 
 function Check({ ok, warn, children, sub }) {
   const c = ok ? '#1A7A4A' : warn ? '#B45309' : '#D32F2F';
@@ -37,7 +35,7 @@ function Check({ ok, warn, children, sub }) {
 }
 
 export default function TrelloTestView({ v, tget }) {
-  const { trelloConfigured, goTrelloLive } = v;
+  const { canIntegrations, goIntegrations, trelloConfigured, goTrelloLive } = v;
   const [conn, setConn] = useState({ state: trelloConfigured ? 'idle' : 'off' });
   const [boardId, setBoardId] = useState('');
   const [board, setBoard] = useState(null);
@@ -45,8 +43,8 @@ export default function TrelloTestView({ v, tget }) {
   const test = async () => {
     setConn({ state: 'busy' });
     try {
-      const me = await tget('/members/me', '&fields=fullName,username');
-      const boards = await tget('/members/me/boards', '&filter=open&fields=name,dateLastActivity');
+      const me = await tget('/members/me');
+      const boards = await tget('/members/me/boards');
       boards.sort((a, b) => new Date(b.dateLastActivity) - new Date(a.dateLastActivity));
       setConn({ state: 'ok', me, boards });
     } catch (e) { setConn({ state: 'error', msg: e.message }); }
@@ -57,7 +55,7 @@ export default function TrelloTestView({ v, tget }) {
     setBoardId(id); setBoard(null);
     if (!id) return;
     setBoard({ busy: true });
-    try { setBoard({ data: await tget(`/boards/${id}`, BOARD_Q) }); } catch (e) { setBoard({ error: e.message }); }
+    try { setBoard({ data: await tget(`/boards/${id}`) }); } catch (e) { setBoard({ error: e.message }); }
   };
 
   let an = null;
@@ -87,12 +85,10 @@ export default function TrelloTestView({ v, tget }) {
           {conn.state !== 'off' ? <Button variant="ghost" size="sm" onClick={test} disabled={conn.state === 'busy'}>{conn.state === 'busy' ? 'Bezig…' : 'Opnieuw testen'}</Button> : null}
         </div>
         {conn.state === 'off' ? <>
-          <div style={row}><span style={dot('#D32F2F')} /><span style={{ fontWeight: 600 }}>Trello is nog niet ingesteld op de server</span></div>
-          <ol style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px', lineHeight: 1.55, color: '#3C3C3A' }}>
-            <li>Open <a href="https://trello.com/power-ups/admin" target="_blank" rel="noreferrer">trello.com/power-ups/admin</a>, maak een Power-Up aan in de workspace met de klantborden (bijvoorbeeld “Campagnemonitor”) en kopieer onder <em>API-sleutel</em> de key.</li>
-            <li>Maak een token met alleen leesrechten. Log in met een Trello-account dat alle klantborden kan zien en open: <span style={code}>https://trello.com/1/authorize?expiration=never&amp;name=Campagnemonitor&amp;scope=read&amp;response_type=token&amp;key=JOUW_KEY</span></li>
-            <li>Zet in Render bij <em>Environment</em> de variabelen <span style={code}>TRELLO_KEY</span> en <span style={code}>TRELLO_TOKEN</span>. Na de herstart kun je hier testen.</li>
-          </ol>
+          <div style={row}><span style={dot('#D32F2F')} /><span style={{ fontWeight: 600 }}>Trello is nog niet gekoppeld</span></div>
+          {canIntegrations
+            ? <div style={{ ...row, justifyContent: 'space-between' }}><span style={{ fontSize: '14px', color: '#3C3C3A' }}>Stel de API-sleutel en het token in onder Instellingen › Integraties.</span><Button variant="accent" size="sm" onClick={goIntegrations}>Naar Integraties</Button></div>
+            : <div style={{ fontSize: '14px', color: '#3C3C3A' }}>De Dev stelt de Trello-sleutels in onder Instellingen › Integraties. Daarna kun je hier testen.</div>}
           <div style={{ fontSize: '13px', color: '#8C8C8A' }}>De key en het token blijven op de server; ze komen nooit in de browser van het team.</div>
         </> : null}
         {conn.state === 'busy' || conn.state === 'idle' ? <div style={row}><span style={dot('#F9A800')} />Verbinden met Trello…</div> : null}
