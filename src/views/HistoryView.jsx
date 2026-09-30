@@ -10,7 +10,7 @@ export default function HistoryView({ v }) {
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>{wk.histRange}</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Historie & analyse</h1>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="m-filters" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={hist.status ?? ''} onChange={setHistStatus} style={{ height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '14px', background: '#FFFFFF' }}>
             <option value="all">Alle campagnes</option>
             <option value="active">Actief</option>
@@ -27,15 +27,15 @@ export default function HistoryView({ v }) {
           <Button variant="outline" onClick={exportCsv}>Export CSV</Button>
         </div>
       </header>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px' }}>
+      <div className="m-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px' }}>
         {histKpis.map((k, i) => <div key={i} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '16px 18px' }}>
             <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>{k.label}</div>
             <div style={{ marginTop: '6px', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '26px', lineHeight: '1.1' }}>{k.value}</div>
           </div>)}
       </div>
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-        <div style={{ minWidth: '1000px', padding: '8px 0' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: `minmax(230px,1.6fr) minmax(0,${histCols}) 64px 64px 64px 56px`, gap: '12px', padding: '10px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', alignItems: 'end' }}>
+        <div className="m-table" style={{ minWidth: '1000px', padding: '8px 0' }}>
+          <div className="hist-head" style={{ display: 'grid', gridTemplateColumns: `minmax(230px,1.6fr) minmax(0,${histCols}) 64px 64px 64px 56px`, gap: '12px', padding: '10px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', alignItems: 'end' }}>
             <div>Kwaliteit per week</div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${histN},minmax(0,1fr))`, gap: '3px' }}>
               {histWeeks.map((w, i) => <div key={i} style={{ textAlign: 'center' }}>{w}</div>)}
@@ -45,7 +45,7 @@ export default function HistoryView({ v }) {
             <div style={{ textAlign: 'right' }}>Geplaatst</div>
             <div style={{ textAlign: 'right' }}>Acties</div>
           </div>
-          {histRows.map((r, i) => <div key={i} className="hov-row" onClick={r.open} style={{ display: 'grid', gridTemplateColumns: `minmax(230px,1.6fr) minmax(0,${histCols}) 64px 64px 64px 56px`, gap: '12px', padding: '6px 20px', alignItems: 'center', cursor: 'pointer', fontSize: '13px' }}>
+          {histRows.map((r, i) => <div key={i} className="hov-row hist-row" onClick={r.open} style={{ display: 'grid', gridTemplateColumns: `minmax(230px,1.6fr) minmax(0,${histCols}) 64px 64px 64px 56px`, gap: '12px', padding: '6px 20px', alignItems: 'center', cursor: 'pointer', fontSize: '13px' }}>
               <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ width: '7px', height: '7px', borderRadius: '50%', flex: 'none', background: r.dot }} />
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -57,10 +57,10 @@ export default function HistoryView({ v }) {
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${histN},minmax(0,1fr))`, gap: '3px' }}>
                 {r.cells.map((x, j) => <div key={j} style={{ height: '30px', borderRadius: '5px', background: x.bg, color: x.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '600', position: 'relative' }}>{x.t}{x.act ? <span style={{ position: 'absolute', top: '3px', right: '3px', width: '5px', height: '5px', borderRadius: '1px', background: '#FB8915', transform: 'rotate(45deg)' }} /> : null}</div>)}
               </div>
-              <div style={{ textAlign: 'right', fontWeight: '600' }}>{r.total}</div>
-              <div style={{ textAlign: 'right', fontWeight: '600', color: r.avgFg }}>{r.avg}</div>
-              <div style={{ textAlign: 'right' }}>{r.placed}</div>
-              <div style={{ textAlign: 'right', color: '#5C5C5A' }}>{r.acts}</div>
+              <div data-label="Instroom" style={{ textAlign: 'right', fontWeight: '600' }}>{r.total}</div>
+              <div data-label="Gem. kw." style={{ textAlign: 'right', fontWeight: '600', color: r.avgFg }}>{r.avg}</div>
+              <div data-label="Geplaatst" style={{ textAlign: 'right' }}>{r.placed}</div>
+              <div data-label="Acties" style={{ textAlign: 'right', color: '#5C5C5A' }}>{r.acts}</div>
             </div>)}
         </div>
       </div>
@@ -73,8 +73,8 @@ export default function HistoryView({ v }) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <h2 style={{ margin: '0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '20px' }}>Wat gebeurde er na een wijziging?</h2>
         <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-          <div style={{ minWidth: '860px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '56px minmax(200px,1.2fr) 110px minmax(220px,2fr) 150px 150px', gap: '14px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE' }}>
+          <div className="m-table" style={{ minWidth: '860px' }}>
+            <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: '56px minmax(200px,1.2fr) 110px minmax(220px,2fr) 150px 150px', gap: '14px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE' }}>
               <div>Week</div>
               <div>Campagne</div>
               <div>Type</div>
@@ -82,7 +82,7 @@ export default function HistoryView({ v }) {
               <div>Kwaliteit vóór → na</div>
               <div>Instroom vóór → na</div>
             </div>
-            {effects.map((e, i) => <div key={i} className="hov-row" onClick={e.open} style={{ display: 'grid', gridTemplateColumns: '56px minmax(200px,1.2fr) 110px minmax(220px,2fr) 150px 150px', gap: '14px', padding: '12px 20px', borderBottom: '1px solid #F5F2ED', fontSize: '13px', alignItems: 'baseline', cursor: 'pointer' }}>
+            {effects.map((e, i) => <div key={i} className="hov-row eff-row" onClick={e.open} style={{ display: 'grid', gridTemplateColumns: '56px minmax(200px,1.2fr) 110px minmax(220px,2fr) 150px 150px', gap: '14px', padding: '12px 20px', borderBottom: '1px solid #F5F2ED', fontSize: '13px', alignItems: 'baseline', cursor: 'pointer' }}>
                 <div style={{ fontWeight: '600' }}>W{e.wl}</div>
                 <div>
                   <strong>{e.client}</strong>
@@ -90,12 +90,12 @@ export default function HistoryView({ v }) {
                 </div>
                 <div style={{ color: '#3C3C3A' }}>{e.type}</div>
                 <div style={{ lineHeight: '1.45' }}>{e.text}</div>
-                <div>
+                <div data-label="Kwaliteit vóór → na">
                   <span>{e.q}</span>
                   {' '}
                   <span style={{ fontWeight: '600', color: e.qFg }}>{e.qd}</span>
                 </div>
-                <div>
+                <div data-label="Instroom vóór → na">
                   <span>{e.l}</span>
                   {' '}
                   <span style={{ fontWeight: '600', color: '#5C5C5A' }}>{e.ld}</span>

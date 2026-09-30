@@ -15,7 +15,7 @@ export default function WeekView({ v }) {
           <Button variant="outline" onClick={goCampaigns}>Alle campagnes</Button>
         </div>
       </header>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '16px' }}>
+      <div className="m-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '16px' }}>
         <div className="span-2" style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px', gridColumn: 'span 2', minWidth: '0' }}>
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Campagne health deze week</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: '16px' }}>
@@ -60,7 +60,7 @@ export default function WeekView({ v }) {
             <span style={{ fontSize: '15px', color: '#8C8C8A' }}>{g.n}</span>
             <span style={{ fontSize: '13px', color: '#5C5C5A' }}>{g.sub}</span>
           </div>
-          {g.cards ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: '14px' }}>
+          {g.cards ? <div className="m-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: '14px' }}>
               {g.items.map((c, j) => <div key={j} className="hov-lift" onClick={c.open} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer', boxShadow: '0 1px 2px rgba(29,29,27,.05)', transition: 'box-shadow 150ms' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
                     <div style={{ minWidth: '0' }}>
@@ -84,7 +84,7 @@ export default function WeekView({ v }) {
                 </div>)}
             </div> : null}
           {g.rows ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
-              {g.items.map((c, j) => <div key={j} className="hov-row" onClick={c.open} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) auto auto minmax(0,2fr)', gap: '16px', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F5F2ED', cursor: 'pointer', fontSize: '14px' }}>
+              {g.items.map((c, j) => <div key={j} className="hov-row week-row" onClick={c.open} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) auto auto minmax(0,2fr)', gap: '16px', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F5F2ED', cursor: 'pointer', fontSize: '14px' }}>
                   <div style={{ minWidth: '0' }}>
                     <span style={{ fontWeight: '600' }}>{c.client}</span>
                     <span style={{ color: '#5C5C5A' }}> – {c.vac}</span>

@@ -13,6 +13,7 @@ import { ROLES, LEVELS, RIGHT_KEYS } from './lib/permissions.js';
 import { api } from './lib/api.js';
 
 import Sidebar from './views/Sidebar.jsx';
+import MobileBar from './views/MobileBar.jsx';
 import TopActions from './views/TopActions.jsx';
 import WeekView from './views/WeekView.jsx';
 import CampaignsView from './views/CampaignsView.jsx';
@@ -30,6 +31,8 @@ import SettingsView from './views/settings/SettingsView.jsx';
 
 // Per-browser settings (chosen data source, news read, "Bekijk als")
 const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as';
+// Below this width the sidebar is a slide-in menu (keep in sync with the media query in styles/app.css).
+const PHONE_MQ = '(max-width: 900px)';
 // Without a server (the built files opened as a static site) there are no accounts: everything is allowed.
 const LOCAL_ACCOUNT = { id: 'local', name: 'Lokaal', role: 'dev', recName: null, level: 'owner', rights: RIGHT_KEYS, grants: [], revokes: [] };
 const prepCampaigns = cs => rollForward(cs.map(c => RENAME[c.rec] ? { ...c, rec: RENAME[c.rec] } : c).map(ensureReasons));
@@ -44,7 +47,7 @@ export default class App extends React.Component {
     return {
       loaded: false, saveState: 'ok', config: { trello: false, auth: false },
       account: null, members: [], viewAs: null, settingsTab: 'account',
-      view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null,
+      view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null, navOpen: false,
       campaigns: null, rules: { ...DEF_RULES },
       f: { q: '', status: 'all', rec: 'all', sort: 'status' },
       ci: { rec: 'all' }, form: null,
@@ -59,6 +62,7 @@ export default class App extends React.Component {
   // ── Loading & syncing ────────────────────────────────────────────────
   async componentDidMount() {
     this._k = e => {
+      if (e.key === 'Escape' && this.state.navOpen) { this.setState({ navOpen: false }); return; }
       if (this.state.view === 'klant' && this.state.kform && (e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); this.saveKlant(); return; }
       if (this.state.view !== 'checkin' || !this.state.form) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); this.saveForm(); return; }
@@ -67,6 +71,9 @@ export default class App extends React.Component {
       if (/^[0-9]$/.test(e.key)) this.setForm({ q: e.key === '0' ? 10 : +e.key, err: false });
     };
     window.addEventListener('keydown', this._k);
+    this._mq = window.matchMedia(PHONE_MQ);
+    this._mqFn = e => { if (!e.matches && this.state.navOpen) this.setState({ navOpen: false }); };
+    this._mq.addEventListener('change', this._mqFn);
 
     this.sync = new Sync({
       getState: () => this.state, apply: (docs, done) => this.applyShared(docs, done), onStatus: s => this.setState({ saveState: s }),
@@ -116,14 +123,23 @@ export default class App extends React.Component {
     });
   }
 
-  componentDidUpdate() {
+  componentDidUpdate(prevProps, prevState) {
+    if (prevState.navOpen !== this.state.navOpen) this.navChanged();
     if (!this.state.loaded) return;
     if (!this.viewOk(this.state.view)) { this.setState({ view: this.homeView() }); return; }
     this.syncLive();
     this.sync.changed();
   }
 
-  componentWillUnmount() { window.removeEventListener('keydown', this._k); clearInterval(this._seenTimer); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); if (this.sync) this.sync.stop(); }
+
+  /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
+  navChanged() {
+    const open = this.state.navOpen;
+    document.body.classList.toggle('nav-locked', open);
+    if (open) { const b = document.querySelector('.nav-close'); if (b) b.focus(); }
+    else if (document.querySelector('.app-aside').contains(document.activeElement)) { const b = document.querySelector('.nav-toggle'); if (b) b.focus(); }
+  }
 
   // ── Trello ───────────────────────────────────────────────────────────
   /** Trello data via the server, which also decides which fields are fetched. */
@@ -333,7 +349,7 @@ export default class App extends React.Component {
     const mineN = st.inbox.filter(n => n.to === me.name || (me.rec && n.to === me.rec));
     const openFb = new Set(st.campaigns.filter(c => !c.ended && c.weeks[c.weeks.length - 1].q == null).map(c => `${c.client} – ${c.vac}`));
     const setP = p => () => {
-      const upd = { panel: st.panel === p ? null : p };
+      const upd = { panel: st.panel === p ? null : p, navOpen: false };
       if (p === 'inbox' && !me.isPreview) upd.inbox = st.inbox.map(n => mineN.includes(n) && !n.read ? { ...n, read: true } : n);
       if (p === 'news') { upd.newsSeen = NEWS[0].id; lsSet(NEWS_KEY, NEWS[0].id); }
       this.setState(upd);
@@ -530,14 +546,14 @@ export default class App extends React.Component {
   canFeedback(c, me = this.me()) { return me.rights.has('feedback.all') || (me.rights.has('feedback.own') && !!me.rec && c.rec === me.rec); }
   go(view) {
     if (!this.viewOk(view)) view = this.homeView();
-    this.setState({ view }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0);
+    this.setState({ view, navOpen: false }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0);
   }
   setViewAs(id) {
     lsSet(VIEW_AS_KEY, id || null);
     api('POST', '/api/me/view-as', { id: id || null }).catch(() => {});
     this.setState({ viewAs: id || null }, () => {
       const me = this.me(), home = this.homeView(me);
-      this.setState(s => ({ ci: { rec: me.rec || 'all' }, f: { ...s.f, rec: 'all', status: 'all' }, form: null, kform: null, view: home, back: home, panel: null }));
+      this.setState(s => ({ ci: { rec: me.rec || 'all' }, f: { ...s.f, rec: 'all', status: 'all' }, form: null, kform: null, view: home, back: home, panel: null, navOpen: false }));
       window.scrollTo(0, 0);
     });
   }
@@ -891,6 +907,7 @@ export default class App extends React.Component {
       user: { id: me.id, name: me.name, roleLabel: me.roleLabel, isPreview: me.isPreview }, authorName: this.author(),
       account: { name: acc.name, roleLabel: ROLES[acc.role].label, levelLabel: LEVELS[ROLES[acc.role].level].label },
       viewAs: this.viewAsVals(), navSections, goSettings: () => { this.setState({ settingsTab: 'account' }); this.go('settings'); },
+      navOpen: st.navOpen, openNav: () => this.setState({ navOpen: true }), closeNav: () => this.setState({ navOpen: false }),
       isSettings: st.view === 'settings', settings: this.settingsVals(me),
       showRecFilter: st.view !== 'mine', recNames,
       campTitle: st.view === 'mine' ? 'Mijn campagnes' : 'Actieve campagnes',
@@ -910,7 +927,7 @@ export default class App extends React.Component {
       isLive: st.view === 'live', live: this.liveData(me), goCheckin: () => this.go('checkin'),
       kq: { doneText: `${kq0.length - kOpen} van ${kq0.length} klanten gaven feedback deze week`, total: kq0.length, open: kOpen, done: kq0.length - kOpen, pct: ((kq0.length - kOpen) / Math.max(kq0.length, 1) * 100) + '%',
         items: kq0.map(c => { const has = !!c.weeks[c.weeks.length - 1].klant, sel = st.kform && st.kform.id === c.id;
-          return { client: c.client, vac: c.vac, bg: sel ? '#FFF8E0' : '#FFFFFF', mark: has ? '✓' : '', markBg: has ? '#E6F4ED' : '#F5F2ED', markBorder: '0', onClick: () => this.loadKlant(c.id) }; }) },
+          return { sel, client: c.client, vac: c.vac, bg: sel ? '#FFF8E0' : '#FFFFFF', mark: has ? '✓' : '', markBg: has ? '#E6F4ED' : '#F5F2ED', markBorder: '0', onClick: () => this.loadKlant(c.id) }; }) },
       setKformText: e => { const v = tv(e); this.setState(s => ({ kform: { ...s.kform, klant: v } })); },
       saveKlant: () => this.saveKlant(), kSaveLabel: kOpen > 1 ? 'Opslaan & volgende' : 'Feedback opslaan',
       sum, groups, list, listCount: list.length, listEmpty: list.length === 0, statusTabs, recOptions, f: st.f,
@@ -929,7 +946,7 @@ export default class App extends React.Component {
       setCiRec: e => { const v = tv(e); this.setState(s => ({ ci: { ...s.ci, rec: v } }), () => this.enterCheckin()); },
       queue: queue.map(c => {
         const cur = c.weeks[c.weeks.length - 1], doneQ = cur.q != null, sel = f && f.id === c.id;
-        return { client: c.client, vac: c.vac, qText: doneQ ? cur.q + '/10' : '', qFg: qc(cur.q), bg: sel ? '#FFF8E0' : '#FFFFFF', mark: doneQ ? '✓' : '', markBg: doneQ ? '#E6F4ED' : '#FFFFFF', markFg: '#1A7A4A', markBorder: doneQ ? '0' : '1.5px solid #C0BDB9', onClick: () => this.loadForm(c.id) };
+        return { sel, client: c.client, vac: c.vac, qText: doneQ ? cur.q + '/10' : '', qFg: qc(cur.q), bg: sel ? '#FFF8E0' : '#FFFFFF', mark: doneQ ? '✓' : '', markBg: doneQ ? '#E6F4ED' : '#FFFFFF', markFg: '#1A7A4A', markBorder: doneQ ? '0' : '1.5px solid #C0BDB9', onClick: () => this.loadForm(c.id) };
       }),
       queueTotal: queue.length, queueOpen: qOpen, queueDone: queue.length - qOpen, queuePct: ((queue.length - qOpen) / Math.max(queue.length, 1) * 100) + '%', queueComplete: queue.length > 0 && qOpen === 0,
       hasForm: !!fcC, form: f || {}, fc, scoreBtns,
@@ -1023,9 +1040,11 @@ export default class App extends React.Component {
     const v = this.renderVals();
     return (
       <>
-        <div className="app-shell">
+        <div className={v.navOpen ? 'app-shell nav-open' : 'app-shell'}>
+          <MobileBar v={v} />
           <Sidebar v={v} />
-          <main className="app-main">
+          <div className="nav-backdrop" onClick={v.closeNav} aria-hidden="true" />
+          <main className="app-main" inert={v.navOpen ? '' : undefined}>
             <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
               {v.isLocal ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', marginBottom: '20px' }}><b>Lokale demo zonder server.</b> Inloggen en rechten staan uit, en wat je invult blijft alleen in deze browser; het team ziet het niet.</div> : null}
               {v.saveOffline ? <div style={{ background: '#FDECEA', color: '#D32F2F', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', fontWeight: 500, marginBottom: '20px' }}>Geen verbinding met de server. Je wijzigingen worden opgeslagen zodra de verbinding terug is; sluit dit tabblad nog niet.</div> : null}
@@ -1050,7 +1069,7 @@ export default class App extends React.Component {
           </main>
         </div>
         {v.hasPanel ? <SidePanel v={v} /> : null}
-        {v.hasToast ? <div role="status" style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', background: '#1B1B63', color: '#FFFFFF', padding: '12px 18px', borderRadius: '10px', fontSize: '14px', boxShadow: '0 8px 32px rgba(29,29,27,.15)', zIndex: 10 }}>{v.toast}</div> : null}
+        {v.hasToast ? <div role="status" className="toast" style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', background: '#1B1B63', color: '#FFFFFF', padding: '12px 18px', borderRadius: '10px', fontSize: '14px', boxShadow: '0 8px 32px rgba(29,29,27,.15)', zIndex: 10 }}>{v.toast}</div> : null}
       </>
     );
   }

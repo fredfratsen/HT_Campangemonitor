@@ -2,19 +2,34 @@ import React from 'react';
 
 const eyebrow = { fontSize: '11px', fontWeight: '500', letterSpacing: '.08em', textTransform: 'uppercase', color: '#8C8C8A' };
 const linkish = { border: '0', background: 'none', padding: '0', fontSize: '12px', color: '#8C8C8A', textAlign: 'left', cursor: 'pointer' };
+const navBtn = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', border: '0', fontSize: '14px', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left' };
 
+// On desktop this is the fixed left column. On phones it is a slide-in menu (see .app-aside in styles/app.css);
+// the close button and the "Wat is er nieuw" / "Bug of idee melden" items (the top-right buttons on desktop) only show there.
 export default function Sidebar({ v }) {
-  const { account, canResetDemo, canTrelloTest, goSettings, goTrelloTest, navSections, reloadTrello, resetDemo, sourceTabs, syncDot, syncText, viewAs } = v;
+  const { account, canResetDemo, canTrelloTest, closeNav, goSettings, goTrelloTest, navSections, news, openIdea, openNews, reloadTrello, resetDemo, sourceTabs, syncDot, syncText, viewAs } = v;
   return (
-    <aside className="app-aside">
-      <img src="/logo.png" alt="Horeca Toppers" style={{ height: '34px', width: 'auto', alignSelf: 'flex-start', marginLeft: '10px' }} />
+    <aside id="app-nav" className="app-aside">
+      <div className="app-aside-head">
+        <img src="/logo.png" alt="Horeca Toppers" style={{ height: '34px', width: 'auto', alignSelf: 'flex-start', marginLeft: '10px' }} />
+        <button className="nav-close" onClick={closeNav} aria-label="Menu sluiten">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
       {navSections.map((sec, si) => <nav key={si} className="app-nav">
           {sec.title ? <div style={{ ...eyebrow, padding: '0 12px 8px' }}>{sec.title}</div> : null}
-          {sec.items.map((n, i) => <button key={i} onClick={n.onClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', border: '0', background: n.bg, color: n.fg, fontWeight: n.fw, fontSize: '14px', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left' }}>
+          {sec.items.map((n, i) => <button key={i} onClick={n.onClick} style={{ ...navBtn, background: n.bg, color: n.fg, fontWeight: n.fw }}>
               <span>{n.label}</span>
               {n.hasBadge ? <span style={{ fontSize: '11px', fontWeight: '600', background: '#FDECEA', color: '#D32F2F', borderRadius: '999px', padding: '2px 7px' }}>{n.badge}</span> : null}
             </button>)}
         </nav>)}
+      <nav className="app-nav nav-extra">
+        <button onClick={openNews} style={{ ...navBtn, background: 'transparent', color: '#3C3C3A', fontWeight: 500 }}>
+          <span>Wat is er nieuw</span>
+          {news.hasNew ? <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)' }} /> : null}
+        </button>
+        <button onClick={openIdea} style={{ ...navBtn, background: 'transparent', color: '#3C3C3A', fontWeight: 500 }}><span>Bug of idee melden</span></button>
+      </nav>
       <div className="app-aside-foot">
         {canTrelloTest ? <button onClick={goTrelloTest} className="link-btn">Trello-koppeling testen →</button> : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

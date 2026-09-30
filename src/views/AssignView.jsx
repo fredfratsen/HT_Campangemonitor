@@ -29,31 +29,31 @@ export default function AssignView({ v }) {
           </div>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="m-filters" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={asgQ ?? ''} onChange={setAsgQ} placeholder="Zoek klant" style={{ flex: '1 1 220px', minWidth: '180px', height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 14px', fontSize: '14px', background: '#FFFFFF' }} />
-        <div style={{ display: 'flex', gap: '2px', background: '#F5F2ED', borderRadius: '999px', padding: '3px', flex: 'none' }}>
+        <div className="m-pills" style={{ display: 'flex', gap: '2px', background: '#F5F2ED', borderRadius: '999px', padding: '3px', flex: 'none' }}>
           {asg.tabs.map((t, i) => <button key={i} onClick={t.onClick} style={{ border: '0', borderRadius: '999px', padding: '7px 14px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', whiteSpace: 'nowrap', background: t.bg, color: t.fg, boxShadow: t.sh }}>{t.label} <span style={{ color: '#8C8C8A' }}>{t.n}</span></button>)}
         </div>
       </div>
       {asg.hasNotice ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '14px 18px', fontSize: '14px' }}>{asg.notice}</div> : null}
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-        <div style={{ minWidth: '760px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.6fr) 150px 170px 170px', gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE' }}>
+        <div className="m-table" style={{ minWidth: '760px' }}>
+          <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.6fr) 150px 170px 170px', gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE' }}>
             <div>Klant · functies</div>
             <div>Activiteit</div>
             <div>Recruiter</div>
             <div>Recruitment Marketeer</div>
           </div>
-          {asg.rows.map((r, i) => <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.6fr) 150px 170px 170px', gap: '16px', padding: '10px 20px', borderBottom: '1px solid #F5F2ED', alignItems: 'center', fontSize: '14px' }}>
+          {asg.rows.map((r, i) => <div key={i} className="asg-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.6fr) 150px 170px 170px', gap: '16px', padding: '10px 20px', borderBottom: '1px solid #F5F2ED', alignItems: 'center', fontSize: '14px' }}>
               <div style={{ minWidth: '0', opacity: r.op }}>
                 <div style={{ fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
                 <div style={{ fontSize: '12px', color: '#5C5C5A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.funcs}</div>
               </div>
               <div style={{ fontSize: '13px', color: '#5C5C5A' }}>{r.last}</div>
-              <select value={r.rec ?? ''} onChange={r.onRec} style={{ height: '36px', border: `1px solid ${r.recBorder}`, borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
+              <select value={r.rec ?? ''} onChange={r.onRec} aria-label={`Recruiter voor ${r.name}`} style={{ height: '36px', border: `1px solid ${r.recBorder}`, borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
                 {r.recOpts.map((o, j) => <option key={j} value={o.v}>{o.l}</option>)}
               </select>
-              <select value={r.mkt ?? ''} onChange={r.onMkt} style={{ height: '36px', border: `1px solid ${r.mktBorder}`, borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
+              <select value={r.mkt ?? ''} onChange={r.onMkt} aria-label={`Recruitment Marketeer voor ${r.name}`} style={{ height: '36px', border: `1px solid ${r.mktBorder}`, borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
                 {r.mktOpts.map((o, j) => <option key={j} value={o.v}>{o.l}</option>)}
               </select>
             </div>)}

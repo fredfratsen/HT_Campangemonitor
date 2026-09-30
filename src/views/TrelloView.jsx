@@ -37,7 +37,7 @@ export default function TrelloView({ v }) {
                 <button onClick={b.restoreBoard} style={{ border: '0', background: 'none', padding: '0', fontSize: '12px', fontWeight: '500', color: '#1B1B63', cursor: 'pointer' }}>Herstel</button>
               </> : null}
           </div>
-          {b.labels.map((l, j) => <div key={j} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 84px auto', gap: '16px', padding: '12px 20px', borderTop: '1px solid #F5F2ED', alignItems: 'center', fontSize: '14px' }}>
+          {b.labels.map((l, j) => <div key={j} className="tr-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 84px auto', gap: '16px', padding: '12px 20px', borderTop: '1px solid #F5F2ED', alignItems: 'center', fontSize: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0' }}>
                 <span style={{ width: '28px', height: '8px', borderRadius: '999px', flex: 'none', background: l.color }} />
                 <span style={{ fontWeight: '600', color: l.fg }}>{l.name}</span>

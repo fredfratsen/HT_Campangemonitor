@@ -7,7 +7,7 @@ export default function DetailView({ v }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <button onClick={goBack} style={{ alignSelf: 'flex-start', border: '0', background: 'none', padding: '0', fontSize: '13px', fontWeight: '500', color: '#5C5C5A', cursor: 'pointer' }}>← {backLabel}</button>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
+        <div className="m-cta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
           <div style={{ minWidth: '0' }}>
             <div style={{ fontSize: '15px', color: '#5C5C5A' }}>{d.client}</div>
             <h1 style={{ margin: '2px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '36px', lineHeight: '1.15', letterSpacing: '-.02em' }}>{d.vac}</h1>
@@ -20,13 +20,13 @@ export default function DetailView({ v }) {
           {d.hasFill ? <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button> : null}
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px' }}>
+      <div className="m-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px' }}>
         {d.kpis.map((k, i) => <div key={i} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '16px 18px' }}>
             <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>{k.label}</div>
             <div style={{ marginTop: '6px', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '26px', lineHeight: '1.1' }}>{k.value}<span style={{ fontSize: '15px', color: '#8C8C8A', fontWeight: '500' }}> {k.unit}</span></div>
           </div>)}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(380px,1fr))', gap: '16px' }}>
+      <div className="m-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(380px,1fr))', gap: '16px' }}>
         <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Instroom per week</span>
@@ -83,8 +83,8 @@ export default function DetailView({ v }) {
       <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ flex: '2 1 560px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <h2 style={{ margin: '0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '20px' }}>Verloop per week</h2>
-          {d.story.map((s, i) => <div key={i} style={{ display: 'grid', gridTemplateColumns: '76px minmax(0,1fr)', gap: '14px' }}>
-              <div style={{ paddingTop: '16px' }}>
+          {d.story.map((s, i) => <div key={i} className="story-row" style={{ display: 'grid', gridTemplateColumns: '76px minmax(0,1fr)', gap: '14px' }}>
+              <div className="story-wk" style={{ paddingTop: '16px' }}>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '15px' }}>Week {s.wl}</div>
                 <div style={{ fontSize: '12px', color: '#8C8C8A' }}>{s.range}</div>
               </div>
@@ -124,7 +124,7 @@ export default function DetailView({ v }) {
               </div>
             </div>)}
         </div>
-        <div style={{ flex: '1 1 300px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="detail-side" style={{ flex: '1 1 300px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Acties & campagnewijzigingen</div>
             {canActions ? <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -138,7 +138,7 @@ export default function DetailView({ v }) {
                     <option value="Klantafspraak">Klantafspraak</option>
                     <option value="Besluit">Besluit</option>
                   </select>
-                  <select value={act.w} onChange={setActWeek} aria-label="Week" style={{ width: '92px', height: '38px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
+                  <select value={act.w} onChange={setActWeek} aria-label="Week" className="act-week" style={{ width: '92px', height: '38px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
                     {d.weekOpts.map((o, i) => <option key={i} value={o.v}>{o.l}</option>)}
                   </select>
                 </div>

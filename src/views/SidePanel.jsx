@@ -5,8 +5,8 @@ export default function SidePanel({ v }) {
   const { authorName, closePanel, idea, inbox, isIdea, isInbox, isNews, news, panelTitle, setIdeaText, submitIdea, user } = v;
   return (
     <>
-      <div onClick={closePanel} style={{ position: 'fixed', inset: '0', background: 'rgba(29,29,27,.12)', zIndex: '20' }} />
-      <div style={{ position: 'fixed', top: '16px', right: '16px', bottom: '16px', width: 'min(440px,calc(100vw - 32px))', background: '#FFFFFF', borderRadius: '12px', boxShadow: '0 8px 32px rgba(29,29,27,.18)', zIndex: '21', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div onClick={closePanel} className="panel-backdrop" style={{ position: 'fixed', inset: '0', background: 'rgba(29,29,27,.12)', zIndex: '20' }} />
+      <div className="side-panel" style={{ position: 'fixed', top: '16px', right: '16px', bottom: '16px', width: 'min(440px,calc(100vw - 32px))', background: '#FFFFFF', borderRadius: '12px', boxShadow: '0 8px 32px rgba(29,29,27,.18)', zIndex: '21', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '18px 22px', borderBottom: '1px solid #E4E1DE', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px' }}>{panelTitle}</span>
           <button onClick={closePanel} aria-label="Sluiten" style={{ border: '0', background: '#F5F2ED', borderRadius: '8px', width: '32px', height: '32px', fontSize: '16px', cursor: 'pointer' }}>×</button>

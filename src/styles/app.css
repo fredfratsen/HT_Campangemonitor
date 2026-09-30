@@ -19,6 +19,9 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
 .app-main{padding:32px 40px 80px;min-width:0}
 .link-btn{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:500;color:#1B1B63;cursor:pointer;text-align:left}
 .link-btn:hover{color:#E09000}
+.app-aside-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+/* Phone-only pieces (top bar, menu backdrop, close button, extra menu items): shown in the media query below */
+.m-bar,.nav-backdrop,.nav-close,.nav-extra{display:none}
 
 .boot{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#5C5C5A;font-size:14px}
 .boot img{height:34px}
@@ -30,13 +33,149 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .member-row > span:last-child{justify-content:flex-start !important}
 }
 
+@keyframes navItemIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
+@keyframes panelIn{from{transform:translate3d(100%,0,0)}to{transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/*
+ * Phones and small tablets. The desktop layout above stays as it is; everything here only rearranges it.
+ * Keep the breakpoint in sync with PHONE_MQ in App.jsx. The views use inline styles, hence the !important.
+ */
 @media (max-width: 900px){
-  .app-shell{grid-template-columns:minmax(0,1fr)}
-  .app-aside{position:static;height:auto;overflow:visible;border-right:0;border-bottom:1px solid #E4E1DE;gap:14px;padding:16px}
-  .app-nav{flex-direction:row;flex-wrap:wrap;gap:4px}
-  .app-nav > div:first-child{flex-basis:100%;padding-bottom:2px !important}
-  .app-aside-foot{margin-top:0;padding:0 4px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));align-items:start}
-  .app-main{padding:24px 16px 64px}
-  .span-2{grid-column:auto !important}
+  html{scroll-padding-top:68px}
+  /* Stops iOS from zooming in when a field gets focus */
+  input:not([type=checkbox]):not([type=radio]):not([inputmode=numeric]),select,textarea{font-size:16px !important}
+
+  /* Shell: fixed top bar, sidebar becomes a slide-in menu */
+  .app-shell{display:block}
+  .app-main{padding:76px 16px 64px}
+  .top-actions{display:none !important}
+  .m-bar{display:flex;align-items:center;gap:4px;position:fixed;top:0;left:0;right:0;z-index:15;height:56px;padding:0 6px;background:rgba(255,255,255,.92);-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px);border-bottom:1px solid #E4E1DE}
+  .m-logo{height:28px;width:auto;margin-right:auto}
+  .nav-toggle,.m-bell,.nav-close{position:relative;width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;border:0;border-radius:10px;background:transparent;color:#1B1B63;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 150ms}
+  .nav-toggle:active,.m-bell:active,.nav-close:active{background:#F5F2ED}
+  .burger{display:flex;flex-direction:column;gap:5px}
+  .burger span{display:block;width:20px;height:2px;border-radius:2px;background:currentColor}
+  .m-dot{position:absolute;top:10px;right:8px;width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#F9CE00 0%,#FB8915 100%);box-shadow:0 0 0 2px #FFFFFF}
+  .m-badge{position:absolute;top:5px;right:3px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#D32F2F;color:#FFFFFF;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #FFFFFF}
+
+  .app-aside{position:fixed;top:0;bottom:0;left:0;z-index:40;width:min(304px,86vw);height:auto;overscroll-behavior:contain;gap:22px;padding:10px 12px 28px;border-right:0;
+    transform:translate3d(-100%,0,0);visibility:hidden;transition:transform 340ms cubic-bezier(.32,.72,0,1),box-shadow 340ms,visibility 0s linear 340ms}
+  .nav-open .app-aside{transform:none;visibility:visible;box-shadow:0 8px 40px rgba(29,29,27,.22);transition:transform 340ms cubic-bezier(.32,.72,0,1),box-shadow 340ms}
+  .nav-open .app-aside > *{animation:navItemIn 440ms cubic-bezier(.2,.8,.2,1) both}
+  .nav-open .app-aside > :nth-child(2){animation-delay:40ms}
+  .nav-open .app-aside > :nth-child(3){animation-delay:80ms}
+  .nav-open .app-aside > :nth-child(4){animation-delay:120ms}
+  .nav-open .app-aside > :nth-child(n+5){animation-delay:160ms}
+  .nav-close{display:flex}
+  .nav-extra{display:flex}
+  .app-nav > button{min-height:44px;font-size:15px !important}
+  .nav-backdrop{display:block;position:fixed;inset:0;z-index:35;background:rgba(29,29,27,.38);opacity:0;pointer-events:none;transition:opacity 340ms}
+  .nav-open .nav-backdrop{opacity:1;pointer-events:auto}
+  body.nav-locked{overflow:hidden}
+
+  /* Meldingen / nieuws / ideeën: full-screen panel sliding in from the right */
+  .side-panel{top:0 !important;right:0 !important;bottom:0 !important;width:100% !important;border-radius:0 !important;animation:panelIn 340ms cubic-bezier(.32,.72,0,1)}
+  .panel-backdrop{animation:fadeIn 340ms}
+  .toast{left:16px !important;right:16px;bottom:20px !important;transform:none !important;text-align:center}
+
+  /* Content: one column, charts and cards full width */
   h1{font-size:32px !important}
+  .span-2{grid-column:auto !important}
+  .m-stack{grid-template-columns:minmax(0,1fr) !important}
+  .m-kpis{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:10px !important}
+  .m-kpis > *{padding:14px !important;min-width:0}
+  .m-kpis-lead > :first-child{grid-column:1 / -1}
+  .m-cta > button{flex:1 1 100%;justify-content:center}
+
+  /* Filter bars: search full width, status pills scroll sideways, dropdowns two per row */
+  .m-filters > input{flex:1 1 100% !important}
+  .m-filters > select,.m-filters > button{flex:1 1 140px;min-width:0;justify-content:center}
+  .m-pills{flex:1 1 100% !important;flex-wrap:nowrap !important;overflow-x:auto;scrollbar-width:none}
+  .m-pills::-webkit-scrollbar{display:none}
+  .m-pills > button{flex:none;white-space:nowrap}
+
+  /* Tables become a list of cards; data-label shows the column name above each value */
+  .m-table{min-width:0 !important}
+  .m-thead{display:none !important}
+  .m-table [data-label]{text-align:left !important;flex-wrap:wrap}
+  .m-table [data-label]::before{content:attr(data-label);display:block;flex-basis:100%;margin-bottom:3px;font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:500;line-height:1.3;letter-spacing:.06em;text-transform:uppercase;color:#8C8C8A;overflow-wrap:anywhere}
+
+  .camp-row{grid-template-columns:repeat(3,minmax(0,1fr)) !important;grid-template-areas:"name name status" "leads q avg" "rec fb fb";gap:12px 10px !important;padding:16px !important;align-items:start !important}
+  .camp-row > :nth-child(1){grid-area:status;justify-self:end}
+  .camp-row > :nth-child(2){grid-area:name}
+  .camp-row > :nth-child(3){grid-area:rec}
+  .camp-row > :nth-child(4){grid-area:leads;row-gap:0 !important}
+  .camp-row > :nth-child(5){grid-area:q}
+  .camp-row > :nth-child(6){grid-area:avg}
+  .camp-row > :nth-child(7){grid-area:fb}
+  .camp-row > :nth-child(8){grid-column:1 / -1}
+  .camp-row > :nth-child(8):empty{display:none}
+
+  .live-row{display:flex !important;flex-wrap:wrap;justify-content:space-between;gap:10px 12px !important;padding:14px 16px !important}
+  .live-row > :first-child,.live-row > :last-child{flex:1 1 100%}
+
+  .week-row{grid-template-columns:minmax(0,1fr) auto !important;gap:2px 12px !important;padding:12px 16px !important}
+  .week-row > :nth-child(1){grid-area:1 / 1}
+  .week-row > :nth-child(3){grid-area:1 / 2}
+  .week-row > :nth-child(2),.week-row > :nth-child(4){grid-column:1 / -1;font-size:13px}
+
+  .hist-head{grid-template-columns:minmax(0,1fr) !important;padding:6px 16px 2px !important;font-size:10px !important;letter-spacing:0 !important}
+  .hist-head > :not(:nth-child(2)){display:none}
+  .hist-row{grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:8px 10px !important;padding:12px 16px !important;border-top:1px solid #F5F2ED}
+  .hist-row > :nth-child(1),.hist-row > :nth-child(2){grid-column:1 / -1}
+
+  .eff-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important;grid-template-areas:"wk type" "camp camp" "text text" "q l";gap:6px 12px !important;padding:14px 16px !important}
+  .eff-row > :nth-child(1){grid-area:wk}
+  .eff-row > :nth-child(2){grid-area:camp}
+  .eff-row > :nth-child(3){grid-area:type;text-align:right}
+  .eff-row > :nth-child(4){grid-area:text;margin-bottom:4px}
+  .eff-row > :nth-child(5){grid-area:q}
+  .eff-row > :nth-child(6){grid-area:l}
+
+  /* Toewijzing: the two dropdowns side by side, labelled with the column names from the (hidden) header */
+  .asg-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important;grid-template-areas:"name name" "last last" "lrec lmkt" "rec mkt";gap:4px 10px !important;padding:14px 16px !important}
+  .asg-row > :nth-child(1){grid-area:name}
+  .asg-row > :nth-child(2){grid-area:last;font-size:12px !important;margin-bottom:8px}
+  .asg-row > :nth-child(3){grid-area:rec;min-width:0}
+  .asg-row > :nth-child(4){grid-area:mkt;min-width:0}
+  .asg-row::before{content:'Recruiter';grid-area:lrec}
+  .asg-row::after{content:'Marketeer';grid-area:lmkt}
+  .asg-row::before,.asg-row::after{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#8C8C8A}
+
+  .tr-row{grid-template-columns:minmax(0,1fr) auto !important;gap:10px !important;padding:12px 16px !important}
+  .tr-row > :nth-child(3){grid-column:1 / -1;flex-wrap:wrap !important;white-space:normal !important;justify-content:flex-start !important}
+  .tr-row input,.tr-row select{flex:1 1 140px;min-width:0}
+
+  /* Health-regels: switch left, rule text next to it, number of hits underneath */
+  .rule-head{flex-wrap:wrap;row-gap:2px !important;padding:14px 16px !important}
+  .rule-head > :nth-child(3){flex-basis:100%;padding-left:20px}
+  .rule-row{display:grid !important;grid-template-columns:auto minmax(0,1fr);gap:4px 12px !important;padding:12px 16px !important}
+  .rule-row > :nth-child(3){grid-column:2;margin-left:0 !important}
+
+  /* Feedback screens: the campaign queue is a sideways strip above the form */
+  .q-card{flex:1 1 100% !important;max-width:none !important}
+  .q-list{position:relative;display:flex;max-height:none !important;overflow-x:auto;overflow-y:hidden !important;scroll-snap-type:x proximity;scrollbar-width:none}
+  .q-list::-webkit-scrollbar{display:none}
+  .q-list > button{flex:0 0 auto;width:auto !important;min-width:200px;max-width:260px;scroll-snap-align:start;border-bottom:0 !important;border-right:1px solid #F5F2ED !important}
+  .f-pad{padding:18px 16px !important}
+  .f-foot{padding:14px 16px !important}
+  .f-foot > button,.f-foot > div{flex:1 1 100%}
+  .f-foot > div > button{flex:1 1 0;justify-content:center}
+  .f-foot > button{justify-content:center}
+  .kbd-hint{display:none}
+  .score-grid{grid-template-columns:repeat(5,minmax(0,1fr)) !important}
+  .needs-toggle{flex-wrap:wrap;row-gap:2px !important;text-align:left}
+  .needs-toggle > span:last-child{flex-basis:100%;padding-left:46px}
+
+  /* Campaign detail: week label above each week, charts and actions before the long week log */
+  .story-row{grid-template-columns:minmax(0,1fr) !important;gap:6px !important}
+  .story-wk{display:flex;align-items:baseline;gap:8px;padding-top:0 !important}
+  .detail-side{order:-1}
+  .act-week{width:116px !important}
+}
+
+@media (max-width: 900px) and (prefers-reduced-motion: reduce){
+  .app-aside,.nav-backdrop{transition:none !important}
+  .nav-open .app-aside > *,.side-panel,.panel-backdrop{animation:none !important}
 }

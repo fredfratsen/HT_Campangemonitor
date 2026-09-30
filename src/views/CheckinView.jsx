@@ -1,8 +1,10 @@
 import React from 'react';
 import Button from '../components/Button.jsx';
+import useCenterCurrent from '../lib/useCenterCurrent.js';
 
 export default function CheckinView({ v }) {
   const { decLeads, fc, form, goMine, hasForm, incLeads, needsBg, needsKnob, queue, queueComplete, queueDone, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
+  const listRef = useCenterCurrent(form.id);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header>
@@ -11,7 +13,7 @@ export default function CheckinView({ v }) {
         <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px' }}>Jouw beeld van de instroom per campagne. Klantfeedback wordt apart vastgelegd door de Recruitment Marketeer.</div>
       </header>
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 260px', maxWidth: '320px', background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
+        <div className="q-card" style={{ flex: '1 1 260px', maxWidth: '320px', background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 18px', borderBottom: '1px solid #E4E1DE', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '15px' }}>Mijn campagnes</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#5C5C5A' }}>
@@ -22,22 +24,24 @@ export default function CheckinView({ v }) {
               <div style={{ height: '100%', width: queuePct, background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)' }} />
             </div>
           </div>
-          {queue.map((qi, i) => <button key={i} onClick={qi.onClick} style={{ width: '100%', border: '0', borderBottom: '1px solid #F5F2ED', background: qi.bg, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left' }}>
-              <span style={{ width: '22px', height: '22px', flex: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', background: qi.markBg, color: qi.markFg, border: qi.markBorder }}>{qi.mark}</span>
-              <span style={{ minWidth: '0', flex: '1' }}>
-                <span style={{ display: 'block', fontSize: '14px', fontWeight: '600' }}>{qi.client}</span>
-                <span style={{ display: 'block', fontSize: '12px', color: '#5C5C5A' }}>{qi.vac}</span>
-              </span>
-              <span style={{ fontSize: '13px', fontWeight: '600', color: qi.qFg }}>{qi.qText}</span>
-            </button>)}
+          <div className="q-list" ref={listRef}>
+            {queue.map((qi, i) => <button key={i} onClick={qi.onClick} aria-current={qi.sel ? 'true' : undefined} style={{ width: '100%', border: '0', borderBottom: '1px solid #F5F2ED', background: qi.bg, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ width: '22px', height: '22px', flex: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', background: qi.markBg, color: qi.markFg, border: qi.markBorder }}>{qi.mark}</span>
+                <span style={{ minWidth: '0', flex: '1' }}>
+                  <span style={{ display: 'block', fontSize: '14px', fontWeight: '600' }}>{qi.client}</span>
+                  <span style={{ display: 'block', fontSize: '12px', color: '#5C5C5A' }}>{qi.vac}</span>
+                </span>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: qi.qFg }}>{qi.qText}</span>
+              </button>)}
+          </div>
         </div>
         <div style={{ flex: '3 1 480px', minWidth: '0' }}>
           {hasForm ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', boxShadow: '0 2px 8px rgba(29,29,27,.09)' }}>
-              <div style={{ padding: '24px 28px', borderBottom: '1px solid #E4E1DE' }}>
+              <div className="f-pad" style={{ padding: '24px 28px', borderBottom: '1px solid #E4E1DE' }}>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', lineHeight: '1.3' }}>Week {wk.n} – {fc.client} – {fc.vac}</div>
                 <div style={{ marginTop: '6px', fontSize: '13px', color: '#5C5C5A', textWrap: 'pretty' }}>Vorige week: {fc.prevLine}</div>
               </div>
-              <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div className="f-pad" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '14px', fontWeight: '600' }}>Nieuwe kandidaten deze week</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
@@ -55,7 +59,7 @@ export default function CheckinView({ v }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '14px', fontWeight: '600' }}>Kwaliteit instroom</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10,minmax(36px,1fr))', gap: '6px', maxWidth: '560px' }}>
+                  <div className="score-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(10,minmax(36px,1fr))', gap: '6px', maxWidth: '560px' }}>
                     {scoreBtns.map((s, i) => <button key={i} onClick={s.onClick} style={{ height: '44px', borderRadius: '8px', border: `1px solid ${s.border}`, background: s.bg, color: s.fg, fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px', cursor: 'pointer', transition: 'all 120ms' }}>{s.n}</button>)}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', maxWidth: '560px', fontSize: '12px', color: '#8C8C8A' }}>
@@ -71,13 +75,13 @@ export default function CheckinView({ v }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '14px', fontWeight: '600' }}>Eventuele actie / notitie</label>
                   <textarea value={form.note ?? ''} onChange={setNote} rows="2" placeholder="Optioneel" style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', lineHeight: '1.5', resize: 'vertical' }} />
-                  <button onClick={toggleNeeds} style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '10px', border: '0', background: 'none', padding: '4px 0', cursor: 'pointer', fontSize: '14px' }}><span style={{ width: '36px', height: '20px', borderRadius: '999px', background: needsBg, position: 'relative', flex: 'none', transition: 'background 150ms' }}>
+                  <button onClick={toggleNeeds} className="needs-toggle" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '10px', border: '0', background: 'none', padding: '4px 0', cursor: 'pointer', fontSize: '14px' }}><span style={{ width: '36px', height: '20px', borderRadius: '999px', background: needsBg, position: 'relative', flex: 'none', transition: 'background 150ms' }}>
                       <span style={{ position: 'absolute', top: '2px', left: needsKnob, width: '16px', height: '16px', borderRadius: '50%', background: '#FFFFFF', transition: 'left 150ms' }} />
                     </span> Bijsturing nodig <span style={{ color: '#8C8C8A', fontSize: '13px' }}>– zet campagne op Actie nodig</span></button>
                 </div>
               </div>
-              <div style={{ padding: '16px 28px', borderTop: '1px solid #E4E1DE', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', background: '#FDFBF8', borderRadius: '0 0 12px 12px' }}>
-                <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Toets 1–0 voor de score · Ctrl/⌘ + Enter om op te slaan</span>
+              <div className="f-foot" style={{ padding: '16px 28px', borderTop: '1px solid #E4E1DE', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', background: '#FDFBF8', borderRadius: '0 0 12px 12px' }}>
+                <span className="kbd-hint" style={{ fontSize: '12px', color: '#8C8C8A' }}>Toets 1–0 voor de score · Ctrl/⌘ + Enter om op te slaan</span>
                 <Button variant="primary" size="lg" onClick={saveForm}>{saveLabel}</Button>
               </div>
             </div> : null}

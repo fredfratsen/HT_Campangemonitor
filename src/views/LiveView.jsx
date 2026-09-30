@@ -42,7 +42,7 @@ export default function LiveView({ v }) {
           <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px' }}>Nog geen klanten aan jou toegewezen</div>
           <div style={{ fontSize: '14px', color: '#5C5C5A', marginTop: '4px' }}>Zodra de teamlead je aan klanten koppelt via Toewijzing, zie je hier je belwerk van vandaag.</div>
         </div> : null}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '12px' }}>
+      <div className="m-kpis m-kpis-lead" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '12px' }}>
         {live.kpis.map((k, i) => <div key={i} style={{ background: k.bg, border: `1px solid ${k.border}`, borderRadius: '12px', padding: '16px 18px' }}>
             <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: k.lfg }}>{k.label}</div>
             <div style={{ marginTop: '6px', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '34px', lineHeight: '1.1', color: k.fg }}>{k.value}</div>
@@ -50,15 +50,15 @@ export default function LiveView({ v }) {
           </div>)}
       </div>
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-        <div style={{ minWidth: '560px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,1.4fr) 96px 120px 64px minmax(0,1fr)', gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>
+        <div className="m-table" style={{ minWidth: '560px' }}>
+          <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,1.4fr) 96px 120px 64px minmax(0,1fr)', gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>
             <div>Klant · vacature</div>
             <div style={{ textAlign: 'right' }}>Nieuw bellen</div>
             <div style={{ textAlign: 'right' }}>Contactpogingen</div>
             <div style={{ textAlign: 'right' }}>Totaal</div>
             <div />
           </div>
-          {live.rows.map((r, i) => <div key={i} className="hov-row" onClick={r.open} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,1.4fr) 96px 120px 64px minmax(0,1fr)', gap: '16px', padding: '12px 20px', borderBottom: '1px solid #F5F2ED', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
+          {live.rows.map((r, i) => <div key={i} className="hov-row live-row" onClick={r.open} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,1.4fr) 96px 120px 64px minmax(0,1fr)', gap: '16px', padding: '12px 20px', borderBottom: '1px solid #F5F2ED', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
               <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
                 <span style={{ minWidth: '0' }}>
@@ -66,9 +66,9 @@ export default function LiveView({ v }) {
                   <span style={{ display: 'block', fontSize: '12px', color: '#5C5C5A' }}>{r.vac}</span>
                 </span>
               </div>
-              <div style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px', color: r.nFg }}>{r.nieuw}</div>
-              <div style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px', color: r.cFg }}>{r.contact}</div>
-              <div style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px' }}>{r.total}</div>
+              <div data-label="Nieuw bellen" style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px', color: r.nFg }}>{r.nieuw}</div>
+              <div data-label="Contactpogingen" style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px', color: r.cFg }}>{r.contact}</div>
+              <div data-label="Totaal" style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px' }}>{r.total}</div>
               <div style={{ display: 'flex', height: '10px', borderRadius: '999px', overflow: 'hidden', background: '#F5F2ED' }}>
                 <div style={{ width: r.nPct, background: '#1B1B63' }} />
                 <div style={{ width: r.cPct, background: '#FB8915' }} />

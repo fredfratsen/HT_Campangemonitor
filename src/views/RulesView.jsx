@@ -18,12 +18,12 @@ export default function RulesView({ v }) {
         {sum.levels.map((l, i) => <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', padding: '8px 14px', borderRadius: '999px', background: l.bg, color: l.fg, fontWeight: '600' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: l.fg }} />{l.n} {l.label}</span>)}
       </div>
       {ruleGroups.map((g, i) => <div key={i} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 22px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #E4E1DE' }}>
+          <div className="rule-head" style={{ padding: '16px 22px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #E4E1DE' }}>
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: g.fg }} />
             <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px' }}>{g.label}</span>
             <span style={{ fontSize: '13px', color: '#8C8C8A' }}>{g.sub}</span>
           </div>
-          {g.rules.map((r, j) => <div key={j} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 22px', borderTop: '1px solid #F5F2ED', fontSize: '14px', flexWrap: 'wrap' }}>
+          {g.rules.map((r, j) => <div key={j} className="rule-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 22px', borderTop: '1px solid #F5F2ED', fontSize: '14px', flexWrap: 'wrap' }}>
               <button onClick={r.toggle} disabled={r.locked} style={{ width: '36px', height: '20px', borderRadius: '999px', border: '0', background: r.tBg, position: 'relative', cursor: r.cursor, opacity: r.op, flex: 'none', padding: '0' }}>
                 <span style={{ position: 'absolute', top: '2px', left: r.knob, width: '16px', height: '16px', borderRadius: '50%', background: '#FFFFFF', transition: 'left 150ms' }} />
               </button>
