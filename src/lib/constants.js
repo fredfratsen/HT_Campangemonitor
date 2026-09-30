@@ -46,6 +46,7 @@ export const cardTs = id => parseInt(id.slice(0, 8), 16) * 1000;
 export const REASONS = ['Te weinig ervaring', 'Afstand', 'Taalbarrière', 'Geen interesse', 'Geen reactie', 'No show', 'Foutieve contactgegevens', 'Ander aanbod', 'Salaris te laag', 'Overgekwalificeerd', 'Overig'];
 
 export const NEWS = [
+  { id: 9, date: '30 sep', tag: 'Nieuw', title: 'Rol Account Manager en vragen over campagnes', text: 'Account Managers zien alles wat een Recruitment Marketeer ziet, maar wijzigen niets. Via ‘Vraag stellen’ op een campagne sturen ze een vraag aan de marketeer en recruiter. Die beantwoord je onder Meldingen.' },
   { id: 8, date: '29 sep', tag: 'Nieuw', title: 'Eigen accounts en rechten', text: 'Iedereen logt nu in met een eigen account in plaats van het teamwachtwoord. Wat je ziet en mag, hangt af van je rol en rechten. Onder Instellingen beheer je je wachtwoord, tweestapsverificatie en je gegevens.' },
   { id: 7, date: '28 sep', tag: 'Nieuw', title: 'Meldingen, nieuws en ideeën', text: 'Herinneringen voor open feedback komen binnen onder Meldingen. Via ‘Bug of idee melden’ kan iedereen aangeven wat niet werkt of beter kan.' },
   { id: 6, date: '28 sep', tag: 'Nieuw', title: 'Opvolging ‘Niet actief’', text: 'In Toewijzing kan een klant op Niet actief. De klant verdwijnt dan uit alle schermen en het belwerk.' },

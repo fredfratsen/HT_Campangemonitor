@@ -11,6 +11,7 @@ export const RIGHTS = [
   { key: 'feedback.client', group: 'werk', label: 'Klantfeedback vastleggen', desc: 'De terugkoppeling van de klant per week.' },
   { key: 'campaign.changes', group: 'werk', label: 'Campagnewijzigingen vastleggen', desc: 'Advertentie, doelgroep, budget, vacaturetekst, …' },
   { key: 'reminders.send', group: 'werk', label: 'Herinneringen sturen', desc: 'Recruiters herinneren aan ontbrekende feedback.' },
+  { key: 'questions.ask', group: 'werk', label: 'Vragen stellen over campagnes', desc: 'Een vraag over een campagne sturen aan de Recruitment Marketeer en recruiter. Vraag en antwoord komen binnen onder Meldingen.' },
   { key: 'rules.edit', group: 'beheer', label: 'Health-regels aanpassen', desc: 'Regels aan- en uitzetten en drempels wijzigen. Geldt voor het hele team.' },
   { key: 'trello.link', group: 'beheer', label: 'Trello-borden koppelen', desc: 'Klanten uit Trello koppelen aan functies en recruiters, en de Trello-koppeling testen.' },
   { key: 'assign', group: 'beheer', label: 'Toewijzing beheren', desc: 'Recruiter en Recruitment Marketeer per klant kiezen, of een klant op Niet actief zetten.' },
@@ -26,13 +27,14 @@ export const RIGHT_GROUPS = { werk: 'Werk', beheer: 'Beheer', eigenaar: 'Eigenaa
 
 export const LEVELS = { owner: { label: 'Eigenaar', rank: 3 }, admin: { label: 'Beheerder', rank: 2 }, member: { label: 'Lid', rank: 1 } };
 
-const WORK = ['campaigns.all', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'reminders.send'];
+const WORK = ['campaigns.all', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'reminders.send', 'questions.ask'];
 const ADMIN = ['rules.edit', 'trello.link', 'assign', 'ideas.manage', 'members.manage'];
 
 export const ROLES = {
   dev: { label: 'Dev', level: 'owner', rights: RIGHT_KEYS, desc: 'Alles, inclusief integraties, auditlog en privacy-tools.' },
   teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello en regels.' },
   marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.all', 'feedback.client', 'campaign.changes', 'reminders.send'], desc: 'Campagnes, klantfeedback, campagnewijzigingen en herinneringen.' },
+  accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet alles wat een Recruitment Marketeer ziet, maar wijzigt niets. Kan vragen stellen over campagnes.' },
   recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own'], desc: 'Eigen campagnes, wekelijkse feedback en Live campagnes.' },
 };
 export const ROLE_KEYS = Object.keys(ROLES);

@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../components/Button.jsx';
 
 export default function DetailView({ v }) {
-  const { act, addAction, backLabel, canActions, d, goBack, setActText, setActType, setActWeek, showTrello, zone } = v;
+  const { act, addAction, ask, askQuestion, backLabel, canActions, canAsk, d, goBack, setActText, setActType, setActWeek, setAskText, setAskTo, showTrello, zone } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -125,6 +125,19 @@ export default function DetailView({ v }) {
             </div>)}
         </div>
         <div className="detail-side" style={{ flex: '1 1 300px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {canAsk ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Vraag stellen</span>
+                <span style={{ fontSize: '12px', color: '#8C8C8A', lineHeight: '1.45' }}>Over deze campagne. Het antwoord komt binnen onder Meldingen.</span>
+              </div>
+              {ask.hasOpts ? <>
+                  <select value={ask.to} onChange={setAskTo} aria-label="Aan" style={{ height: '38px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
+                    {ask.opts.map((o, i) => <option key={i} value={o.v}>Aan: {o.l}</option>)}
+                  </select>
+                  <textarea value={ask.text ?? ''} onChange={setAskText} rows="3" placeholder="Wat wil je weten?" style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', lineHeight: '1.45', resize: 'vertical' }} />
+                  <Button variant="primary" size="sm" onClick={askQuestion}>Versturen</Button>
+                </> : <div style={{ fontSize: '13px', color: '#8C8C8A' }}>Deze campagne heeft nog geen recruiter of marketeer om je vraag aan te stellen.</div>}
+            </div> : null}
           <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Acties & campagnewijzigingen</div>
             {canActions ? <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

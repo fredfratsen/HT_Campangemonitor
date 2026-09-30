@@ -19,12 +19,14 @@ Everyone logs in with a personal account. What you see and can do depends on you
   (1–10), written feedback, an optional action, and a **Bijsturing nodig** (needs adjusting) flag.
 - **Mijn campagnes**: your own campaigns and earlier check-ins.
 
-**Campaign overview** (right: *Alle campagnes bekijken*; Recruitment Marketeers, Teamlead, Dev)
+**Campaign overview** (right: *Alle campagnes bekijken*; Recruitment Marketeers, Account Managers, Teamlead, Dev)
 
 - **Weekoverzicht**: campaign health for this week, whose feedback is still missing, and a button to send
   reminders.
 - **Campagnes** and campaign detail: candidates and quality per week, the Trello pipeline, rejection reasons, and a
   log of campaign changes (ad, audience, budget, vacancy text, ...).
+- **Vraag stellen** on a campaign (right: *Vragen stellen over campagnes*): send a question to the campaign's
+  Recruitment Marketeer and/or recruiter. They answer it under Meldingen, and the answer comes back there too.
 - **Feedback klant**: record the client's feedback, separately from the recruiter's.
 - **Historie & analyse**: totals, averages and changes over past weeks.
 - **Health-regels**: the rules that label each campaign *Goed*, *Monitoren* or *Actie nodig*.
@@ -62,6 +64,7 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als*, demo reset) |
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, handling bugs and ideas |
 | **Recruitment Marketeer** | Lid (member) | Campaign overview, client feedback, logging campaign changes, reminders |
+| **Account Manager** | Lid (member) | Campaign overview (sees what a Recruitment Marketeer sees) and asking questions about campaigns; changes nothing |
 | **Recruiter** | Lid (member) | Own weekly feedback and Live campagnes |
 
 The rules for managing people:
@@ -75,7 +78,8 @@ The rules for managing people:
 saved change against the rights of whoever is logged in. For example, a recruiter can only fill in feedback on
 campaigns where they are the recruiter. Refused changes are not stored; the app reloads the server's version and
 shows a message. Author names (`recBy`, `klantBy`, `by`, `from`) are always filled in by the server, so nobody can
-save under someone else's name.
+save under someone else's name. Answering a question needs no right, but only the person it was sent to can
+answer, and only to whoever asked it.
 
 **Bekijk als** (Dev only, in the sidebar) shows the app as another team member sees it. Anything you save is
 still saved as yourself, with your own rights, and the switch is written to the audit log.

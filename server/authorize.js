@@ -44,6 +44,11 @@ export function makeAuthorizer(actor, docs) {
     }
     return out;
   }
+  /** An answer needs no right: it replies to a question that was sent to you, and goes back to who asked it. */
+  function isAnswer(a) {
+    const q = (docs.inbox || {})[String(a.re)];
+    return !!q && q.kind === 'question' && mine.has(q.to) && a.to === q.from;
+  }
 
   const rules = {
     campaigns(key, before, after) {
@@ -109,14 +114,15 @@ export function makeAuthorizer(actor, docs) {
     },
     inbox(key, before, after) {
       if (before === undefined) {
-        const ok = after && (after.kind === 'reminder' ? has('reminders.send') : after.kind === 'assign' ? any('assign', 'trello.link') : has('dev'));
+        const ok = after && (after.kind === 'reminder' ? has('reminders.send') : after.kind === 'assign' ? any('assign', 'trello.link')
+          : after.kind === 'question' ? has('questions.ask') : after.kind === 'answer' ? isAnswer(after) : has('dev'));
         if (!ok) return NO_RIGHT;
         return after.from !== actor.name ? { value: { ...after, from: actor.name } } : '';
       }
       if (after === undefined) return need(has('dev'));
-      // Marking your own notification as read.
+      // Marking your own notification as read, or a question to you as answered.
       const changed = keysOf(before, after).filter(k => !same(before[k], after[k]));
-      if (changed.length === 1 && changed[0] === 'read' && mine.has(before.to)) return '';
+      if (changed.length && changed.every(k => k === 'read' || k === 'answered') && mine.has(before.to)) return '';
       return need(has('dev'));
     },
     ideas(key, before, after) {

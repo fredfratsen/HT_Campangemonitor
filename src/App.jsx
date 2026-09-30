@@ -52,7 +52,7 @@ export default class App extends React.Component {
       f: { q: '', status: 'all', rec: 'all', sort: 'status' },
       ci: { rec: 'all' }, form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
-      act: { type: 'Advertentie', text: '', w: CUR },
+      act: { type: 'Advertentie', text: '', w: CUR }, ask: { to: '', text: '' }, reply: null,
       toast: null, reminded: false, trTab: 'open', trSel: {}, trVac: {}, asg: { tab: 'open', q: '' }, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null
@@ -366,9 +366,17 @@ export default class App extends React.Component {
       inboxBg: P === 'inbox' ? '#F5F2ED' : '#FFFFFF', newsBg: P === 'news' ? '#F5F2ED' : '#FFFFFF', ideaBg: P === 'idea' ? '#F5F2ED' : '#FFFFFF',
       inbox: {
         unread: mineN.filter(n => !n.read).length, hasUnread: mineN.some(n => !n.read), empty: mineN.length === 0,
-        items: mineN.map(n => ({ from: `Van ${n.from}`, at: n.at, title: n.title, bg: n.read ? '#FFFFFF' : '#FFF8E0',
-          lines: (n.items || []).map(t => n.kind === 'reminder' ? { t: (openFb.has(t) ? '○ ' : '✓ ') + t, fg: openFb.has(t) ? '#1D1D1B' : '#8C8C8A' } : { t, fg: '#5C5C5A' }),
-          hasAction: me.rights.has('feedback.own') && n.kind === 'reminder', actLabel: 'Feedback invullen', act: () => { this.setState({ panel: null }); this.go('checkin'); } }))
+        items: mineN.map(n => {
+          const qa = n.kind === 'question' || n.kind === 'answer', isQ = n.kind === 'question', replying = !!st.reply && st.reply.id === n.id;
+          return { from: `Van ${n.from}`, at: n.at, title: n.title, bg: n.read ? '#FFFFFF' : '#FFF8E0',
+            lines: (n.items || []).map((t, j) => n.kind === 'reminder' ? { t: (openFb.has(t) ? '○ ' : '✓ ') + t, fg: openFb.has(t) ? '#1D1D1B' : '#8C8C8A' } : { t, fg: qa && j === 0 ? '#1D1D1B' : '#5C5C5A' }),
+            hasAction: me.rights.has('feedback.own') && n.kind === 'reminder', actLabel: 'Feedback invullen', act: () => { this.setState({ panel: null }); this.go('checkin'); },
+            // Questions about a campaign: answer them here, or open the campaign.
+            canReply: isQ && !n.answered && !replying && !me.isPreview, answered: isQ && !!n.answered, replying,
+            replyText: replying ? st.reply.text : '', setReplyText: e => { const v = e.target.value; this.setState(s => ({ reply: { ...s.reply, text: v } })); },
+            startReply: () => this.setState({ reply: { id: n.id, text: '' } }), cancelReply: () => this.setState({ reply: null }), sendReply: () => this.answer(n),
+            canOpen: qa && this.viewOk('detail', me) && st.campaigns.some(c => c.id === n.campaign), openCampaign: () => { this.setState({ panel: null }); this.open(n.campaign); } };
+        })
       },
       news: { hasNew: st.newsSeen < NEWS[0].id, items: NEWS.map(n => ({ ...n, tagBg: n.tag === 'Nieuw' ? '#FFF8E0' : '#E7E7F0', tagFg: n.tag === 'Nieuw' ? '#B45309' : '#1B1B63' })) },
       idea: {
@@ -397,6 +405,31 @@ export default class App extends React.Component {
     const e = { id: at + Math.random(), mode: this.state.source, client, from: from && from !== '__multi' ? from : '', to, at, by: au };
     const note = { id: e.id, to, from: au, at: stamp(), read: false, kind: 'assign', title: e.from ? `${client} is aan jou overgedragen` : `Nieuw bedrijf voor jou: ${client}`, items: e.from ? [`Eerder opgevolgd door ${e.from}`] : [] };
     this.setState(s => ({ assignLog: [e, ...s.assignLog].slice(0, 500), inbox: [note, ...s.inbox] }));
+  }
+  /** Who a question about campaign c can go to: its marketeer and recruiter (not yourself), or both at once. */
+  askTargets(c) {
+    const acc = this.state.account, self = new Set([acc.name, acc.recName].filter(Boolean)), mkt = this.mktOf(c);
+    const who = [mkt && { name: mkt, role: 'marketeer' }, c.rec && c.rec !== mkt && { name: c.rec, role: 'recruiter' }].filter(x => x && !self.has(x.name));
+    const opts = who.map(x => ({ v: x.name, l: `${x.name} (${x.role})`, to: [x.name] }));
+    return who.length > 1 ? [{ v: 'all', l: who.map(x => x.name).join(' en '), to: who.map(x => x.name) }, ...opts] : opts;
+  }
+  askQuestion(c) {
+    const A = this.state.ask, opts = this.askTargets(c), o = opts.find(x => x.v === A.to) || opts[0];
+    if (!o) return;
+    if (!A.text.trim()) { this.flash('Schrijf eerst je vraag'); return; }
+    const au = this.author(), at = Date.now();
+    const notes = o.to.map(to => ({ id: at + Math.random(), to, from: au, at: stamp(), read: false, kind: 'question', campaign: c.id, title: `Vraag over ${c.client} – ${c.vac}`, items: [A.text.trim()] }));
+    this.setState(s => ({ inbox: [...notes, ...s.inbox], ask: { ...s.ask, text: '' } }));
+    this.flash(`Vraag gestuurd naar ${o.to.join(' en ')}`);
+  }
+  /** Answers question note q; the answer goes back to whoever asked it. */
+  answer(q) {
+    const text = ((this.state.reply || {}).text || '').trim();
+    if (!text) { this.flash('Schrijf eerst je antwoord'); return; }
+    const note = { id: Date.now() + Math.random(), to: q.from, from: this.author(), at: stamp(), read: false, kind: 'answer', re: q.id, campaign: q.campaign,
+      title: q.title.replace(/^Vraag over/, 'Antwoord over'), items: [text, `Je vroeg: “${q.items[0]}”`] };
+    this.setState(s => ({ inbox: [note, ...s.inbox.map(n => n.id === q.id ? { ...n, answered: true } : n)], reply: null }));
+    this.flash(`Antwoord gestuurd naar ${q.from}`);
   }
   placeholder() { return { id: 'none', client: '—', vac: 'Nog geen campagnes', rec: '', start: CUR, ended: false, actions: [], weeks: [{ w: CUR, leads: 0, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: 0, gescreend: 0, voorgesteld: 0, gesprek: 0, geplaatst: 0 } }] }; }
 
@@ -602,7 +635,7 @@ export default class App extends React.Component {
   }
 
   // ── Wekelijkse feedback recruiter ────────────────────────────────────
-  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR } })); window.scrollTo(0, 0); }
+  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR }, ask: { to: '', text: '' } })); window.scrollTo(0, 0); }
   flash(t) { this.setState({ toast: t }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2400); }
   queue(st = this.state) {
     const me = this.me(), rec = me.rights.has('feedback.all') ? st.ci.rec : me.rec;
@@ -825,6 +858,8 @@ export default class App extends React.Component {
       fill: fillMode === 'rec' ? () => this.startCheckin(selC.id) : () => this.startKlant(selC.id),
       fillLabel: fillMode === 'rec' ? `${ownC ? 'Mijn feedback' : 'Recruiterfeedback'} week ${wl(CUR)}` : `Feedback klant week ${wl(CUR)}`
     };
+    const canAsk = can('questions.ask') && selC.id !== 'none', askOpts = canAsk ? this.askTargets(selC) : [];
+    const askTo = (askOpts.find(o => o.v === st.ask.to) || askOpts[0] || {}).v || '';
     const zone = {
       red: R.qRedOn ? ((R.qRed + 0.5) * 10) + '%' : '0%',
       green: ((10 - R.qOrange - 0.5) * 10) + '%',
@@ -960,6 +995,10 @@ export default class App extends React.Component {
       setActWeek: e => { const v = +tv(e); this.setState(s => ({ act: { ...s.act, w: v } })); },
       setActText: e => { const v = tv(e); this.setState(s => ({ act: { ...s.act, text: v } })); },
       addAction: () => this.addAction(),
+      canAsk, ask: { text: st.ask.text, to: askTo, opts: askOpts, hasOpts: askOpts.length > 0 },
+      setAskTo: e => { const v = tv(e); this.setState(s => ({ ask: { ...s.ask, to: v } })); },
+      setAskText: e => { const v = tv(e); this.setState(s => ({ ask: { ...s.ask, text: v } })); },
+      askQuestion: () => this.askQuestion(selC),
       hist: st.hist, histWeeks: hw.map(w => 'W' + wl(w)), histN: hw.length, histCols: `${hw.length * 40}px`, histRows, histKpis, effects,
       setHistStatus: e => { const v = tv(e); this.setState(s => ({ hist: { ...s.hist, status: v } })); },
       setHistRec: e => { const v = tv(e); this.setState(s => ({ hist: { ...s.hist, rec: v } })); },

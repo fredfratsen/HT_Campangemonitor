@@ -12,6 +12,7 @@ const lead = { id: 'robbin', name: 'Robbin', role: 'teamlead' };
 const lead2 = { id: 'u-lead2', name: 'Lead Twee', role: 'teamlead' };
 const mkt = { id: 'danielle', name: 'Danielle', role: 'marketeer' };
 const kim = { id: 'r-kim', name: 'Kim', role: 'recruiter', recName: 'Kim' };
+const am = { id: 'u-am', name: 'Anouk', role: 'accountmanager' };
 
 test('role defaults, grants and revokes', () => {
   assert.equal(rightsOf(dev).size, RIGHT_KEYS.length);
@@ -104,6 +105,37 @@ test('assignments need assign or trello.link, and are stamped', () => {
   assert.equal(makeAuthorizer(lead, {})('assignLog', '1', undefined, e).value.by, 'Robbin');
   assert.equal(makeAuthorizer(mkt, {})('live.mkt', 'b1', '', 'Danielle'), NO_RIGHT);
   assert.equal(makeAuthorizer(lead, {})('live.inactive', 'b1', undefined, true), '');
+});
+
+test('account manager sees campaigns but changes nothing', () => {
+  assert.deepEqual([...rightsOf(am)].sort(), ['campaigns.all', 'questions.ask']);
+  assert.equal(manageError(lead, null, { role: 'accountmanager' }), '', 'a teamlead can invite account managers');
+  const a = makeAuthorizer(am, { 'live.links': { 't-1-all': { id: 't-1-all', boardId: '1', rec: 'Kim' } } });
+  const c = camp('c1', 'Kim');
+  assert.equal(a('campaigns', 'c1', c, { ...c, weeks: [c.weeks[0], { ...c.weeks[1], q: 8, rec: 'x' }] }), NO_RIGHT, 'no recruiter feedback');
+  assert.equal(a('campaigns', 'c1', c, { ...c, weeks: [c.weeks[0], { ...c.weeks[1], klant: 'x' }] }), NO_RIGHT, 'no client feedback');
+  assert.equal(a('campaigns', 'c1', c, { ...c, actions: [{ id: 'a', w: 39, type: 'Budget', text: 'x' }] }), NO_RIGHT, 'no campaign changes');
+  assert.equal(a('campaigns', 'c1', c, { ...c, rec: 'Juul' }), NO_RIGHT, 'no assigning');
+  assert.equal(a('live.fb', 't-1-all', {}, { 39: { klant: 'x' } }), NO_RIGHT);
+  assert.equal(a('live.actions', 't-1-all', [], [{ w: 39 }]), NO_RIGHT);
+  assert.equal(a('live.mkt', '1', '', 'Anouk'), NO_RIGHT);
+  assert.equal(a('rules', 'qRed', 4, 9), NO_RIGHT);
+  assert.equal(a('inbox', '1', undefined, { id: 1, to: 'Kim', from: 'Anouk', kind: 'reminder', title: 't' }), NO_RIGHT, 'no reminders');
+});
+
+test('questions go out with questions.ask; answers only to a question sent to you', () => {
+  const q = { id: 1, to: 'Danielle', from: 'Anouk', at: 'x', read: false, kind: 'question', campaign: 'c1', title: 'Vraag over X', items: ['Hoe gaat het?'] };
+  assert.equal(makeAuthorizer(am, {})('inbox', '1', undefined, q), '');
+  assert.equal(makeAuthorizer(am, {})('inbox', '1', undefined, { ...q, from: 'Iemand' }).value.from, 'Anouk', 'author is stamped');
+  assert.equal(makeAuthorizer(mkt, {})('inbox', '1', undefined, q), NO_RIGHT, 'marketeers have no questions.ask by default');
+  const docs = { inbox: { 1: q } };
+  const ans = { id: 2, to: 'Anouk', from: 'Danielle', at: 'x', read: false, kind: 'answer', re: 1, campaign: 'c1', title: 'Antwoord over X', items: ['Goed'] };
+  assert.equal(makeAuthorizer(mkt, docs)('inbox', '2', undefined, ans), '', 'the addressee may answer');
+  assert.equal(makeAuthorizer(kim, docs)('inbox', '2', undefined, ans), NO_RIGHT, 'not a question to Kim');
+  assert.equal(makeAuthorizer(mkt, docs)('inbox', '2', undefined, { ...ans, to: 'Robbin' }), NO_RIGHT, 'only back to the asker');
+  assert.equal(makeAuthorizer(mkt, docs)('inbox', '2', undefined, { ...ans, re: 99 }), NO_RIGHT, 'the question must exist');
+  assert.equal(makeAuthorizer(mkt, docs)('inbox', '1', q, { ...q, read: true, answered: true }), '', 'marking it read and answered');
+  assert.equal(makeAuthorizer(mkt, docs)('inbox', '1', q, { ...q, items: ['anders'] }), NO_RIGHT);
 });
 
 test('every role in ROLES has only known rights', () => {

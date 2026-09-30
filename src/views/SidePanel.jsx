@@ -13,7 +13,7 @@ export default function SidePanel({ v }) {
         </div>
         <div style={{ flex: '1', overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {isInbox ? <>
-              <div style={{ fontSize: '13px', color: '#5C5C5A', lineHeight: '1.5' }}>Herinneringen en meldingen voor {user.name}.</div>
+              <div style={{ fontSize: '13px', color: '#5C5C5A', lineHeight: '1.5' }}>Herinneringen, vragen en meldingen voor {user.name}.</div>
               {inbox.items.map((n, i) => <div key={i} style={{ border: '1px solid #E4E1DE', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px', background: n.bg }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '12px', color: '#8C8C8A' }}>
                     <span>{n.from}</span>
@@ -21,9 +21,21 @@ export default function SidePanel({ v }) {
                   </div>
                   <div style={{ fontSize: '14px', fontWeight: '600', lineHeight: '1.4' }}>{n.title}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                    {n.lines.map((ln, j) => <span key={j} style={{ fontSize: '13px', color: ln.fg }}>{ln.t}</span>)}
+                    {n.lines.map((ln, j) => <span key={j} style={{ fontSize: '13px', lineHeight: '1.45', whiteSpace: 'pre-wrap', color: ln.fg }}>{ln.t}</span>)}
                   </div>
                   {n.hasAction ? <button onClick={n.act} style={{ alignSelf: 'flex-start', border: '0', background: '#1B1B63', color: '#FFFFFF', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>{n.actLabel}</button> : null}
+                  {n.replying ? <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <textarea value={n.replyText ?? ''} onChange={n.setReplyText} rows="3" placeholder="Je antwoord" autoFocus style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', lineHeight: '1.45', resize: 'vertical', background: '#FFFFFF' }} />
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <Button variant="primary" size="sm" onClick={n.sendReply}>Antwoord versturen</Button>
+                        <button onClick={n.cancelReply} className="link-btn">Annuleren</button>
+                      </div>
+                    </div> : null}
+                  {n.canReply || n.answered || n.canOpen ? <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {n.canReply ? <button onClick={n.startReply} style={{ border: '0', background: '#1B1B63', color: '#FFFFFF', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Beantwoorden</button> : null}
+                      {n.answered ? <span style={{ fontSize: '12px', fontWeight: '600', color: '#1A7A4A' }}>✓ Beantwoord</span> : null}
+                      {n.canOpen ? <button onClick={n.openCampaign} className="link-btn">Campagne openen</button> : null}
+                    </div> : null}
                 </div>)}
               {inbox.empty ? <div style={{ padding: '24px 0', textAlign: 'center', fontSize: '14px', color: '#8C8C8A' }}>Geen meldingen.</div> : null}
               <div style={{ fontSize: '12px', color: '#8C8C8A', lineHeight: '1.5', borderTop: '1px solid #F5F2ED', paddingTop: '12px' }}>Herinneringen verschijnen hier. Een e-mail (of Slack/Teams) en de automatische herinnering op maandag 09:00 volgen zodra die koppeling is ingesteld.</div>

@@ -17,7 +17,7 @@ export default function RolesTab({ s }) {
         </div>
       </Section>
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-        <div style={{ minWidth: '760px' }}>
+        <div style={{ minWidth: '860px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '8px', padding: '14px 20px', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>
             <div style={eyebrow}>Recht</div>
             {ROLE_KEYS.map(r => <div key={r} style={{ textAlign: 'center' }}>
