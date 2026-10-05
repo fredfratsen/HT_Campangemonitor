@@ -3,17 +3,22 @@
 // allow, a reason to reject, or { value } to store a corrected value: author fields (recBy, klantBy, by,
 // from) are always set to the person who is logged in, so nobody can save under someone else's name.
 import { rightsOf } from '../src/lib/permissions.js';
-import { DEF_RULES, RENAME } from '../src/lib/constants.js';
+import { DEF_RULES, RENAME, REMIND_GAP_MS } from '../src/lib/constants.js';
 
 export const NO_RIGHT = 'Je hebt geen rechten voor deze wijziging.';
+export const REMINDED = 'Deze recruiter kreeg de afgelopen 48 uur al een herinnering.';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isEmpty = v => v == null || (Array.isArray(v) ? !v.length : typeof v === 'object' && !Object.keys(v).length);
 const keysOf = (...objs) => [...new Set(objs.flatMap(o => o && typeof o === 'object' ? Object.keys(o) : []))];
-// Fields of a feedback week that belong to the recruiter's check-in, and to the client feedback.
+// Fields of a feedback week that belong to the recruiter's check-in, to the client feedback, and to the
+// marketeer's monitor status and update for the recruiter.
 const REC_FIELDS = new Set(['leads', 'q', 'rec', 'recBy', 'note', 'needsAction', 'at']);
 const KLANT_FIELDS = new Set(['klant', 'klantBy']);
-const emptyWeek = w => w && w.q == null && !w.rec && !w.klant && !w.note && !w.needsAction && !w.at;
+const MON_FIELDS = new Set(['mon', 'monBy', 'monSig', 'upd', 'updBy']);
+const emptyWeek = w => w && w.q == null && !w.rec && !w.klant && !w.note && !w.needsAction && !w.at && !w.mon && !w.upd;
+// When a reminder was sent: stamped by the server; older ones only have the client's id (Date.now() + name).
+const sentAt = n => n.ts ?? (parseFloat(String(n.id)) || 0);
 
 export function makeAuthorizer(actor, docs) {
   const R = rightsOf(actor), has = r => R.has(r), any = (...rs) => rs.some(has);
@@ -30,6 +35,7 @@ export function makeAuthorizer(actor, docs) {
         if (f === 'leads' && allowLeadsDrop && aw && aw[f] === undefined) continue;
         if (!canRec(campaignRec)) return NO_RIGHT;
       } else if (KLANT_FIELDS.has(f)) { if (!has('feedback.client')) return NO_RIGHT; }
+      else if (MON_FIELDS.has(f)) { if (!has('campaigns.monitor')) return NO_RIGHT; }
       else if (f === 'tr') continue; // demo pipeline numbers, derived data
       else if (!has('dev')) return NO_RIGHT;
     }
@@ -39,7 +45,7 @@ export function makeAuthorizer(actor, docs) {
   function stampWeek(bw, aw) {
     if (!aw) return aw;
     let out = aw;
-    for (const f of ['recBy', 'klantBy']) {
+    for (const f of ['recBy', 'klantBy', 'monBy', 'updBy']) {
       if (aw[f] !== undefined && (!bw || bw[f] !== aw[f]) && aw[f] !== actor.name) { if (out === aw) out = { ...aw }; out[f] = actor.name; }
     }
     return out;
@@ -115,8 +121,15 @@ export function makeAuthorizer(actor, docs) {
     inbox(key, before, after) {
       if (before === undefined) {
         const ok = after && (after.kind === 'reminder' ? has('reminders.send') : after.kind === 'assign' ? any('assign', 'trello.link')
-          : after.kind === 'question' ? has('questions.ask') : after.kind === 'answer' ? isAnswer(after) : has('dev'));
+          : after.kind === 'question' ? has('questions.ask') : after.kind === 'answer' ? isAnswer(after)
+          : after.kind === 'update' ? has('campaigns.monitor') : has('dev'));
         if (!ok) return NO_RIGHT;
+        if (after.kind === 'reminder') {
+          // One per recruiter per 48 hours, by the server's clock.
+          const now = Date.now();
+          if (Object.values(docs.inbox || {}).some(n => n.kind === 'reminder' && n.to === after.to && now - sentAt(n) < REMIND_GAP_MS)) return REMINDED;
+          return { value: { ...after, from: actor.name, ts: now } };
+        }
         return after.from !== actor.name ? { value: { ...after, from: actor.name } } : '';
       }
       if (after === undefined) return need(has('dev'));

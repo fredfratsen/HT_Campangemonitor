@@ -100,6 +100,12 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.deepEqual(p.data.rejected, [{ doc: 'rules', key: 'qRed' }]);
     assert.equal((await rec.get('/api/admin/members')).status, 403);
     assert.equal((await rec.get('/api/admin/audit')).status, 403);
+    // "Bekijk als": other recruiters yes (their rights come along), Recruitment Marketeers never.
+    const mem = (await rec.get('/api/me')).data.members, by = id => mem.find(m => m.id === id);
+    assert.ok(by('r-kim').rights && !by('danielle').rights && !by('robbin').rights);
+    assert.equal((await rec.api('POST', '/api/me/view-as', { id: 'r-kim' })).status, 200);
+    assert.equal((await rec.api('POST', '/api/me/view-as', { id: 'danielle' })).status, 403);
+    assert.equal((await rec.api('POST', '/api/me/view-as', { id: null })).status, 200);
     S.rec = rec;
   });
 

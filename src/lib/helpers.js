@@ -36,3 +36,19 @@ export function health(c, R) {
   if (R.missingOn && cur.q == null) add(1, 'Feedback ontbreekt', 'missing');
   return { lvl, reasons };
 }
+
+/**
+ * Monitor status this week, from the marketeer's choice (week field `mon`) and the health h:
+ * - 'klant': waiting for the client. Stays on in later weeks until someone sets another status.
+ * - 'check': a marketeer checked it this week, whatever its scores. A signal that wasn't there at the check
+ *   (`monSig`) puts it back on 'actie' (`stale`). Without any signal a campaign is 'check' by itself.
+ * - 'actie': everything else (at least one rule fires).
+ * `mon: 'open'` clears an earlier choice. Returns { s, by, w, stale }; `by` is empty when nobody set it.
+ */
+export function monitor(c, h) {
+  const ws = c.weeks, cur = ws[ws.length - 1], set = [...ws].reverse().find(w => w.mon);
+  if (set && set.mon === 'klant') return { s: 'klant', by: set.monBy || '', w: set.w, stale: false };
+  const checked = cur.mon === 'check', fresh = checked && h.reasons.every(r => (cur.monSig || []).includes(r.k));
+  if (fresh) return { s: 'check', by: cur.monBy || '', w: cur.w, stale: false };
+  return { s: h.lvl ? 'actie' : 'check', by: '', w: null, stale: checked };
+}

@@ -2,8 +2,8 @@
 // data (server/authorize.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rightsOf, can, manageError, overridesFor, ROLES, RIGHT_KEYS } from '../src/lib/permissions.js';
-import { makeAuthorizer, NO_RIGHT } from '../server/authorize.js';
+import { rightsOf, can, canViewAs, manageError, overridesFor, ROLES, RIGHT_KEYS } from '../src/lib/permissions.js';
+import { makeAuthorizer, NO_RIGHT, REMINDED } from '../server/authorize.js';
 import { DEF_RULES } from '../src/lib/constants.js';
 
 const dev = { id: 'r-tsjerk', name: 'Tsjerk', role: 'dev', recName: 'Tsjerk' };
@@ -38,7 +38,22 @@ test('who may manage whom', () => {
   assert.equal(manageError(lead, kimPlus, { role: 'recruiter', rights: ['feedback.own', 'audit.view'] }), '');
 });
 
-const week = (w, o = {}) => ({ w, leads: 5, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: 5 }, ...o });
+test('Bekijk als: recruiters and marketeers see each other, a recruiter never a marketeer', () => {
+  const juul = { id: 'r-juul', name: 'Juul', role: 'recruiter', recName: 'Juul' }, mare = { id: 'mare', name: 'Mare', role: 'marketeer' };
+  assert.equal(canViewAs(kim, juul), true);
+  assert.equal(canViewAs(kim, mkt), false);
+  assert.equal(canViewAs({ ...kim, grants: ['campaigns.all'] }, mkt), false, 'not even with extra rights');
+  assert.equal(canViewAs(mkt, kim), true);
+  assert.equal(canViewAs(mkt, mare), true);
+  for (const t of [dev, lead, am]) { assert.equal(canViewAs(kim, t), false); assert.equal(canViewAs(mkt, t), false); }
+  assert.equal(canViewAs(lead, kim), false, 'teamlead: not part of this');
+  assert.equal(canViewAs(am, kim), false);
+  assert.equal(canViewAs(kim, kim), false, 'not yourself');
+  assert.equal(canViewAs(dev, mkt), true, 'Dev sees everyone');
+  assert.equal(canViewAs(dev, lead), true);
+});
+
+const week = (w, o = {}) =>({ w, leads: 5, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: 5 }, ...o });
 const camp = (id, rec, weeks = [week(38, { q: 7, rec: 'ok' }), week(39)]) => ({ id, client: 'Klant ' + id, vac: 'Kok', rec, start: 38, ended: false, actions: [], weeks });
 
 test('campaign feedback: own campaigns only, author stamped', () => {
@@ -136,6 +151,38 @@ test('questions go out with questions.ask; answers only to a question sent to yo
   assert.equal(makeAuthorizer(mkt, docs)('inbox', '2', undefined, { ...ans, re: 99 }), NO_RIGHT, 'the question must exist');
   assert.equal(makeAuthorizer(mkt, docs)('inbox', '1', q, { ...q, read: true, answered: true }), '', 'marking it read and answered');
   assert.equal(makeAuthorizer(mkt, docs)('inbox', '1', q, { ...q, items: ['anders'] }), NO_RIGHT);
+});
+
+test('monitor status and the update for the recruiter need campaigns.monitor, author stamped', () => {
+  const c = camp('c1', 'Kim');
+  const set = o => ({ ...c, weeks: [c.weeks[0], { ...c.weeks[1], ...o }] });
+  const r = makeAuthorizer(mkt, {})('campaigns', 'c1', c, set({ mon: 'check', monBy: 'Iemand', monSig: ['missing'], upd: 'Nieuwe advertentie', updBy: 'Iemand' }));
+  assert.equal(r.value.weeks[1].monBy, 'Danielle');
+  assert.equal(r.value.weeks[1].updBy, 'Danielle');
+  assert.equal(makeAuthorizer(lead, {})('campaigns', 'c1', c, set({ mon: 'klant', monBy: 'Robbin' })), '', 'teamlead has it');
+  for (const who of [kim, am]) {
+    assert.equal(makeAuthorizer(who, {})('campaigns', 'c1', c, set({ mon: 'check' })), NO_RIGHT);
+    assert.equal(makeAuthorizer(who, {})('campaigns', 'c1', c, set({ upd: 'x' })), NO_RIGHT);
+  }
+  assert.equal(makeAuthorizer(kim, {})('campaigns', 'c1', c, { ...c, weeks: [...c.weeks, week(40, { mon: 'klant' })] }), NO_RIGHT, 'not hidden in a new week');
+  const docs = { 'live.links': { 't-1-all': { id: 't-1-all', boardId: '1', rec: 'Kim' } } };
+  assert.equal(makeAuthorizer(mkt, docs)('live.fb', 't-1-all', {}, { 40: { mon: 'check', monBy: 'Danielle' } }), '', 'Trello mode too');
+  assert.equal(makeAuthorizer(kim, docs)('live.fb', 't-1-all', {}, { 40: { upd: 'x' } }), NO_RIGHT);
+  const note = { id: 9, to: 'Kim', from: 'Danielle', read: false, kind: 'update', campaign: 'c1', title: 'Update over Klant c1 – Kok', items: ['x'] };
+  assert.equal(makeAuthorizer(mkt, {})('inbox', '9', undefined, note), '', 'and lets the recruiter know');
+  assert.equal(makeAuthorizer(am, {})('inbox', '9', undefined, { ...note, from: 'Anouk' }), NO_RIGHT);
+});
+
+test('a recruiter gets at most one reminder per 48 hours', () => {
+  const now = Date.now(), rem = (id, to, o = {}) => ({ id, to, from: 'Danielle', read: false, kind: 'reminder', title: 't', items: [], ...o });
+  const fresh = makeAuthorizer(mkt, {})('inbox', 'n1', undefined, rem('n1', 'Kim', { ts: 1 }));
+  assert.ok(Math.abs(fresh.value.ts - now) < 5000, 'sent time comes from the server clock');
+  const docs = { inbox: { old: rem('old', 'Kim', { ts: now - 47 * 36e5 }), juul: rem('juul', 'Juul', { ts: now - 49 * 36e5 }), legacy: rem(`${now - 36e5}Robin`, 'Robin') } };
+  const a = makeAuthorizer(mkt, docs);
+  assert.equal(a('inbox', 'n2', undefined, rem('n2', 'Kim')), REMINDED);
+  assert.equal(a('inbox', 'n3', undefined, rem('n3', 'Juul')).value.to, 'Juul', 'more than 48 hours ago');
+  assert.equal(a('inbox', 'n4', undefined, rem('n4', 'Robin')), REMINDED, 'older reminders: time from the id');
+  assert.equal(a('inbox', 'n5', undefined, rem('n5', 'Tsjerk')).value.to, 'Tsjerk');
 });
 
 test('every role in ROLES has only known rights', () => {

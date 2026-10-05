@@ -15,21 +15,32 @@ Everyone logs in with a personal account. What you see and can do depends on you
 **Recruiter work** (right: *Eigen recruiterfeedback invullen*, plus a recruiter name on the account)
 
 - **Live campagnes**: today's call work per client, with new candidates and contact attempts pulled from Trello.
-- **Wekelijkse feedback recruiter**: the weekly check-in per campaign. It covers new candidates, a quality score
-  (1–10), written feedback, an optional action, and a **Bijsturing nodig** (needs adjusting) flag.
-- **Mijn campagnes**: your own campaigns and earlier check-ins.
+- **Wekelijkse feedback recruiter**: the weekly check-in per campaign, headed with the week it is about (for
+  example *Feedback week 39*). It covers new candidates, a quality score (1–10), written feedback, an optional
+  action, and a **Bijsturing nodig** (needs adjusting) flag. That flag puts the campaign on *Actie nodig* even when
+  its scores are fine, for example when a new question needs to be added. The latest update from the Recruitment
+  Marketeer on that campaign is shown above the form.
+- **Mijn campagnes**: your own campaigns with this week's candidates, quality, feedback and signals (no status,
+  recruiter or average-quality columns). Sorted by most new candidates; you can also sort by fewest or by client.
 
 **Campaign overview** (right: *Alle campagnes bekijken*; Recruitment Marketeers, Account Managers, Teamlead, Dev)
 
-- **Weekoverzicht**: campaign health for this week, whose feedback is still missing, and a button to send
-  reminders.
-- **Campagnes** and campaign detail: candidates and quality per week, the Trello pipeline, rejection reasons, and a
-  log of campaign changes (ad, audience, budget, vacancy text, ...).
+- **Weekoverzicht**: the **Monitorstatus** of this week's campaigns (see [Monitor status](#monitor-status-and-health-rules)),
+  grouped per status. Each campaign opens on click, or in a new browser tab with the icon (or Cmd/Ctrl-click).
+  The **Feedback recruiter** card lists the first 3 campaigns without feedback (*Alle campagnes* shows the rest)
+  and has a button to send reminders. A recruiter gets at most one reminder per 48 hours; the server checks this.
+- **Campagnes**: all active campaigns with status, client and vacancy, recruiter, candidates, quality and average
+  quality. Filter by status; sort by priority, lowest quality, fewest candidates or client.
+- **Campaign detail**: candidates and quality per week, the Trello pipeline, rejection reasons, and a log of
+  campaign changes (ad, audience, budget, vacancy text, ...). With the right *Monitorstatus en updates bijhouden*
+  you set the campaign to *Check* or *In afwachting van klant*, and write an **update for the recruiter**. The
+  recruiter sees it on the campaign and in their weekly feedback, and gets a notification under Meldingen. The
+  address bar follows the open campaign (`#campagne=<id>`), so a link or a reload opens it again.
 - **Vraag stellen** on a campaign (right: *Vragen stellen over campagnes*): send a question to the campaign's
   Recruitment Marketeer and/or recruiter. They answer it under Meldingen, and the answer comes back there too.
 - **Feedback klant**: record the client's feedback, separately from the recruiter's.
 - **Historie & analyse**: totals, averages and changes over past weeks.
-- **Health-regels**: the rules that label each campaign *Goed*, *Monitoren* or *Actie nodig*.
+- **Health-regels**: the rules that put a campaign on *Actie nodig*.
 
 **Management** (Teamlead and Dev by default)
 
@@ -42,16 +53,28 @@ Everyone logs in with a personal account. What you see and can do depends on you
 (report a bug or idea), the **Databron** switch between demo data and live Trello data, and **Instellingen**
 (your account, password, two-factor, sessions and a download of your own data).
 
-### Health rules
+### Monitor status and health rules
 
-The defaults are below. Anyone with the right *Health-regels aanpassen* can switch each rule on or off and change
-its threshold in **Health-regels**.
+Every active campaign has one monitor status per week. The health rules decide it, until a Recruitment Marketeer
+(or anyone with *Monitorstatus en updates bijhouden*) sets it on the campaign.
 
 | Status | When |
 |---|---|
-| **Actie nodig** | Any of: quality is 4 or lower · quality has dropped 2 weeks in a row · 2 or fewer new candidates this week · recruiter ticked *Bijsturing nodig* |
-| **Monitoren** | No red rule applies, and any of: quality is 6 or lower · new candidates 30% or more below the average of the previous 3 weeks · no feedback yet this week |
-| **Goed** | None of the above |
+| **Actie nodig** | At least one health rule fires, and nobody has set another status |
+| **In afwachting van klant** | Set by hand when the client still has to deliver something, such as ad balance or photos. It stays on in the weeks after, until someone changes it |
+| **Check** | Set by hand: the campaign has been reviewed this week, whatever its scores. Also when no rule fires at all. If a signal appears after the check that wasn't there at the time, the campaign goes back to *Actie nodig* |
+
+The health rules and their defaults are below. Red signals sort above orange ones; both put a campaign on *Actie
+nodig*. Anyone with the right *Health-regels aanpassen* can switch each rule on or off and change its threshold in
+**Health-regels**.
+
+| Signal | Rules |
+|---|---|
+| **Red** | quality is 4 or lower · quality has dropped 2 weeks in a row · 2 or fewer new candidates this week · recruiter ticked *Bijsturing nodig* |
+| **Orange** | quality is 6 or lower · new candidates 30% or more below the average of the previous 3 weeks · no feedback yet this week |
+
+The status is stored on the week (`mon`: `check`, `klant`, or `open` to hand it back to the rules; with `monBy`
+and, for a check, the signals seen at that moment in `monSig`). The update for the recruiter is `upd` / `updBy`.
 
 ## Accounts and rights
 
@@ -61,9 +84,9 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 
 | Role | Level | Default rights |
 |---|---|---|
-| **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als*, demo reset) |
+| **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset) |
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, handling bugs and ideas |
-| **Recruitment Marketeer** | Lid (member) | Campaign overview, client feedback, logging campaign changes, reminders |
+| **Recruitment Marketeer** | Lid (member) | Campaign overview, monitor status and updates for the recruiter, client feedback, logging campaign changes, reminders |
 | **Account Manager** | Lid (member) | Campaign overview (sees what a Recruitment Marketeer sees) and asking questions about campaigns; changes nothing |
 | **Recruiter** | Lid (member) | Own weekly feedback and Live campagnes |
 
@@ -77,12 +100,21 @@ The rules for managing people:
 **The server checks every change.** The app hides what you can't use, but `server/authorize.js` checks each
 saved change against the rights of whoever is logged in. For example, a recruiter can only fill in feedback on
 campaigns where they are the recruiter. Refused changes are not stored; the app reloads the server's version and
-shows a message. Author names (`recBy`, `klantBy`, `by`, `from`) are always filled in by the server, so nobody can
-save under someone else's name. Answering a question needs no right, but only the person it was sent to can
+shows a message. Author names (`recBy`, `klantBy`, `monBy`, `updBy`, `by`, `from`) are always filled in by the
+server, so nobody can save under someone else's name. Answering a question needs no right, but only the person it was sent to can
 answer, and only to whoever asked it.
 
-**Bekijk als** (Dev only, in the sidebar) shows the app as another team member sees it. Anything you save is
-still saved as yourself, with your own rights, and the switch is written to the audit log.
+**Bekijk als** (in the sidebar) shows the app as another team member sees it. Who you can pick is set in
+`canViewAs` (`src/lib/permissions.js`) and checked by the server:
+
+| You are | You can view as |
+|---|---|
+| Dev | Anyone |
+| Recruitment Marketeer | Recruiters and other Recruitment Marketeers |
+| Recruiter | Other recruiters, never a Recruitment Marketeer |
+| Teamlead, Account Manager | Nobody |
+
+Anything you save is still saved as yourself, with your own rights, and the switch is written to the audit log.
 
 **Recruiter name.** Campaigns and Trello links store the recruiter by name (`rec`). An account's *recruiternaam*
 connects it to those campaigns. The Dev account for Tsjerk has the recruiter name *Tsjerk*.
@@ -181,7 +213,7 @@ NODE_ENV=production SECRETS_KEY=something-long-and-random npm start   # http://l
 | `npm run build` | Builds the frontend into `dist/` |
 | `npm start` | Starts the server, which serves `dist/` and the API |
 | `npm run preview` | Build, then start |
-| `npm test` | Rights, crypto, and an end-to-end test of login, invites, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
+| `npm test` | Rights, monitor status, crypto, and an end-to-end test of login, invites, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
 
 ## Configuration
 

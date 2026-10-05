@@ -3,13 +3,13 @@
 import React from 'react';
 import { CUR, MON, wl, range, rangeLong, todayLong, stamp, weekOf, isoDate, mondayOf } from './lib/weeks.js';
 import {
-  RENAME, STAT, DEF_RULES, LABEL_COLORS, TR_EXTRA, TR_INACTIVE, TCOL, TCOLHEX, RANK, stageOf, cardTs,
+  RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, LABEL_COLORS, TR_EXTRA, TR_INACTIVE, TCOL, TCOLHEX, RANK, stageOf, cardTs,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES
 } from './lib/constants.js';
-import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health } from './lib/helpers.js';
+import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
-import { ROLES, LEVELS, RIGHT_KEYS } from './lib/permissions.js';
+import { ROLES, LEVELS, RIGHT_KEYS, canViewAs } from './lib/permissions.js';
 import { api } from './lib/api.js';
 
 import Sidebar from './views/Sidebar.jsx';
@@ -36,6 +36,14 @@ const PHONE_MQ = '(max-width: 900px)';
 // Without a server (the built files opened as a static site) there are no accounts: everything is allowed.
 const LOCAL_ACCOUNT = { id: 'local', name: 'Lokaal', role: 'dev', recName: null, level: 'owner', rights: RIGHT_KEYS, grants: [], revokes: [] };
 const prepCampaigns = cs => rollForward(cs.map(c => RENAME[c.rec] ? { ...c, rec: RENAME[c.rec] } : c).map(ensureReasons));
+// Week fields written by the marketeer: monitor status (see monitor() in lib/helpers.js) and the update for the recruiter.
+const MON_FIELDS = ['mon', 'monBy', 'monSig', 'upd', 'updBy'];
+// When a reminder was sent; older ones only have their id (Date.now() + name).
+const sentAt = n => n.ts ?? (parseFloat(String(n.id)) || 0);
+const DAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+/** "wo 4 okt 10:12" */
+const when = ts => { const d = new Date(ts); return `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const names = a => a.length > 1 ? `${a.slice(0, -1).join(', ')} en ${a[a.length - 1]}` : a.join('');
 
 class TrelloError extends Error {}
 
@@ -49,11 +57,11 @@ export default class App extends React.Component {
       account: null, members: [], viewAs: null, settingsTab: 'account',
       view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null, navOpen: false,
       campaigns: null, rules: { ...DEF_RULES },
-      f: { q: '', status: 'all', rec: 'all', sort: 'status' },
+      f: { q: '', status: 'all', sort: 'status', mineSort: 'leadsMost' },
       ci: { rec: 'all' }, form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
-      act: { type: 'Advertentie', text: '', w: CUR }, ask: { to: '', text: '' }, reply: null,
-      toast: null, reminded: false, trTab: 'open', trSel: {}, trVac: {}, asg: { tab: 'open', q: '' }, mktDemo: null, seen: null, panel: null,
+      act: { type: 'Advertentie', text: '', w: CUR }, ask: { to: '', text: '' }, reply: null, upd: null, missAll: false,
+      toast: null, trTab: 'open', trSel: {}, trVac: {}, asg: { tab: 'open', q: '' }, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null
     };
@@ -61,6 +69,9 @@ export default class App extends React.Component {
 
   // ── Loading & syncing ────────────────────────────────────────────────
   async componentDidMount() {
+    this._hashOpen = this.hashId();
+    this._hash = () => { this._hashOpen = this.hashId(); this.openPending(); };
+    window.addEventListener('hashchange', this._hash);
     this._k = e => {
       if (e.key === 'Escape' && this.state.navOpen) { this.setState({ navOpen: false }); return; }
       if (this.state.view === 'klant' && this.state.kform && (e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); this.saveKlant(); return; }
@@ -83,7 +94,7 @@ export default class App extends React.Component {
     try { docs = await this.sync.start(); if (docs) who = await this.sync.me(); } catch (e) { this.setState({ bootError: e.serverMessage || 'De server is niet bereikbaar. Probeer het zo opnieuw.' }); return; }
     if (!docs) return; // redirected to login
     const account = who ? who.account : LOCAL_ACCOUNT, members = who ? who.members : [];
-    const va = lsGet(VIEW_AS_KEY, null), viewAs = account.rights.includes('dev') && members.some(m => m.id === va && m.rights) ? va : null;
+    const va = lsGet(VIEW_AS_KEY, null), viewAs = members.some(m => m.id === va && m.rights && canViewAs(account, m)) ? va : null;
     const sh = fromDocs(docs), cfg = this.sync.config;
     const meta = sh.meta || {};
     let campaigns = sh.campaigns, assignLog = sh.assignLog;
@@ -100,7 +111,7 @@ export default class App extends React.Component {
       ...(source === 'trello' ? { demoCampaigns: campaigns, campaigns: [] } : { campaigns })
     }, () => {
       const me = this.me(), home = this.homeView(me);
-      this.setState({ view: home, back: home, ci: { rec: me.rec || 'all' } });
+      this.setState({ view: home, back: home, ci: { rec: me.rec || 'all' } }, () => this.openPending());
       this.sync.begin();
       this.touchLogin(account.id);
       this._seenTimer = setInterval(() => this.setState(s => { const id = s.account.id, mine = s.seen[id]; return mine ? { seen: { ...s.seen, [id]: { ...mine, last: Date.now() } } } : null; }), 60000);
@@ -129,9 +140,10 @@ export default class App extends React.Component {
     if (!this.viewOk(this.state.view)) { this.setState({ view: this.homeView() }); return; }
     this.syncLive();
     this.sync.changed();
+    this.syncHash();
   }
 
-  componentWillUnmount() { window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); if (this.sync) this.sync.stop(); }
 
   /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
   navChanged() {
@@ -211,8 +223,9 @@ export default class App extends React.Component {
     for (let w = start; w <= CUR; w++) {
       const inW = cw.filter(x => x.w === w);
       const tr = { nieuw: inW.length, gescreend: inW.filter(x => x.r >= 1).length, gesprek: inW.filter(x => x.r >= 2).length, voorgesteld: inW.filter(x => x.r >= 3).length, geplaatst: inW.filter(x => x.r >= 4).length, reasons: inW.reduce((o, x) => { if (x.reason) o[x.reason] = (o[x.reason] || 0) + 1; return o; }, {}) };
-      const e = f[w] || {};
-      weeks.push({ w, leads: e.leads ?? tr.nieuw, q: e.q ?? null, rec: e.rec || '', klant: e.klant || '', note: e.note || '', needsAction: !!e.needsAction, at: e.at || '', recBy: e.recBy, klantBy: e.klantBy, tr });
+      const e = f[w] || {}, mon = {};
+      MON_FIELDS.forEach(k => { if (e[k] !== undefined) mon[k] = e[k]; });
+      weeks.push({ w, leads: e.leads ?? tr.nieuw, q: e.q ?? null, rec: e.rec || '', klant: e.klant || '', note: e.note || '', needsAction: !!e.needsAction, at: e.at || '', recBy: e.recBy, klantBy: e.klantBy, ...mon, tr });
     }
     const open = cards.filter(c => !c.closed);
     return { id: k.id, boardId: k.boardId, client: k.boardName, vac: k.vac, rec: k.rec, start, ended: false, weeks, actions: acts, trello: true,
@@ -223,7 +236,7 @@ export default class App extends React.Component {
     const L = this.state.live, bd = this._bd || {};
     const campaigns = L.links.filter(k => !(L.inactive || {})[k.boardId]).map(k => this.buildLive(k, bd[k.boardId], L.fb[k.id] || {}, L.actions[k.id] || [])).filter(Boolean);
     this._skipSync = true;
-    this.setState({ campaigns }, () => { if (this.state.view === 'checkin' && !this.state.form) this.enterCheckin(); });
+    this.setState({ campaigns }, () => { if (this.state.view === 'checkin' && !this.state.form) this.enterCheckin(); this.openPending(); });
   }
   /** In Trello mode, feedback typed into the (derived) campaigns is written back to live.fb / live.actions. */
   syncLive() {
@@ -240,6 +253,7 @@ export default class App extends React.Component {
         if (w.q != null) e.q = w.q; if (w.rec) e.rec = w.rec; if (w.klant) e.klant = w.klant; if (w.note) e.note = w.note;
         if (w.needsAction) e.needsAction = true; if (w.leads !== w.tr.nieuw) e.leads = w.leads; if (w.at) e.at = w.at;
         if (w.recBy) e.recBy = w.recBy; if (w.klantBy) e.klantBy = w.klantBy;
+        MON_FIELDS.forEach(k => { if (w[k] !== undefined) e[k] = w[k]; });
         if (Object.keys(e).length) o[w.w] = e;
       });
       fb[c.id] = o; actions[c.id] = c.actions;
@@ -367,7 +381,7 @@ export default class App extends React.Component {
       inbox: {
         unread: mineN.filter(n => !n.read).length, hasUnread: mineN.some(n => !n.read), empty: mineN.length === 0,
         items: mineN.map(n => {
-          const qa = n.kind === 'question' || n.kind === 'answer', isQ = n.kind === 'question', replying = !!st.reply && st.reply.id === n.id;
+          const qa = n.kind === 'question' || n.kind === 'answer' || n.kind === 'update', isQ = n.kind === 'question', replying = !!st.reply && st.reply.id === n.id;
           return { from: `Van ${n.from}`, at: n.at, title: n.title, bg: n.read ? '#FFFFFF' : '#FFF8E0',
             lines: (n.items || []).map((t, j) => n.kind === 'reminder' ? { t: (openFb.has(t) ? '○ ' : '✓ ') + t, fg: openFb.has(t) ? '#1D1D1B' : '#8C8C8A' } : { t, fg: qa && j === 0 ? '#1D1D1B' : '#5C5C5A' }),
             hasAction: me.rights.has('feedback.own') && n.kind === 'reminder', actLabel: 'Feedback invullen', act: () => { this.setState({ panel: null }); this.go('checkin'); },
@@ -551,12 +565,12 @@ export default class App extends React.Component {
     });
   }
   /**
-   * Who the app is shown for: the logged-in account, or with "Bekijk als" (Dev only) another team member.
+   * Who the app is shown for: the logged-in account, or with "Bekijk als" another team member (see canViewAs).
    * Saving always happens as the logged-in account; the server checks its real rights.
    */
   me() {
     const st = this.state, acc = st.account;
-    const other = st.viewAs && acc.rights.includes('dev') ? st.members.find(m => m.id === st.viewAs && m.rights) : null;
+    const other = st.viewAs ? st.members.find(m => m.id === st.viewAs && m.rights && canViewAs(acc, m)) : null;
     const src = other || acc;
     return { id: src.id, name: src.name, role: src.role, rec: src.recName || null, rights: new Set(src.rights), isPreview: !!other,
       roleLabel: ROLES[src.role].label, levelLabel: LEVELS[ROLES[src.role].level].label };
@@ -579,14 +593,32 @@ export default class App extends React.Component {
   canFeedback(c, me = this.me()) { return me.rights.has('feedback.all') || (me.rights.has('feedback.own') && !!me.rec && c.rec === me.rec); }
   go(view) {
     if (!this.viewOk(view)) view = this.homeView();
+    this._hashOpen = null;
     this.setState({ view, navOpen: false }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0);
+  }
+  /** Campaign id from a link like #campagne=<id>, for example opened in a new tab from the Weekoverzicht. */
+  hashId() { const m = /^#campagne=(.+)$/.exec(window.location.hash); return m ? decodeURIComponent(m[1]) : null; }
+  /** Opens the campaign of such a link once it's loaded; with Trello live that can be after the boards come in. */
+  openPending() {
+    const id = this._hashOpen;
+    if (!id || !this.state.loaded) return;
+    if (!this.viewOk('detail')) { this._hashOpen = null; return; }
+    if (!this.state.campaigns.some(c => c.id === id)) return;
+    this._hashOpen = null;
+    this.open(id);
+  }
+  /** The address bar follows the open campaign, so a reload or a copied link opens it again. */
+  syncHash() {
+    const st = this.state, want = st.view === 'detail' ? '#campagne=' + encodeURIComponent(st.sel) : '';
+    if (this._hashOpen || window.location.hash === want) return;
+    window.history.replaceState(null, '', want || window.location.pathname + window.location.search);
   }
   setViewAs(id) {
     lsSet(VIEW_AS_KEY, id || null);
     api('POST', '/api/me/view-as', { id: id || null }).catch(() => {});
     this.setState({ viewAs: id || null }, () => {
       const me = this.me(), home = this.homeView(me);
-      this.setState(s => ({ ci: { rec: me.rec || 'all' }, f: { ...s.f, rec: 'all', status: 'all' }, form: null, kform: null, view: home, back: home, panel: null, navOpen: false }));
+      this.setState(s => ({ ci: { rec: me.rec || 'all' }, f: { ...s.f, status: 'all' }, form: null, kform: null, view: home, back: home, panel: null, navOpen: false }));
       window.scrollTo(0, 0);
     });
   }
@@ -635,7 +667,7 @@ export default class App extends React.Component {
   }
 
   // ── Wekelijkse feedback recruiter ────────────────────────────────────
-  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR }, ask: { to: '', text: '' } })); window.scrollTo(0, 0); }
+  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR }, ask: { to: '', text: '' }, upd: null })); window.scrollTo(0, 0); }
   flash(t) { this.setState({ toast: t }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2400); }
   queue(st = this.state) {
     const me = this.me(), rec = me.rights.has('feedback.all') ? st.ci.rec : me.rec;
@@ -680,11 +712,52 @@ export default class App extends React.Component {
     this.setState({ campaigns, act: { ...a, text: '' } });
     this.flash('Campagnewijziging vastgelegd');
   }
+  /** Changes this week's entry of campaign id; fn(week, campaign) returns the fields to set. */
+  setWeek(id, fn) {
+    this.setState(s => ({ campaigns: s.campaigns.map(c => {
+      if (c.id !== id) return c;
+      const ws = c.weeks.slice(), cur = ws[ws.length - 1];
+      ws[ws.length - 1] = { ...cur, ...fn(cur, c) };
+      return { ...c, weeks: ws };
+    }) }));
+  }
+  /**
+   * Monitor status for this week: 'check' (with the signals seen at that moment, see monitor()), 'klant', or
+   * 'open' to let the health rules decide again.
+   */
+  setMon(c, mon) {
+    const R = this.state.rules;
+    this.setWeek(c.id, (_, cc) => ({ mon, monBy: this.author(), monSig: mon === 'check' ? health(cc, R).reasons.map(r => r.k) : undefined }));
+    this.flash(mon === 'open' ? 'De health-regels bepalen de status weer' : `${c.client} – ${c.vac} staat op ${MONITOR[mon].label}`);
+  }
+  /** Saves the update for the recruiter (this week) and lets the recruiter know under Meldingen. */
+  saveUpd(c) {
+    const cur = c.weeks[c.weeks.length - 1], u = this.state.upd, text = (u && u.id === c.id ? u.text : cur.upd || '').trim();
+    if (text === (cur.upd || '')) { this.setState({ upd: null }); return; }
+    this.setWeek(c.id, () => ({ upd: text || undefined, updBy: text ? this.author() : undefined }));
+    const acc = this.state.account, notify = !!text && !!c.rec && c.rec !== acc.recName && c.rec !== acc.name;
+    const note = notify && { id: Date.now() + Math.random(), to: c.rec, from: this.author(), at: stamp(), read: false, kind: 'update', campaign: c.id, title: `Update over ${c.client} – ${c.vac}`, items: [text] };
+    this.setState(s => ({ upd: null, ...(note ? { inbox: [note, ...s.inbox] } : {}) }));
+    this.flash(!text ? 'Update verwijderd' : notify ? `Update opgeslagen · ${c.rec} krijgt een melding` : 'Update opgeslagen');
+  }
+  /** The newest update for the recruiter on campaign c, from any week. */
+  lastUpd(c) {
+    const w = [...c.weeks].reverse().find(x => x.upd), cur = c.weeks[c.weeks.length - 1];
+    return w ? { text: w.upd, by: w.updBy || 'de marketeer', cur: w === cur, meta: `Update van ${w.updBy || 'de marketeer'} · week ${wl(w.w)}` } : null;
+  }
+  /** Which recruiters with missing feedback can get a reminder now (at most one per REMIND_GAP_MS). */
+  remindInfo(missingD) {
+    const now = Date.now(), last = {};
+    this.state.inbox.forEach(n => { if (n.kind === 'reminder') last[n.to] = Math.max(last[n.to] || 0, sentAt(n)); });
+    const recs = [...new Set(missingD.map(d => d.rec).filter(Boolean))];
+    const ok = recs.filter(r => now - (last[r] || 0) >= REMIND_GAP_MS), wait = recs.filter(r => !ok.includes(r));
+    return { ok, wait, next: wait.length ? Math.min(...wait.map(r => last[r] + REMIND_GAP_MS)) : null };
+  }
   setRule(k, v) { this.setState(s => ({ rules: { ...s.rules, [k]: v } })); }
   exportCsv() {
     const period = +this.state.hist.period, first = CUR - period + 1;
-    const rows = [['klant', 'vacature', 'recruiter', 'week', 'week_start', 'nieuwe_kandidaten', 'kwaliteit', 'feedback_recruitment', 'feedback_klant', 'actie_notitie', 'bijsturing_nodig', 'trello_voorgesteld', 'trello_gesprek', 'trello_geplaatst']];
-    this.state.campaigns.forEach(c => c.weeks.forEach(w => rows.push([c.client, c.vac, c.rec, wl(w.w), isoDate(mondayOf(w.w)), w.leads, w.q ?? '', w.rec, w.klant, w.note, w.needsAction ? 'ja' : 'nee', w.tr.voorgesteld, w.tr.gesprek, w.tr.geplaatst])));
+    const rows = [['klant', 'vacature', 'recruiter', 'week', 'week_start', 'nieuwe_kandidaten', 'kwaliteit', 'feedback_recruitment', 'feedback_klant', 'actie_notitie', 'bijsturing_nodig', 'monitorstatus_gezet', 'update_recruiter', 'trello_voorgesteld', 'trello_gesprek', 'trello_geplaatst']];
+    this.state.campaigns.forEach(c => c.weeks.forEach(w => rows.push([c.client, c.vac, c.rec, wl(w.w), isoDate(mondayOf(w.w)), w.leads, w.q ?? '', w.rec, w.klant, w.note, w.needsAction ? 'ja' : 'nee', MONITOR[w.mon] ? MONITOR[w.mon].label : '', w.upd || '', w.tr.voorgesteld, w.tr.gesprek, w.tr.geplaatst])));
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = `campagnefeedback-week-${wl(first)}-${wl(CUR)}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -697,8 +770,8 @@ export default class App extends React.Component {
     return { qB, qA, lB, lA };
   }
   deco(c) {
-    const R = this.state.rules, h = health(c, R), ws = c.weeks, cur = ws[ws.length - 1], prev = ws[ws.length - 2] || null;
-    const S = STAT[h.lvl], missing = cur.q == null;
+    const R = this.state.rules, h = health(c, R), m = monitor(c, h), ws = c.weeks, cur = ws[ws.length - 1], prev = ws[ws.length - 2] || null;
+    const S = MONITOR[m.s], missing = cur.q == null;
     const qd = (!missing && prev && prev.q != null) ? cur.q - prev.q : null;
     const ld = prev ? cur.leads - prev.leads : null;
     const l8 = ws.slice(-8), pts = [];
@@ -707,7 +780,10 @@ export default class App extends React.Component {
     const lastFb = [...ws].reverse().find(w => w.q != null);
     return {
       id: c.id, client: c.client, vac: c.vac, rec: c.rec, start: c.start, startLabel: wl(c.start), cur, lvl: h.lvl,
-      statusLabel: S.label, sFg: S.fg, sBg: S.bg,
+      ms: m.s, msRank: S.rank, monBy: m.by, statusLabel: S.label, sFg: S.fg, sBg: S.bg,
+      monText: m.s === 'klant' ? `Sinds week ${wl(m.w)}${m.by ? ` · ${m.by}` : ''}` : m.s === 'check' ? (m.by ? `Gecheckt door ${m.by}` : 'Geen signalen deze week')
+        : m.stale ? `Nieuw signaal na de check van ${cur.monBy || 'de marketeer'}` : '',
+      href: '#campagne=' + encodeURIComponent(c.id),
       reasons: h.reasons.map(r => ({ t: r.t, fg: STAT[r.l].fg, bg: STAT[r.l].bg })),
       missing, qText: missing ? '—' : cur.q + '/10', qFg: qc(cur.q),
       qdText: missing ? 'nog niet beoordeeld' : qd == null ? 'eerste week' : qd === 0 ? 'gelijk aan vorige week' : `${qd > 0 ? '▲' : '▼'} ${Math.abs(qd)} t.o.v. vorige week`,
@@ -731,8 +807,8 @@ export default class App extends React.Component {
     const st = this.state, R = st.rules, me = this.me(), acc = st.account, can = r => me.rights.has(r), recMode = !!me.rec && can('feedback.own');
     const active = st.campaigns.filter(c => !c.ended);
     const D = active.map(c => this.deco(c));
-    const cnt = [0, 1, 2].map(l => D.filter(d => d.lvl === l).length);
-    const missingD = D.filter(d => d.missing);
+    const cnt = {}; MONITOR_KEYS.forEach(k => { cnt[k] = D.filter(d => d.ms === k).length; });
+    const missingD = D.filter(d => d.missing), ri = this.remindInfo(missingD);
     const done = D.length - missingD.length;
     const setF = p => this.setState(s => ({ f: { ...s.f, ...p } }));
 
@@ -752,38 +828,47 @@ export default class App extends React.Component {
       { title: '', items: [['settings', 'Instellingen']] }
     ].filter(x => x && x.items.length).map(x => ({ title: x.title, items: x.items.map(navItem) }));
 
-    const levels = [2, 1, 0].map(l => ({ n: cnt[l], label: STAT[l].label, fg: STAT[l].fg, bg: STAT[l].bg, pct: (cnt[l] / Math.max(D.length, 1) * 100) + '%', onClick: () => { setF({ status: String(l) }); this.go('campaigns'); } }));
+    const levels = MONITOR_KEYS.map(k => ({ n: cnt[k], label: MONITOR[k].label, fg: MONITOR[k].fg, bg: MONITOR[k].bg, pct: (cnt[k] / Math.max(D.length, 1) * 100) + '%', onClick: () => { setF({ status: k }); this.go('campaigns'); } }));
+    // Feedback recruiter: the first 3 missing, the rest behind a button.
+    const missShown = st.missAll ? missingD : missingD.slice(0, 3);
     const sum = {
       active: D.length, done, donePct: (done / Math.max(D.length, 1) * 100) + '%', levels,
       hasMissing: missingD.length > 0,
-      missingList: missingD.map(d => ({ client: d.client, vac: d.vac, rec: d.rec, fill: () => this.open(d.id) })),
+      missingList: missShown.map(d => ({ client: d.client, vac: d.vac, rec: d.rec, fill: () => this.open(d.id) })),
+      hasMoreMissing: missingD.length > 3, missAll: !!st.missAll, moreMissingLabel: st.missAll ? 'Minder tonen' : `Alle ${missingD.length} campagnes`,
+      toggleMissing: () => this.setState(s => ({ missAll: !s.missAll })),
       klantDone: active.length - klantOpen
     };
     const byPrio = (a, b) => (a.cur.q ?? 5.5) - (b.cur.q ?? 5.5);
+    const bySeverity = (a, b) => b.lvl - a.lvl || byPrio(a, b);
     const groups = [
-      { lvl: 2, sub: 'Bijsturen deze week' }, { lvl: 1, sub: 'In de gaten houden' }, { lvl: 0, sub: 'Geen actie nodig' }
+      { k: 'actie', sub: 'Bekijken en bijsturen deze week' }, { k: 'klant', sub: 'Wacht op input van de klant, zoals saldo of foto’s' }, { k: 'check', sub: 'Beoordeeld, of zonder signalen' }
     ].map(g => {
-      const items = D.filter(d => d.lvl === g.lvl).sort(byPrio);
-      return { label: STAT[g.lvl].label, fg: STAT[g.lvl].fg, n: items.length, sub: g.sub, items, cards: g.lvl > 0 && items.length > 0, rows: g.lvl === 0 && items.length > 0 };
+      const items = D.filter(d => d.ms === g.k).sort(bySeverity);
+      return { label: MONITOR[g.k].label, fg: MONITOR[g.k].fg, n: items.length, sub: g.sub, items, cards: g.k !== 'check' && items.length > 0, rows: g.k === 'check' && items.length > 0 };
     }).filter(g => g.n > 0);
 
     // dashboard
-    const q = st.f.q.trim().toLowerCase();
-    const recF = st.view === 'mine' ? me.rec : st.f.rec;
-    let list = D.filter(d => (!q || (d.client + ' ' + d.vac).toLowerCase().includes(q)) && (recF === 'all' || d.rec === recF));
-    const tabCount = k => k === 'all' ? list.length : k === 'missing' ? list.filter(d => d.missing).length : list.filter(d => d.lvl === +k).length;
-    const statusTabs = [['all', 'Alle', null], ['2', 'Actie nodig', STAT[2].fg], ['1', 'Monitoren', STAT[1].fg], ['0', 'Goed', STAT[0].fg], ['missing', 'Geen feedback', null]].map(([k, label, dot]) => ({
+    const q = st.f.q.trim().toLowerCase(), isMine = st.view === 'mine';
+    let list = D.filter(d => (!q || (d.client + ' ' + d.vac).toLowerCase().includes(q)) && (!isMine || d.rec === me.rec));
+    const tabCount = k => k === 'all' ? list.length : k === 'missing' ? list.filter(d => d.missing).length : list.filter(d => d.ms === k).length;
+    const statusTabs = [['all', 'Alle', null], ...MONITOR_KEYS.map(k => [k, MONITOR[k].label, MONITOR[k].fg]), ['missing', 'Geen feedback', null]].map(([k, label, dot]) => ({
       label, dot, n: tabCount(k), bg: st.f.status === k ? '#FFFFFF' : 'transparent', fg: st.f.status === k ? '#1D1D1B' : '#5C5C5A', sh: st.f.status === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => setF({ status: k })
     }));
     if (st.f.status === 'missing') list = list.filter(d => d.missing);
-    else if (st.f.status !== 'all') list = list.filter(d => d.lvl === +st.f.status);
+    else if (st.f.status !== 'all') list = list.filter(d => d.ms === st.f.status);
     const sorters = {
-      status: (a, b) => b.lvl - a.lvl || byPrio(a, b),
+      status: (a, b) => b.msRank - a.msRank || bySeverity(a, b),
       quality: (a, b) => byPrio(a, b),
+      leadsMost: (a, b) => b.cur.leads - a.cur.leads,
       leads: (a, b) => a.cur.leads - b.cur.leads,
       client: (a, b) => a.client.localeCompare(b.client)
     };
-    list = list.slice().sort(sorters[st.f.sort] || sorters.status);
+    // Mijn campagnes (recruiters) sorts on instroom or name only; Campagnes also on priority and quality.
+    const sortKeys = isMine ? [['leadsMost', 'meeste instroom'], ['leads', 'minste instroom'], ['client', 'klant A–Z']]
+      : [['status', 'prioriteit'], ['quality', 'laagste kwaliteit'], ['leads', 'minste instroom'], ['client', 'klant A–Z']];
+    const sortOptions = sortKeys.map(([v, l]) => ({ v, l: 'Sorteer: ' + l })), sortValue = isMine ? st.f.mineSort : st.f.sort;
+    list = list.slice().sort(sorters[sortValue] || sorters[sortKeys[0][0]]);
     const recNames = this.recs(), recOptions = [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: r }))];
 
     // check-in
@@ -793,9 +878,9 @@ export default class App extends React.Component {
     let fc = {};
     if (fcC) {
       const prev = fcC.weeks[fcC.weeks.length - 2];
-      const edited = +f.leads !== f.trello;
+      const edited = +f.leads !== f.trello, upd = this.lastUpd(fcC);
       fc = {
-        client: fcC.client, vac: fcC.vac,
+        client: fcC.client, vac: fcC.vac, hasUpd: !!upd, upd: upd || {},
         prevLine: prev ? `${prev.leads} kandidaten · kwaliteit ${prev.q ?? '—'}/10${prev.rec ? ` · “${prev.rec}”` : ''}` : 'eerste week van deze campagne',
         trText: edited ? `Handmatig aangepast · Trello telde ${f.trello}` : `Automatisch uit Trello · ${f.trello} nieuwe kaarten ${range(CUR)}`,
         trBg: edited ? '#FEF3C7' : '#E7E7F0', trFg: edited ? '#B45309' : '#1B1B63',
@@ -822,6 +907,7 @@ export default class App extends React.Component {
     // Main button on a campaign: your own feedback if it's your campaign, else client feedback, else correcting the recruiter's.
     const canFb = this.canFeedback(selC, me), ownC = !!me.rec && selC.rec === me.rec;
     const fillMode = canFb && ownC ? 'rec' : can('feedback.client') ? 'klant' : canFb ? 'rec' : null;
+    const canMon = can('campaigns.monitor') && !selC.ended && selC.id !== 'none';
     const d = {
       ...dd, mkt: this.mktOf(selC) || 'nog niet toegewezen',
       kpis: [
@@ -839,6 +925,8 @@ export default class App extends React.Component {
         klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A',
         canFill: canFb && w.w === CUR && !selC.ended, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !selC.ended, addKlant: () => this.startKlant(selC.id),
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
+        upd: w.upd || '', hasUpd: !!w.upd, updBy: w.updBy || 'marketeer',
+        monTag: MONITOR[w.mon] ? `${MONITOR[w.mon].label}${w.monBy ? ` · ${w.monBy}` : ''}` : '', monFg: MONITOR[w.mon] ? MONITOR[w.mon].fg : '', monBg: MONITOR[w.mon] ? MONITOR[w.mon].bg : '',
         trText: `${w.tr.voorgesteld} voorgesteld · ${w.tr.gesprek} ${w.tr.gesprek === 1 ? 'gesprek' : 'gesprekken'}${w.tr.geplaatst ? ` · ${w.tr.geplaatst} geplaatst` : ''}`,
         reasons: reasonList(w.tr.reasons), hasReasons: reasonList(w.tr.reasons).length > 0, rejN: Object.values(w.tr.reasons || {}).reduce((a, b) => a + b, 0),
         acts: selC.actions.filter(a => a.w === w.w), fill: () => this.startCheckin(selC.id)
@@ -856,14 +944,25 @@ export default class App extends React.Component {
       funnel: funnelDefs.map(([k, label]) => ({ label, n: tot(k), pct: (tot(k) / Math.max(tot('nieuw'), 1) * 100) + '%' })),
       hasFill: !!fillMode && !selC.ended,
       fill: fillMode === 'rec' ? () => this.startCheckin(selC.id) : () => this.startKlant(selC.id),
-      fillLabel: fillMode === 'rec' ? `${ownC ? 'Mijn feedback' : 'Recruiterfeedback'} week ${wl(CUR)}` : `Feedback klant week ${wl(CUR)}`
+      fillLabel: fillMode === 'rec' ? `${ownC ? 'Mijn feedback' : 'Recruiterfeedback'} week ${wl(CUR)}` : `Feedback klant week ${wl(CUR)}`,
+      // Monitor status and the update for the recruiter: set by whoever has campaigns.monitor, seen by everyone here.
+      canMon, monActs: !canMon ? [] : (dd.ms === 'klant' ? [['Check', 'check'], ['Wachten opheffen', 'open']]
+        : dd.ms === 'check' ? [['In afwachting van klant', 'klant'], ...(dd.monBy ? [['Check ongedaan maken', 'open']] : [])]
+        : [['Check', 'check'], ['In afwachting van klant', 'klant']]).map(([label, v]) => ({ label, primary: v === 'check', onClick: () => this.setMon(selC, v) })),
+      upd: (() => {
+        const text = st.upd && st.upd.id === selC.id ? st.upd.text : (cw.upd || ''), last = this.lastUpd(selC);
+        return { text, dirty: text.trim() !== (cw.upd || ''), has: !!last, last: last || {},
+          saved: !last ? '' : last.cur ? `Opgeslagen door ${last.by}` : `Laatste update: ${last.meta.replace('Update van ', '')}`,
+          set: e => { const v = e.target.value; this.setState({ upd: { id: selC.id, text: v } }); }, save: () => this.saveUpd(selC),
+          hint: selC.rec ? `${selC.rec} ziet dit hier en bij de wekelijkse feedback, en krijgt een melding.` : 'Deze campagne heeft nog geen recruiter.' };
+      })()
     };
     const canAsk = can('questions.ask') && selC.id !== 'none', askOpts = canAsk ? this.askTargets(selC) : [];
     const askTo = (askOpts.find(o => o.v === st.ask.to) || askOpts[0] || {}).v || '';
     const zone = {
       red: R.qRedOn ? ((R.qRed + 0.5) * 10) + '%' : '0%',
       green: ((10 - R.qOrange - 0.5) * 10) + '%',
-      redText: `Actie nodig (≤ ${R.qRed})`, greenText: `Goed (≥ ${R.qOrange + 1})`
+      redText: `Rood signaal (≤ ${R.qRed})`, greenText: `Geen signaal (≥ ${R.qOrange + 1})`
     };
 
     // history
@@ -875,10 +974,9 @@ export default class App extends React.Component {
       const qv = inP.filter(w => w.q != null).map(w => w.q);
       const a = avgOf(qv);
       const aw = new Set(c.actions.map(x => x.w));
-      const lvl = c.ended ? null : health(c, R).lvl;
       return {
         client: c.client, vac: c.vac + (c.ended ? ' (afgerond)' : ''),
-        dot: c.ended ? '#C0BDB9' : STAT[lvl].fg,
+        dot: c.ended ? '#C0BDB9' : MONITOR[monitor(c, health(c, R)).s].fg,
         cells: hw.map(w => { const e = c.weeks.find(x => x.w === w); return e ? { t: e.q ?? '?', bg: qb(e.q), fg: qc(e.q), act: aw.has(w) } : { t: '', bg: 'transparent', fg: '#8C8C8A', act: false }; }),
         total: inP.reduce((s, w) => s + w.leads, 0), avgN: a ?? 0, avg: a == null ? '—' : nl(a), avgFg: qc(a == null ? null : Math.round(a)),
         placed: inP.reduce((s, w) => s + w.tr.geplaatst, 0), acts: c.actions.filter(x => hw.includes(x.w)).length,
@@ -913,14 +1011,15 @@ export default class App extends React.Component {
       toggle: () => { if (lead) this.setRule(onKey, !R[onKey]); }, tBg: R[onKey] ? '#1B1B63' : '#C0BDB9', knob: R[onKey] ? '18px' : '2px',
       hits: R[onKey] ? hits(hitKey) : 'uit'
     });
+    // Both groups put a campaign on Actie nodig; red signals come first in the lists.
     const ruleGroups = [
-      { label: 'Actie nodig', fg: STAT[2].fg, sub: 'Minimaal één van deze regels', rules: [
+      { label: 'Rode signalen', fg: STAT[2].fg, sub: 'Zet de campagne op Actie nodig, bovenaan', rules: [
         rule('qRedOn', 'Kwaliteit is', 'qRed', 'of lager', 'qRed'),
         rule('declOn', 'Kwaliteit daalt', 'declWeeks', 'weken achter elkaar', 'decl'),
         rule('minLeadsOn', 'Instroom deze week is', 'minLeads', 'kandidaten of minder', 'minLeads'),
         rule('manualOn', 'Recruiter heeft ‘Bijsturing nodig’ aangevinkt', null, '', 'manual')
       ] },
-      { label: 'Monitoren', fg: STAT[1].fg, sub: 'Als geen rode regel afgaat', rules: [
+      { label: 'Oranje signalen', fg: STAT[1].fg, sub: 'Zet de campagne ook op Actie nodig, na de rode', rules: [
         rule('qOrangeOn', 'Kwaliteit is', 'qOrange', 'of lager', 'qOrange'),
         rule('dropOn', 'Instroom ligt', 'dropPct', '% of meer onder het gemiddelde van de 3 weken ervoor', 'drop'),
         rule('missingOn', 'Er is nog geen feedback ingevuld voor deze week', null, '', 'missing')
@@ -944,8 +1043,8 @@ export default class App extends React.Component {
       viewAs: this.viewAsVals(), navSections, goSettings: () => { this.setState({ settingsTab: 'account' }); this.go('settings'); },
       navOpen: st.navOpen, openNav: () => this.setState({ navOpen: true }), closeNav: () => this.setState({ navOpen: false }),
       isSettings: st.view === 'settings', settings: this.settingsVals(me),
-      showRecFilter: st.view !== 'mine', recNames,
-      campTitle: st.view === 'mine' ? 'Mijn campagnes' : 'Actieve campagnes',
+      recNames, isMine, sortOptions, sortValue,
+      campTitle: isMine ? 'Mijn campagnes' : 'Actieve campagnes',
       isKlant: st.view === 'klant', goKlant: () => this.go('klant'), goMine: () => this.go('mine'),
       hasKform: !!kC, kform: st.kform || {}, kc, skipKlant: () => this.skipKlant(),
       sourceTabs: [['demo', 'Demo-data'], ['trello', 'Trello live']].map(([k, label]) => ({ label, bg: st.source === k ? '#FFFFFF' : 'transparent', fg: st.source === k ? '#1D1D1B' : '#5C5C5A', sh: st.source === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => this.setSource(k) })),
@@ -968,15 +1067,18 @@ export default class App extends React.Component {
       sum, groups, list, listCount: list.length, listEmpty: list.length === 0, statusTabs, recOptions, f: st.f,
       isWeek: st.view === 'week', isCampaigns: st.view === 'campaigns' || st.view === 'mine', isCheckin: st.view === 'checkin', isDetail: st.view === 'detail', isHistory: st.view === 'history', isRules: st.view === 'rules',
       goCampaigns: () => { setF({ status: 'all' }); this.go('campaigns'); }, goWeek: () => this.go('week'),
-      goBack: () => this.go(st.back || 'campaigns'), backLabel: { settings: 'Instellingen', toewijzing: 'Toewijzing', trello: 'Klanten uit Trello', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', mine: 'Mijn campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: 'Mijn feedback', rules: 'Health-regels' }[st.back] || 'Campagnes',
+      goBack: () => this.go(st.back || 'campaigns'), backLabel: { settings: 'Instellingen', toewijzing: 'Toewijzing', trello: 'Klanten uit Trello', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', mine: 'Mijn campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: `Feedback week ${wl(CUR)}`, rules: 'Health-regels' }[st.back] || 'Campagnes',
+      // Reminders: only to recruiters who didn't get one in the last 48 hours.
       remind: () => {
-        const byRec = {};
-        missingD.forEach(m => { (byRec[m.rec] = byRec[m.rec] || []).push(`${m.client} – ${m.vac}`); });
-        const add = Object.entries(byRec).map(([rec, items]) => ({ id: Date.now() + rec, to: rec, from: this.author(), at: stamp(), read: false, kind: 'reminder', title: `Nog ${items.length} ${items.length === 1 ? 'campagne' : 'campagnes'} zonder feedback voor week ${wl(CUR)}`, items }));
-        this.setState(s => ({ reminded: true, inbox: [...add, ...s.inbox] })); this.flash(`Herinnering gestuurd naar ${Object.keys(byRec).join(', ')}`);
+        const byRec = {}, now = Date.now();
+        missingD.filter(m => ri.ok.includes(m.rec)).forEach(m => { (byRec[m.rec] = byRec[m.rec] || []).push(`${m.client} – ${m.vac}`); });
+        const add = Object.entries(byRec).map(([rec, items]) => ({ id: now + rec, ts: now, to: rec, from: this.author(), at: stamp(), read: false, kind: 'reminder', title: `Nog ${items.length} ${items.length === 1 ? 'campagne' : 'campagnes'} zonder feedback voor week ${wl(CUR)}`, items }));
+        if (!add.length) return;
+        this.setState(s => ({ inbox: [...add, ...s.inbox] })); this.flash(`Herinnering gestuurd naar ${names(Object.keys(byRec))}`);
       },
-      remindLabel: st.reminded ? 'Herinnering verstuurd ✓' : 'Herinnering sturen',
-      setSearch: e => setF({ q: tv(e) }), setRecFilter: e => setF({ rec: tv(e) }), setSort: e => setF({ sort: tv(e) }),
+      canSendRemind: ri.ok.length > 0, remindLabel: ri.ok.length ? 'Herinnering sturen' : 'Herinnering verstuurd ✓',
+      remindNote: !ri.wait.length ? '' : `${names(ri.wait)} ${ri.wait.length === 1 ? 'kreeg' : 'kregen'} de afgelopen 48 uur al een herinnering${ri.ok.length ? '' : `. Weer mogelijk vanaf ${when(ri.next)}`}.`,
+      setSearch: e => setF({ q: tv(e) }), setSort: e => setF(isMine ? { mineSort: tv(e) } : { sort: tv(e) }),
       ci: st.ci, ciRecOptions: [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: 'Ingevuld door ' + r }))],
       setCiRec: e => { const v = tv(e); this.setState(s => ({ ci: { ...s.ci, rec: v } }), () => this.enterCheckin()); },
       queue: queue.map(c => {
@@ -1008,19 +1110,19 @@ export default class App extends React.Component {
       canResetDemo: st.source === 'demo' && can('dev'),
       resetDemo: () => {
         if (!window.confirm('Demo-data en health-regels terugzetten naar de beginstand? Dit geldt voor het hele team.')) return;
-        this.setState({ campaigns: build(), rules: { ...DEF_RULES }, form: null, reminded: false }); this.flash('Demo-data hersteld');
+        this.setState({ campaigns: build(), rules: { ...DEF_RULES }, form: null }); this.flash('Demo-data hersteld');
       },
       saveOffline: st.saveState === 'offline', isLocal: this.sync.mode === 'local',
       ...this.panelVals(me),
       hasToast: !!st.toast, toast: st.toast
     };
   }
-  /** The "Bekijk als" picker (Dev only): team members grouped by role. */
+  /** The "Bekijk als" picker: the team members whose view you may open, grouped by role. */
   viewAsVals() {
     const st = this.state, acc = st.account;
-    const list = st.members.filter(m => m.rights && m.id !== acc.id && m.status !== 'deactivated');
+    const list = st.members.filter(m => m.rights && m.status !== 'deactivated' && canViewAs(acc, m));
     return {
-      enabled: acc.rights.includes('dev') && list.length > 0, value: st.viewAs || '', active: !!st.viewAs,
+      enabled: list.length > 0, value: st.viewAs || '', active: !!st.viewAs,
       onChange: e => this.setViewAs(e.target.value),
       groups: Object.keys(ROLES).map(r => ({ label: ROLES[r].label, members: list.filter(m => m.role === r) })).filter(g => g.members.length)
     };
@@ -1051,7 +1153,7 @@ export default class App extends React.Component {
       const cur = c.weeks[c.weeks.length - 1], ev = recent[c.client], mineEv = ev && ev.to === me.rec;
       const nieuw = c.live ? c.live.nieuw : Math.floor(rnd(c.id + 'today') * (cur.leads / 4 + 1.5)) + Math.round(rnd(c.id + 'bl') * 1.4);
       const contact = c.live ? c.live.contact : Math.round(rnd(c.id + 'cp') * 3) + Math.round(cur.leads / 4);
-      return { client: c.client, vac: c.vac, dot: STAT[health(c, R).lvl].fg, open: () => this.open(c.id), nieuw, contact, total: nieuw + contact,
+      return { client: c.client, vac: c.vac, dot: MONITOR[monitor(c, health(c, R)).s].fg, open: () => this.open(c.id), nieuw, contact, total: nieuw + contact,
         hasBadge: !!mineEv, badge: mineEv ? (ev.from ? `Overgenomen van ${ev.from}` : 'Nieuw') : '', bBg: mineEv && ev.from ? '#E7E7F0' : '#FFF8E0', bFg: mineEv && ev.from ? '#1B1B63' : '#B45309',
         nFg: nieuw ? '#1B1B63' : '#C0BDB9', cFg: contact ? '#B45309' : '#C0BDB9' };
     });
@@ -1088,7 +1190,7 @@ export default class App extends React.Component {
               {v.isLocal ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', marginBottom: '20px' }}><b>Lokale demo zonder server.</b> Inloggen en rechten staan uit, en wat je invult blijft alleen in deze browser; het team ziet het niet.</div> : null}
               {v.saveOffline ? <div style={{ background: '#FDECEA', color: '#D32F2F', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', fontWeight: 500, marginBottom: '20px' }}>Geen verbinding met de server. Je wijzigingen worden opgeslagen zodra de verbinding terug is; sluit dit tabblad nog niet.</div> : null}
               {v.user.isPreview ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '10px 16px', fontSize: '14px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <span>Je bekijkt de app als <b>{v.user.name}</b> ({v.user.roleLabel}). Wat je opslaat, wordt opgeslagen als {v.authorName}.</span>
+                <span>Je bekijkt de app als <b>{v.user.name}</b> ({v.user.roleLabel}). Wat je opslaat, wordt opgeslagen als {v.authorName}, met je eigen rechten.</span>
                 <button onClick={() => this.setViewAs('')} className="link-btn">Stoppen</button>
               </div> : null}
               <TopActions v={v} />

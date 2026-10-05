@@ -13,13 +13,21 @@ export default function DetailView({ v }) {
             <h1 style={{ margin: '2px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '36px', lineHeight: '1.15', letterSpacing: '-.02em' }}>{d.vac}</h1>
             <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', padding: '5px 10px', borderRadius: '6px', background: d.sBg, color: d.sFg }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.sFg }} />{d.statusLabel}</span>
+              {d.monText ? <span style={{ fontSize: '13px', fontWeight: '500', color: d.sFg, marginRight: '4px' }}>{d.monText}</span> : null}
               {d.reasons.map((r, i) => <span key={i} style={{ fontSize: '12px', fontWeight: '500', padding: '4px 8px', borderRadius: '6px', background: '#F5F2ED', color: '#3C3C3A' }}>{r.t}</span>)}
               <span style={{ fontSize: '13px', color: '#8C8C8A', marginLeft: '6px' }}>Recruiter {d.rec} · Marketeer {d.mkt} · gestart week {d.startLabel}</span>
             </div>
           </div>
-          {d.hasFill ? <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button> : null}
+          {d.hasFill || d.canMon ? <div className="detail-acts" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {d.monActs.map((a, i) => <Button key={i} variant={a.primary ? 'outline' : 'ghost'} onClick={a.onClick}>{a.label}</Button>)}
+              {d.hasFill ? <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button> : null}
+            </div> : null}
         </div>
       </div>
+      {!d.canMon && d.upd.has ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontSize: '12px', fontWeight: '600', color: '#B45309' }}>{d.upd.last.meta}</span>
+          <span style={{ fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{d.upd.last.text}</span>
+        </div> : null}
       <div className="m-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px' }}>
         {d.kpis.map((k, i) => <div key={i} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '16px 18px' }}>
             <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>{k.label}</div>
@@ -95,6 +103,7 @@ export default function DetailView({ v }) {
                     <span style={{ fontSize: '13px', fontWeight: '600', padding: '3px 9px', borderRadius: '6px', background: s.qBg, color: s.qFg }}>{s.qText}</span>
                     {s.showTr ? <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Trello: {s.trText}</span> : null}
                     {s.needsAction ? <span style={{ fontSize: '12px', fontWeight: '600', padding: '3px 8px', borderRadius: '6px', background: '#FDECEA', color: '#D32F2F' }}>Bijsturing gevraagd</span> : null}
+                    {s.monTag ? <span style={{ fontSize: '12px', fontWeight: '600', padding: '3px 8px', borderRadius: '6px', background: s.monBg, color: s.monFg }}>{s.monTag}</span> : null}
                   </div>
                   {s.missing ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', fontSize: '14px', color: '#B45309' }}>
                       <span>Recruiter heeft voor deze week nog geen feedback ingevuld.</span>
@@ -116,6 +125,7 @@ export default function DetailView({ v }) {
                       {s.reasons.map((rs, j) => <span key={j} style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '999px', background: '#FDECEA', color: '#3C3C3A', display: 'inline-flex', gap: '5px' }}>{rs.t} <strong>{rs.n}</strong></span>)}
                     </div> : null}
                   {s.hasNote ? <div style={{ fontSize: '13px', lineHeight: '1.5', color: '#3C3C3A', borderTop: '1px solid #F5F2ED', paddingTop: '10px' }}><strong>Actie / notitie:</strong> {s.note}</div> : null}
+                  {s.hasUpd ? <div style={{ fontSize: '13px', lineHeight: '1.5', color: '#3C3C3A', borderTop: '1px solid #F5F2ED', paddingTop: '10px', whiteSpace: 'pre-wrap' }}><strong>Update van {s.updBy}:</strong> {s.upd}</div> : null}
                 </div>
                 {s.acts.map((a, j) => <div key={j} style={{ display: 'flex', gap: '10px', alignItems: 'baseline', background: '#FFF8E0', borderRadius: '8px', padding: '10px 14px', fontSize: '13px', lineHeight: '1.45' }}>
                     <span style={{ flex: 'none', width: '8px', height: '8px', borderRadius: '2px', background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)', transform: 'rotate(45deg) translateY(-1px)' }} />
@@ -125,6 +135,17 @@ export default function DetailView({ v }) {
             </div>)}
         </div>
         <div className="detail-side" style={{ flex: '1 1 300px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {d.canMon ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Update voor recruiter</span>
+                <span style={{ fontSize: '12px', color: '#8C8C8A', lineHeight: '1.45' }}>{d.upd.hint}</span>
+              </div>
+              <textarea value={d.upd.text} onChange={d.upd.set} rows="3" aria-label="Update voor recruiter" placeholder="Bijvoorbeeld: nieuwe advertentie staat sinds woensdag live." style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', lineHeight: '1.45', resize: 'vertical' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <Button variant="primary" size="sm" onClick={d.upd.save} disabled={!d.upd.dirty}>Opslaan</Button>
+                {d.upd.has ? <span style={{ fontSize: '12px', color: '#8C8C8A' }}>{d.upd.saved}</span> : null}
+              </div>
+            </div> : null}
           {canAsk ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Vraag stellen</span>

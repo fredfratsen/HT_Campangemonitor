@@ -9,7 +9,7 @@ export default function RulesView({ v }) {
         <div>
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Instellingen</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Campagne health</h1>
-          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '560px', textWrap: 'pretty' }}>Eén regel die afgaat bepaalt de status. Rood gaat vóór oranje. Wijzigingen gelden direct voor alle schermen.</div>
+          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '560px', textWrap: 'pretty' }}>Eén regel die afgaat zet een campagne op Actie nodig, tot een marketeer hem op Check of In afwachting van klant zet. Rood staat in de lijsten vóór oranje. Wijzigingen gelden direct voor alle schermen.</div>
           {rulesLocked ? <div style={{ marginTop: '12px', display: 'inline-flex', background: '#F5F2ED', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', color: '#3C3C3A' }}>Je hebt geen recht om de regels aan te passen.</div> : null}
         </div>
         {!rulesLocked ? <Button variant="ghost" onClick={resetRules}>Standaard herstellen</Button> : null}
@@ -31,10 +31,13 @@ export default function RulesView({ v }) {
               <span style={{ marginLeft: 'auto', fontSize: '12px', color: '#8C8C8A' }}>{r.hits}</span>
             </div>)}
         </div>)}
-      <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '16px 22px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#1A7A4A' }} />
-        <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px' }}>Goed</span>
-        <span style={{ fontSize: '13px', color: '#8C8C8A' }}>Alle campagnes waar geen regel afgaat</span>
+      <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
+        {[['#B45309', 'In afwachting van klant', 'Gezet door een marketeer als de klant nog iets moet aanleveren, zoals saldo of foto’s. Blijft staan tot iemand het wijzigt.'],
+          ['#1A7A4A', 'Check', 'Gezet door een marketeer als de campagne is beoordeeld, of vanzelf als er geen regel afgaat.']].map(([fg, label, sub], i) => <div key={i} className="rule-head" style={{ padding: '16px 22px', display: 'flex', alignItems: 'center', gap: '10px', borderTop: i ? '1px solid #F5F2ED' : '0' }}>
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: fg, flex: 'none' }} />
+            <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px', flex: 'none' }}>{label}</span>
+            <span style={{ fontSize: '13px', color: '#8C8C8A' }}>{sub}</span>
+          </div>)}
       </div>
     </div>
   );

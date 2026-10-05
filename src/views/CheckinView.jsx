@@ -8,14 +8,14 @@ export default function CheckinView({ v }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header>
-        <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Wekelijkse feedback recruiter · week {wk.n}</div>
-        <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Mijn feedback</h1>
+        <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Wekelijkse feedback recruiter · {wk.range}</div>
+        <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Feedback week {wk.n}</h1>
         <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px' }}>Jouw beeld van de instroom per campagne. Klantfeedback wordt apart vastgelegd door de Recruitment Marketeer.</div>
       </header>
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div className="q-card" style={{ flex: '1 1 260px', maxWidth: '320px', background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 18px', borderBottom: '1px solid #E4E1DE', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '15px' }}>Mijn campagnes</div>
+            <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '15px' }}>Mijn campagnes · week {wk.n}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#5C5C5A' }}>
               <span>{queueDone} van {queueTotal} ingevuld</span>
               <span>{queueOpen} open</span>
@@ -40,6 +40,10 @@ export default function CheckinView({ v }) {
               <div className="f-pad" style={{ padding: '24px 28px', borderBottom: '1px solid #E4E1DE' }}>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', lineHeight: '1.3' }}>Week {wk.n} – {fc.client} – {fc.vac}</div>
                 <div style={{ marginTop: '6px', fontSize: '13px', color: '#5C5C5A', textWrap: 'pretty' }}>Vorige week: {fc.prevLine}</div>
+                {fc.hasUpd ? <div style={{ marginTop: '12px', background: '#FFF8E0', borderRadius: '8px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '600', color: '#B45309' }}>{fc.upd.meta}</span>
+                    <span style={{ fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{fc.upd.text}</span>
+                  </div> : null}
               </div>
               <div className="f-pad" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

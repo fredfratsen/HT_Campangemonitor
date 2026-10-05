@@ -1,7 +1,7 @@
 // The JSON API behind the app. Everything here needs a session (see auth.guard); each route checks the right
 // it needs on the server, whatever the app shows.
 import express from 'express';
-import { can, ROLES, manageError, rightsOf } from '../src/lib/permissions.js';
+import { can, canViewAs, ROLES, manageError, rightsOf } from '../src/lib/permissions.js';
 import { AccountError, TTL } from './accounts.js';
 import { passwordProblem, otpauthUrl } from './crypto.js';
 import { qrDataUrl } from './pages.js';
@@ -33,10 +33,10 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, po
 
   // ── App data ─────────────────────────────────────────────────────────
   api.get('/config', (req, res) => res.json({ trello: !!secrets.get('trello'), auth: true, pollMs }));
-  // The Dev also gets everyone's rights, for "Bekijk als".
+  // For "Bekijk als", you also get the rights of the people whose view you may open.
   api.get('/me', (req, res) => res.json({
     account: accounts.selfView(req.account),
-    members: accounts.live().map(a => can(req.account, 'dev') ? { ...accounts.directoryView(a), rights: [...rightsOf(a)] } : accounts.directoryView(a)),
+    members: accounts.live().map(a => canViewAs(req.account, a) ? { ...accounts.directoryView(a), rights: [...rightsOf(a)] } : accounts.directoryView(a)),
   }));
   api.get('/state', (req, res) => {
     if (req.query.rev != null && Number(req.query.rev) === store.rev) return res.json({ rev: store.rev, unchanged: true });
@@ -116,8 +116,9 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, po
     audit.log('privacy.export', { actor: req.account, target: req.account });
     download(res, `mijn-gegevens-campagnemonitor-${new Date().toISOString().slice(0, 10)}.json`, await privacy.exportFor(req.account, req.sessionId));
   }));
-  api.post('/me/view-as', json, need('dev'), (req, res) => {
-    const t = req.body && req.body.id ? accounts.get(req.body.id) : null;
+  api.post('/me/view-as', json, (req, res) => {
+    const id = req.body && req.body.id, t = id ? accounts.get(id) : null;
+    if (id && !canViewAs(req.account, t)) return res.status(403).json({ error: 'forbidden', message: 'Je hebt hier geen rechten voor.' });
     audit.log('dev.view_as', { actor: req.account, target: t, details: t ? {} : { gestopt: true } });
     res.json({ ok: true });
   });

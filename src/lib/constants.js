@@ -2,11 +2,21 @@
 
 // Recruiter names in older demo data, renamed on load.
 export const RENAME = { Sanne: 'Robin', Mehmet: 'Tsjerk', Lotte: 'Kim', Joris: 'Juul' };
+// Health level from the rules (0 no signal, 1 orange, 2 red). Colours the signals; the status shown is MONITOR.
 export const STAT = [
-  { label: 'Goed', fg: '#1A7A4A', bg: '#E6F4ED' },
-  { label: 'Monitoren', fg: '#B45309', bg: '#FEF3C7' },
-  { label: 'Actie nodig', fg: '#D32F2F', bg: '#FDECEA' }
+  { label: 'Geen signaal', fg: '#1A7A4A', bg: '#E6F4ED' },
+  { label: 'Oranje signaal', fg: '#B45309', bg: '#FEF3C7' },
+  { label: 'Rood signaal', fg: '#D32F2F', bg: '#FDECEA' }
 ];
+// Monitor status of a campaign this week (see monitor() in helpers.js), in order of priority.
+export const MONITOR = {
+  actie: { label: 'Actie nodig', fg: '#D32F2F', bg: '#FDECEA', rank: 2 },
+  klant: { label: 'In afwachting van klant', fg: '#B45309', bg: '#FEF3C7', rank: 1 },
+  check: { label: 'Check', fg: '#1A7A4A', bg: '#E6F4ED', rank: 0 }
+};
+export const MONITOR_KEYS = ['actie', 'klant', 'check'];
+// A recruiter gets at most one feedback reminder per 48 hours (checked by the server too).
+export const REMIND_GAP_MS = 48 * 36e5;
 export const DEF_RULES = { qRedOn: true, qRed: 4, declOn: true, declWeeks: 2, minLeadsOn: true, minLeads: 2, manualOn: true, qOrangeOn: true, qOrange: 6, dropOn: true, dropPct: 30, missingOn: true };
 
 // Trello
@@ -46,6 +56,8 @@ export const cardTs = id => parseInt(id.slice(0, 8), 16) * 1000;
 export const REASONS = ['Te weinig ervaring', 'Afstand', 'Taalbarrière', 'Geen interesse', 'Geen reactie', 'No show', 'Foutieve contactgegevens', 'Ander aanbod', 'Salaris te laag', 'Overgekwalificeerd', 'Overig'];
 
 export const NEWS = [
+  { id: 11, date: '2 okt', tag: 'Nieuw', title: 'Monitorstatus voor Recruitment Marketeers', text: 'Het weekoverzicht toont nu de monitorstatus: Actie nodig, In afwachting van klant (bijvoorbeeld saldo of foto’s) of Check. Op een campagne zet je de status en schrijf je een update voor de recruiter; die krijgt een melding. Een campagne open je vanuit het weekoverzicht ook in een nieuw tabblad. Herinneringen voor feedback gaan hooguit eens per 48 uur naar dezelfde recruiter.' },
+  { id: 10, date: '2 okt', tag: 'Verbeterd', title: 'Rustiger overzicht voor recruiters', text: 'De wekelijkse feedback toont nu groot om welke week het gaat. Mijn campagnes heeft geen kolommen meer voor status, recruiter en gemiddelde kwaliteit, en sorteert standaard op meeste instroom. Recruiters en Recruitment Marketeers kunnen via ‘Bekijk als’ elkaars scherm bekijken; recruiters zien alleen dat van andere recruiters.' },
   { id: 9, date: '30 sep', tag: 'Nieuw', title: 'Rol Account Manager en vragen over campagnes', text: 'Account Managers zien alles wat een Recruitment Marketeer ziet, maar wijzigen niets. Via ‘Vraag stellen’ op een campagne sturen ze een vraag aan de marketeer en recruiter. Die beantwoord je onder Meldingen.' },
   { id: 8, date: '29 sep', tag: 'Nieuw', title: 'Eigen accounts en rechten', text: 'Iedereen logt nu in met een eigen account in plaats van het teamwachtwoord. Wat je ziet en mag, hangt af van je rol en rechten. Onder Instellingen beheer je je wachtwoord, tweestapsverificatie en je gegevens.' },
   { id: 7, date: '28 sep', tag: 'Nieuw', title: 'Meldingen, nieuws en ideeën', text: 'Herinneringen voor open feedback komen binnen onder Meldingen. Via ‘Bug of idee melden’ kan iedereen aangeven wat niet werkt of beter kan.' },
