@@ -95,7 +95,7 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     const rec = client(), link = new URL(r.data.link).pathname;
     const ok = await rec.form(link, { email: 'tessa@example.com', password: 'de recruiter haar wachtwoord', password2: 'de recruiter haar wachtwoord' });
     assert.equal(ok.loc, '/');
-    assert.deepEqual((await rec.get('/api/me')).data.account.rights, ['feedback.own']);
+    assert.deepEqual((await rec.get('/api/me')).data.account.rights, ['feedback.own', 'blacklist.view']);
     const p = await rec.api('POST', '/api/state/patch', { patches: [{ doc: 'rules', set: { qRed: 9 } }, { doc: 'seen', set: { [S.recId]: { last: 1 } } }] });
     assert.deepEqual(p.data.rejected, [{ doc: 'rules', key: 'qRed' }]);
     assert.equal((await rec.get('/api/admin/members')).status, 403);
@@ -117,6 +117,43 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     const ideas = (await S.dev.get('/api/state')).data.docs.ideas;
     for (let i = 0; i < n; i++) assert.equal((ideas['c' + i] || {}).text, 'tegelijk ' + i, `idea ${i} missing; responses: ${JSON.stringify(res.map(r => r.data))}; stored: ${Object.keys(ideas).join(',')}`);
     assert.equal(ideas.c1.by, 'Tsjerk', 'author filled in by the server');
+  });
+
+  test('blacklist: a recruiter proposes, the Dev confirms, and the candidate never reaches the shared data', async () => {
+    const cand = { name: 'Jan de Vries', phone: '06 1234 5678', reason: 'No-show bij gesprek of proefdag', client: 'Hotel X', vac: 'Kok' };
+    const p = await S.rec.api('POST', '/api/blacklist', cand);
+    assert.equal(p.status, 200, p.text);
+    assert.equal(p.data.entry.status, 'voorstel', 'without blacklist.manage it is a proposal');
+    const id = p.data.entry.id;
+    assert.equal((await S.rec.api('POST', '/api/blacklist', { ...cand, phone: '+31612345678' })).data.message, 'Jan de Vries is al voorgedragen voor de blacklist.');
+    assert.deepEqual((await S.rec.get('/api/blacklist?q=vries')).data.entries.map(e => e.id), [id], 'your own proposal');
+    assert.equal((await S.rec.get('/api/blacklist?q=ja')).status, 400, 'at least 3 characters');
+    assert.equal((await S.rec.api('POST', `/api/blacklist/${id}/approve`)).status, 403);
+    assert.equal((await S.rec.api('PATCH', `/api/blacklist/${id}`, cand)).status, 403);
+
+    const state = (await S.dev.get('/api/state')).text;
+    assert.ok(!state.includes('Vries') && !state.includes('12345678'), 'not in /api/state');
+    assert.match(state, /Voordracht voor de blacklist/, 'the Dev got a notification');
+    assert.equal((await S.dev.get('/api/blacklist/summary')).data.pending, 1);
+    const ok = await S.dev.api('POST', `/api/blacklist/${id}/approve`);
+    assert.equal(ok.data.entry.status, 'actief');
+    assert.equal(ok.data.entry.approvedBy, 'Tsjerk');
+    assert.equal((await S.rec.api('DELETE', `/api/blacklist/${id}`)).status, 403, 'a confirmed entry is not the recruiter\'s to remove');
+    assert.equal((await S.dev.get(`/api/blacklist/${id}/export`)).data.naam, 'Jan de Vries');
+
+    // A Recruitment Marketeer has no blacklist rights.
+    const inv = await S.dev.api('POST', '/api/admin/members', { name: 'Test Marketeer', role: 'marketeer' });
+    const mkt = client();
+    await mkt.form(new URL(inv.data.link).pathname, { email: 'mkt@example.com', password: 'de marketeer haar wachtwoord', password2: 'de marketeer haar wachtwoord' });
+    assert.equal((await mkt.get('/api/me')).status, 200);
+    assert.equal((await mkt.get('/api/blacklist?q=vries')).status, 403);
+    assert.equal((await mkt.api('POST', '/api/blacklist', { ...cand, phone: '0687654321' })).status, 403);
+
+    assert.equal((await S.dev.api('DELETE', `/api/blacklist/${id}`)).status, 200);
+    assert.deepEqual((await S.rec.get('/api/blacklist?q=vries')).data.entries, []);
+    const audit = JSON.stringify((await S.dev.get('/api/admin/audit?type=blacklist')).data.entries);
+    for (const t of ['blacklist.proposed', 'blacklist.approved', 'blacklist.export', 'blacklist.removed']) assert.ok(audit.includes(t), t);
+    assert.ok(!audit.includes('Vries'), 'the audit log has initials, not the name');
   });
 
   test('cross-site requests are refused', async () => {

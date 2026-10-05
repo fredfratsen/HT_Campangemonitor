@@ -162,7 +162,8 @@ export const privacyPage = ({ back = '/', hosting = 'render' } = {}) => page({ t
     <li>Een auditlog van beveiligingsgebeurtenissen (inloggen, rechten, sleutels, privacy-acties), met het IP-adres bij inlogpogingen.</li>
   </ul>
   <h2>En over kandidaten?</h2>
-  <p>De app telt kaarten op de Trello-borden per lijst, label en week, en leest de afwijsreden. Namen, contactgegevens en beschrijvingen van kandidaten worden niet opgehaald of opgeslagen.</p>
+  <p>De app telt kaarten op de Trello-borden per lijst, label en week, en leest de afwijsreden. Namen, contactgegevens en beschrijvingen van kandidaten worden daarbij niet opgehaald of opgeslagen.</p>
+  <p>Alleen voor de blacklist legt het team zelf gegevens van een kandidaat vast: naam, e-mailadres en/of telefoonnummer, de reden (uit een vaste lijst, zoals een no-show of ongepast gedrag), een korte toelichting en bij welke klant het gebeurde. Zo voorkomen we dat we iemand opnieuw voorstellen terwijl daar een goede reden tegen is (gerechtvaardigd belang). Recruiters kunnen iemand opzoeken en voordragen; de teamlead beslist. Alleen wie daar het recht voor heeft, ziet de blacklist, en hij wordt niet met klanten gedeeld.</p>
   <h2>Waarom?</h2>
   <p>Om het werk van het team te organiseren (uitvoering van de arbeidsovereenkomst) en om de gegevens te beveiligen (gerechtvaardigd belang).</p>
   <h2>Hoe lang?</h2>
@@ -171,10 +172,11 @@ export const privacyPage = ({ back = '/', hosting = 'render' } = {}) => page({ t
     <li>Auditlog: 12 maanden.</li>
     <li>Back-ups van de data: 14 dagen.</li>
     <li>Na uitdiensttreding wordt je account gedeactiveerd en na de ingestelde termijn geanonimiseerd: je naam wordt overal vervangen door een pseudoniem.</li>
+    <li>Blacklist: per kandidaat 6, 12 of 24 maanden, daarna automatisch verwijderd. Een voordracht waar niemand over beslist: 30 dagen.</li>
   </ul>
   <h2>Waar?</h2>
-  <p>${HOSTING[hosting] || HOSTING.render} Kandidaatgegevens blijven in Trello (Atlassian).</p>
+  <p>${HOSTING[hosting] || HOSTING.render} Kandidaatgegevens blijven in Trello (Atlassian), behalve de blacklist, die bij de rest van de data van de app staat.</p>
   <h2>Je rechten</h2>
-  <p>Je kunt je eigen gegevens downloaden onder Instellingen › Mijn account. Voor inzage, correctie of verwijdering kun je terecht bij [contactpersoon privacy, Horeca Toppers].</p>
+  <p>Je kunt je eigen gegevens downloaden onder Instellingen › Mijn account. Voor inzage, correctie of verwijdering kun je terecht bij [contactpersoon privacy, Horeca Toppers]. Dat geldt ook voor kandidaten op de blacklist; zij kunnen daar ook bezwaar maken.</p>
   <a class="btn" href="${esc(back)}" style="margin-top:12px">Terug</a>
 </div>` });

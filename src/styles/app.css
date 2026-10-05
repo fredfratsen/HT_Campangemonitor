@@ -145,19 +145,23 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .eff-row > :nth-child(5){grid-area:q}
   .eff-row > :nth-child(6){grid-area:l}
 
-  /* Toewijzing: the two dropdowns side by side, labelled with the column names from the (hidden) header */
-  .asg-row{grid-template-columns:repeat(2,minmax(0,1fr)) !important;grid-template-areas:"name name" "last last" "lrec lmkt" "rec mkt";gap:4px 10px !important;padding:14px 16px !important}
-  .asg-row > :nth-child(1){grid-area:name}
-  .asg-row > :nth-child(2){grid-area:last;font-size:12px !important;margin-bottom:8px}
-  .asg-row > :nth-child(3){grid-area:rec;min-width:0}
-  .asg-row > :nth-child(4){grid-area:mkt;min-width:0}
+  /* Toewijzing: tick box next to the name, the two dropdowns side by side, labelled with the column names from the (hidden) header */
+  .asg-row{grid-template-columns:16px repeat(2,minmax(0,1fr)) !important;grid-template-areas:"pick name name" ". last last" ". lrec lmkt" ". rec mkt" ". act act";gap:4px 10px !important;padding:14px 16px !important}
+  .asg-row > :nth-child(1){grid-area:pick;padding-top:2px}
+  .asg-row > :nth-child(2){grid-area:name}
+  .asg-row > :nth-child(3){grid-area:last;font-size:12px !important;margin-bottom:8px}
+  .asg-row > :nth-child(4){grid-area:rec;min-width:0}
+  .asg-row > :nth-child(5){grid-area:mkt;min-width:0}
+  .asg-row > :nth-child(6){grid-area:act;justify-content:flex-start !important;margin-top:6px}
+  .asg-row > :nth-child(6):empty{display:none}
   .asg-row::before{content:'Recruiter';grid-area:lrec}
   .asg-row::after{content:'Marketeer';grid-area:lmkt}
   .asg-row::before,.asg-row::after{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#8C8C8A}
-
-  .tr-row{grid-template-columns:minmax(0,1fr) auto !important;gap:10px !important;padding:12px 16px !important}
-  .tr-row > :nth-child(3){grid-column:1 / -1;flex-wrap:wrap !important;white-space:normal !important;justify-content:flex-start !important}
-  .tr-row input,.tr-row select{flex:1 1 140px;min-width:0}
+  .asg-fns{padding:0 16px 12px 42px !important}
+  .asg-bulk{bottom:12px !important}
+  .asg-bulk > div:first-child{flex:1 1 100%;flex-direction:row !important;justify-content:space-between;align-items:baseline}
+  .asg-bulk > select{flex:1 1 120px !important;max-width:none !important}
+  .asg-bulk > button{flex:1 1 100%;justify-content:center}
 
   /* Health-regels: switch left, rule text next to it, number of hits underneath */
   .rule-head{flex-wrap:wrap;row-gap:2px !important;padding:14px 16px !important}

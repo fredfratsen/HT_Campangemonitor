@@ -19,23 +19,21 @@ export const MONITOR_KEYS = ['actie', 'klant', 'check'];
 export const REMIND_GAP_MS = 48 * 36e5;
 export const DEF_RULES = { qRedOn: true, qRed: 4, declOn: true, declWeeks: 2, minLeadsOn: true, minLeads: 2, manualOn: true, qOrangeOn: true, qOrange: 6, dropOn: true, dropPct: 30, missingOn: true };
 
-// Trello
-export const LABEL_COLORS = ['#61BD4F', '#F2D600', '#FF9F1A', '#EB5A46', '#C377E0', '#0079BF', '#00C2E0', '#51E898'];
+// Trello. Demo: labels just found in Trello without a campaign (a new function of a client, a label that isn't a
+// function, and new boards), and boards without activity for [days].
 export const TR_EXTRA = [
   { board: 'Hotel Wijnberg', label: 'Kok', cards: 3 },
   { board: 'Hotel De Linde', label: 'Spoed', cards: 1 },
-  { board: 'Restaurant De Zwaan', label: 'Bediening', cards: 4, isNew: true },
-  { board: 'Restaurant De Zwaan', label: 'Afwasser', cards: 2, isNew: true },
-  { board: 'Hotel Bellevue', label: 'Receptionist', cards: 6, isNew: true },
-  { board: 'Hotel Bellevue', label: 'Ontbijtmedewerker', cards: 2, isNew: true }
+  { board: 'Restaurant De Zwaan', label: 'Bediening', cards: 4 },
+  { board: 'Restaurant De Zwaan', label: 'Afwasser', cards: 2 },
+  { board: 'Hotel Bellevue', label: 'Receptionist', cards: 6 },
+  { board: 'Hotel Bellevue', label: 'Ontbijtmedewerker', cards: 2 }
 ];
 export const TR_INACTIVE = [
   ['Café De Gouden Leeuw', ['Bediening'], 142], ['Hotel Rivierzicht', ['Kok', 'Afwasser'], 96], ['Restaurant Het Anker', ['Sous-chef'], 210],
   ['Bistro Sjiek', ['Bediening', 'Barmedewerker'], 64], ['Eetcafé De Brug', ['Kok'], 318], ['Strandclub West', ['Bediening'], 181],
   ['Hotel Maasoever', ['Receptionist'], 75], ['Pannenkoekenhuis Oma', ['Allround'], 402], ['Lunchcafé Kade', ['Barista'], 133]
 ];
-export const TCOL = { green: 'groen', yellow: 'geel', orange: 'oranje', red: 'rood', purple: 'paars', blue: 'blauw', sky: 'lichtblauw', lime: 'lime', pink: 'roze', black: 'zwart' };
-export const TCOLHEX = { green: '#61BD4F', yellow: '#F2D600', orange: '#FF9F1A', red: '#EB5A46', purple: '#C377E0', blue: '#0079BF', sky: '#00C2E0', lime: '#51E898', pink: '#FF78CB', black: '#344563' };
 export const RANK = { gescreend: 1, gesprek: 2, voorgesteld: 3, geplaatst: 4 };
 /** Maps a Trello list name to a pipeline stage. */
 export function stageOf(name) {
@@ -55,7 +53,17 @@ export const cardTs = id => parseInt(id.slice(0, 8), 16) * 1000;
 
 export const REASONS = ['Te weinig ervaring', 'Afstand', 'Taalbarrière', 'Geen interesse', 'Geen reactie', 'No show', 'Foutieve contactgegevens', 'Ander aanbod', 'Salaris te laag', 'Overgekwalificeerd', 'Overig'];
 
+// Blacklist (server/blacklist.js): why a candidate is on it. Only things the candidate did, so no health, origin,
+// religion or other sensitive data, and no suspicions of crimes (those need legal advice first). 'Overig' needs a
+// note. An entry ends after one of BL_MONTHS; a proposal nobody decided on after BL_PROPOSAL_DAYS.
+export const BL_REASONS = ['No-show bij gesprek of proefdag', 'Niet verschenen na plaatsing', 'Ongepast of agressief gedrag', 'Bewust onjuiste informatie gegeven', 'Klant wil niet meer met deze kandidaat werken', 'Overig'];
+export const BL_MONTHS = [6, 12, 24];
+export const BL_DEF_MONTHS = 12;
+export const BL_PROPOSAL_DAYS = 30;
+
 export const NEWS = [
+  { id: 13, date: '5 okt', tag: 'Nieuw', title: 'Blacklist voor kandidaten', text: 'Onder Kandidaten › Blacklist zoek je op naam, e-mail of telefoonnummer of een kandidaat op de blacklist staat, en waarom. Recruiters dragen iemand voor; de teamlead bevestigt of wijst af. Een vermelding geldt voor alle klanten of alleen voor één klant, en verloopt vanzelf na de gekozen termijn.' },
+  { id: 12, date: '5 okt', tag: 'Verbeterd', title: 'Klanten uit Trello zit nu in Toewijzing', text: 'Nieuwe borden en functies uit Trello verschijnen direct in Toewijzing; het scherm Klanten uit Trello is vervallen. Elke functie houdt een eigen campagne met eigen feedback, maar de recruiter en Recruitment Marketeer kies je per klant: zij volgen alle functies. Vink meerdere klanten aan om ze in één keer toe te wijzen. Een label dat geen functie is, zet je op Geen functie.' },
   { id: 11, date: '2 okt', tag: 'Nieuw', title: 'Monitorstatus voor Recruitment Marketeers', text: 'Het weekoverzicht toont nu de monitorstatus: Actie nodig, In afwachting van klant (bijvoorbeeld saldo of foto’s) of Check. Op een campagne zet je de status en schrijf je een update voor de recruiter; die krijgt een melding. Een campagne open je vanuit het weekoverzicht ook in een nieuw tabblad. Herinneringen voor feedback gaan hooguit eens per 48 uur naar dezelfde recruiter.' },
   { id: 10, date: '2 okt', tag: 'Verbeterd', title: 'Rustiger overzicht voor recruiters', text: 'De wekelijkse feedback toont nu groot om welke week het gaat. Mijn campagnes heeft geen kolommen meer voor status, recruiter en gemiddelde kwaliteit, en sorteert standaard op meeste instroom. Recruiters en Recruitment Marketeers kunnen via ‘Bekijk als’ elkaars scherm bekijken; recruiters zien alleen dat van andere recruiters.' },
   { id: 9, date: '30 sep', tag: 'Nieuw', title: 'Rol Account Manager en vragen over campagnes', text: 'Account Managers zien alles wat een Recruitment Marketeer ziet, maar wijzigen niets. Via ‘Vraag stellen’ op een campagne sturen ze een vraag aan de marketeer en recruiter. Die beantwoord je onder Meldingen.' },
@@ -70,5 +78,5 @@ export const NEWS = [
 ];
 export const IDEA_TYPES = { bug: ['Bug', '#FDECEA', '#D32F2F', 'Wat ging er mis? Wat deed je, en wat verwachtte je?'], idee: ['Idee', '#E7E7F0', '#1B1B63', 'Wat zou je handig vinden?'], verbetering: ['Verbetering', '#FEF3C7', '#B45309', 'Wat werkt nu onhandig, en hoe zou het beter kunnen?'] };
 export const IDEA_STATUS = { nieuw: ['Nieuw', '#5C5C5A'], opgepakt: ['Opgepakt', '#B45309'], opgelost: ['Opgelost', '#1A7A4A'], niet: ['Doen we niet', '#8C8C8A'] };
-export const VIEW_NAMES = { settings: 'Instellingen', week: 'Weekoverzicht', campaigns: 'Campagnes', klant: 'Feedback klant', trello: 'Klanten uit Trello', 'trello-test': 'Trello-koppeling testen', toewijzing: 'Toewijzing', history: 'Historie & analyse', rules: 'Health-regels', detail: 'Campagnedetail', checkin: 'Wekelijkse feedback recruiter', live: 'Live campagnes', mine: 'Mijn campagnes' };
+export const VIEW_NAMES = { settings: 'Instellingen', week: 'Weekoverzicht', campaigns: 'Campagnes', klant: 'Feedback klant', 'trello-test': 'Trello-koppeling testen', toewijzing: 'Toewijzing', history: 'Historie & analyse', rules: 'Health-regels', detail: 'Campagnedetail', checkin: 'Wekelijkse feedback recruiter', live: 'Live campagnes', mine: 'Mijn campagnes', blacklist: 'Blacklist' };
 export const ACT_TYPES = ['Advertentie', 'Doelgroep', 'Budget', 'Vacaturetekst', 'Screening', 'Klantafspraak', 'Besluit'];

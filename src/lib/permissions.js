@@ -13,11 +13,13 @@ export const RIGHTS = [
   { key: 'campaigns.monitor', group: 'werk', label: 'Monitorstatus en updates bijhouden', desc: 'Een campagne op Check of In afwachting van klant zetten, en updates schrijven die de recruiter ziet.' },
   { key: 'reminders.send', group: 'werk', label: 'Herinneringen sturen', desc: 'Recruiters herinneren aan ontbrekende feedback.' },
   { key: 'questions.ask', group: 'werk', label: 'Vragen stellen over campagnes', desc: 'Een vraag over een campagne sturen aan de Recruitment Marketeer en recruiter. Vraag en antwoord komen binnen onder Meldingen.' },
+  { key: 'blacklist.view', group: 'werk', label: 'Blacklist raadplegen', desc: 'Opzoeken of een kandidaat op de blacklist staat, en waarom. Een kandidaat voordragen; wie de blacklist beheert, beslist.' },
   { key: 'rules.edit', group: 'beheer', label: 'Health-regels aanpassen', desc: 'Regels aan- en uitzetten en drempels wijzigen. Geldt voor het hele team.' },
-  { key: 'trello.link', group: 'beheer', label: 'Trello-borden koppelen', desc: 'Klanten uit Trello koppelen aan functies en recruiters, en de Trello-koppeling testen.' },
-  { key: 'assign', group: 'beheer', label: 'Toewijzing beheren', desc: 'Recruiter en Recruitment Marketeer per klant kiezen, of een klant op Niet actief zetten.' },
+  { key: 'trello.link', group: 'beheer', label: 'Trello-koppeling testen', desc: 'Op de testpagina nagaan of de borden uit Trello goed binnenkomen.' },
+  { key: 'assign', group: 'beheer', label: 'Toewijzing beheren', desc: 'Klanten uit Trello toewijzen: recruiter en Recruitment Marketeer per klant kiezen, nieuwe functies toevoegen, een klant op Niet actief zetten, of een bord op Geen klant.' },
   { key: 'ideas.manage', group: 'beheer', label: 'Bugs en ideeën afhandelen', desc: 'De status van meldingen wijzigen.' },
   { key: 'members.manage', group: 'beheer', label: 'Leden en rechten beheren', desc: 'Mensen uitnodigen, rollen en rechten wijzigen, accounts deactiveren.' },
+  { key: 'blacklist.manage', group: 'beheer', label: 'Blacklist beheren', desc: 'De hele blacklist zien, kandidaten erop zetten, voordrachten bevestigen of afwijzen, vermeldingen wijzigen en verwijderen.' },
   { key: 'integrations', group: 'eigenaar', label: 'Integraties en API-sleutels', desc: 'Sleutels voor Trello (en later andere diensten) instellen en testen.' },
   { key: 'audit.view', group: 'eigenaar', label: 'Auditlog bekijken', desc: 'Wie heeft wanneer ingelogd, rechten gewijzigd of sleutels aangepast.' },
   { key: 'privacy', group: 'eigenaar', label: 'Privacy-tools', desc: 'Gegevens van een persoon exporteren of anonimiseren, bewaartermijnen instellen.' },
@@ -28,15 +30,15 @@ export const RIGHT_GROUPS = { werk: 'Werk', beheer: 'Beheer', eigenaar: 'Eigenaa
 
 export const LEVELS = { owner: { label: 'Eigenaar', rank: 3 }, admin: { label: 'Beheerder', rank: 2 }, member: { label: 'Lid', rank: 1 } };
 
-const WORK = ['campaigns.all', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send', 'questions.ask'];
-const ADMIN = ['rules.edit', 'trello.link', 'assign', 'ideas.manage', 'members.manage'];
+const WORK = ['campaigns.all', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send', 'questions.ask', 'blacklist.view'];
+const ADMIN = ['rules.edit', 'trello.link', 'assign', 'ideas.manage', 'members.manage', 'blacklist.manage'];
 
 export const ROLES = {
   dev: { label: 'Dev', level: 'owner', rights: RIGHT_KEYS, desc: 'Alles, inclusief integraties, auditlog en privacy-tools.' },
-  teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello en regels.' },
+  teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello, regels en de blacklist.' },
   marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send'], desc: 'Campagnes, monitorstatus, klantfeedback, campagnewijzigingen en herinneringen.' },
   accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet alles wat een Recruitment Marketeer ziet, maar wijzigt niets. Kan vragen stellen over campagnes.' },
-  recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own'], desc: 'Eigen campagnes, wekelijkse feedback en Live campagnes.' },
+  recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own', 'blacklist.view'], desc: 'Eigen campagnes, wekelijkse feedback, Live campagnes en de blacklist raadplegen.' },
 };
 export const ROLE_KEYS = Object.keys(ROLES);
 

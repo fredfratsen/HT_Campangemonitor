@@ -42,10 +42,24 @@ Everyone logs in with a personal account. What you see and can do depends on you
 - **Historie & analyse**: totals, averages and changes over past weeks.
 - **Health-regels**: the rules that put a campaign on *Actie nodig*.
 
+**Candidates** (right: *Blacklist raadplegen*; recruiters, Teamlead, Dev)
+
+- **Blacklist**: candidates Horeca Toppers doesn't put forward (again), with the reason. Look someone up by name,
+  email address or phone number (in any format) before planning an interview or trial day. Each entry has a name
+  plus an email address or phone number (so nobody is mixed up with a namesake), a reason from a fixed list
+  (`BL_REASONS` in `src/lib/constants.js`), an optional note, the client and function they applied for, and
+  whether it applies to all clients or only that one. It ends by itself after 6, 12 or 24 months.
+- Recruiters **propose** a candidate (*Kandidaat voordragen*). Whoever has *Blacklist beheren* (Teamlead, Dev) gets
+  a notification and confirms or rejects it; a proposal nobody decides on lapses after 30 days. With that right you
+  also see the whole list, add candidates directly, correct, extend and remove entries, and download an entry for a
+  candidate's request for access. Without it you only see confirmed entries and your own proposals.
+
 **Management** (Teamlead and Dev by default)
 
-- **Klanten uit Trello**: link Trello boards and labels to campaigns.
-- **Toewijzing**: assign a recruiter and a Recruitment Marketeer per client, or mark a client inactive.
+- **Toewijzing**: every Trello board is a client and every label on it a function, each with its own campaign (and
+  its own recruiter and client feedback). Assign a recruiter and a Recruitment Marketeer per client; they cover all
+  its functions. New boards and labels show up here by themselves. Tick several clients to assign them at once, mark
+  a client inactive, set a board that isn't a client to *Geen klant* or a label that isn't a function to *Geen functie*.
 - **Trello-koppeling testen**: check the Trello setup against the conventions below.
 - Editing the health rules.
 
@@ -85,10 +99,10 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 | Role | Level | Default rights |
 |---|---|---|
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset) |
-| **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, handling bugs and ideas |
+| **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, handling bugs and ideas, managing the blacklist |
 | **Recruitment Marketeer** | Lid (member) | Campaign overview, monitor status and updates for the recruiter, client feedback, logging campaign changes, reminders |
 | **Account Manager** | Lid (member) | Campaign overview (sees what a Recruitment Marketeer sees) and asking questions about campaigns; changes nothing |
-| **Recruiter** | Lid (member) | Own weekly feedback and Live campagnes |
+| **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
 
 The rules for managing people:
 
@@ -153,11 +167,18 @@ variable afterwards.
 - **Data minimisation for candidates.** The server decides which Trello fields are fetched, not the browser. Only
   lists, labels, and per card its list, labels and the two custom fields the monitor uses (*Sollicitatiedatum*,
   *Reden afgewezen*) come through. Candidate names, descriptions and other custom fields are never fetched.
+- **The blacklist is the exception**: the only place the app stores candidates' personal data, typed in by the
+  team. It is its own document (`DATA_DIR/blacklist.json`), only reachable through `/api/blacklist` with a
+  blacklist right, and never part of `/api/state`, so people without the right never receive it. Notifications
+  about proposals don't name the candidate (everyone receives the inbox), and the audit log has the entry id and
+  initials, not the name. Entries are deleted when their term ends. Reasons come from a fixed list without
+  sensitive data or suspicions of crimes, and the form warns against putting those in the note.
 - **Audit log** (Instellingen › Auditlog): logins (with IP address), failed attempts and lockouts, invites, role
   and rights changes, two-factor changes, API-key changes, exports, anonymisation, rule and assignment changes,
-  and refused changes. Individual feedback edits are not logged.
+  every blacklist change, and refused changes. Individual feedback edits are not logged.
 - **Right of access.** Everyone can download their own data (Instellingen › Mijn account). The Dev can export
-  anyone's data (Instellingen › Privacy).
+  anyone's data (Instellingen › Privacy). For a candidate on the blacklist, *Gegevens downloaden* on the entry;
+  correcting and removing are done there too.
 - **Right to erasure.** Deactivate the account (Leden), then anonymise it (Privacy). The name is replaced by a
   pseudonym (*Oud-teamlid 1*) everywhere: campaigns, feedback, assignments, notifications, ideas and the audit
   log. Email, password and two-factor are wiped. Free text that people typed can still mention names and has to be
@@ -173,11 +194,16 @@ variable afterwards.
   | Audit log | 12 months |
   | Daily backups | 14 days |
   | Deactivated accounts | Anonymised automatically after 12 months (setting in Instellingen › Privacy) |
+  | Blacklist entries | 6, 12 or 24 months, chosen per entry (can be extended) |
+  | Blacklist proposals nobody decided on | 30 days |
 
 - **Privacy notice** at `/privacy`, linked from the login page. It is a draft: have it checked and fill in the
   contact person in `server/pages.js`.
 - **Outside the app:** add the Campagnemonitor to Horeca Toppers' record of processing (verwerkingsregister), and
-  have data processing agreements with Render (hosting, Frankfurt) and Atlassian (Trello).
+  have data processing agreements with Render (hosting, Frankfurt) and Atlassian (Trello). Before the blacklist is
+  used: do a DPIA (the Dutch DPA lists blacklists as processing that requires one), and mention the blacklist in
+  the privacy statement for candidates, including how to object or ask for access. Don't share the list with
+  clients: that would be a different, heavier kind of processing that needs its own legal check.
 
 ## Tech stack
 
@@ -213,7 +239,7 @@ NODE_ENV=production SECRETS_KEY=something-long-and-random npm start   # http://l
 | `npm run build` | Builds the frontend into `dist/` |
 | `npm start` | Starts the server, which serves `dist/` and the API |
 | `npm run preview` | Build, then start |
-| `npm test` | Rights, monitor status, crypto, and an end-to-end test of login, invites, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
+| `npm test` | Rights, monitor status, crypto, the blacklist, and an end-to-end test of login, invites, the blacklist, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
 
 ## Configuration
 
@@ -298,6 +324,7 @@ Then open <http://localhost:8888/setup>; the link appears in that terminal.
 - Accounts, sessions and one-time links live in `DATA_DIR/accounts.json`. Passwords are scrypt hashes; sessions and
   links are stored as SHA-256 hashes; two-factor secrets are encrypted.
 - Integration keys are in `DATA_DIR/secrets.json` (encrypted). The audit log is in `DATA_DIR/audit/YYYY-MM.jsonl`.
+- The blacklist is in `DATA_DIR/blacklist.json`, apart from the shared data (see [Privacy](#privacy-gdpr)).
 - For each JSON file, a dated copy is kept for each of the last 14 days as a safety net.
 - The app sends only what changed (per campaign, per rule, ...), so two people saving at the same moment don't
   overwrite each other. Other people's changes appear within about 15 seconds, or right away when you switch back
@@ -356,6 +383,7 @@ server/
   secrets.js      encrypted API keys (DATA_DIR/secrets.json)
   audit.js        audit log (DATA_DIR/audit/*.jsonl)
   privacy.js      data export and anonymisation
+  blacklist.js    the candidate blacklist (DATA_DIR/blacklist.json): checks, search, terms, expiry
   crypto.js       scrypt, TOTP, AES-GCM helpers
   pages.js        server-rendered pages (login, 2FA, invite, reset, privacy)
   jsonfile.js     document storage: files with daily backups, or Netlify Blobs with conditional writes
@@ -393,4 +421,8 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | GET, PUT, DELETE, POST | `/api/admin/integrations/…` | API keys (*integrations*) |
 | GET | `/api/admin/audit` | Audit log (*audit.view*) |
 | GET, PUT, POST | `/api/admin/privacy/…` | Retention, export, anonymise (*privacy*) |
+| GET | `/api/blacklist?q=`, `/api/blacklist/summary` | Search (at least 3 characters), the list, and the counts for the menu (*blacklist.view* or *blacklist.manage*; without the second, only confirmed entries and your own proposals) |
+| POST | `/api/blacklist` | Add (*blacklist.manage*) or propose (*blacklist.view*) a candidate |
+| PATCH, DELETE | `/api/blacklist/:id` | Correct or extend, remove or reject (*blacklist.manage*); withdraw your own proposal |
+| POST, GET | `/api/blacklist/:id/approve`, `/api/blacklist/:id/export` | Confirm a proposal, download an entry (*blacklist.manage*) |
 | GET | `/api/trello/…` | Read-only Trello proxy (`members/me`, `members/me/boards`, `boards/:id`) |

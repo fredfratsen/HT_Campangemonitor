@@ -4,7 +4,7 @@
 
 const eq = (names, v) => typeof v === 'string' && names.has(v);
 
-export function createPrivacy({ accounts, store, audit }) {
+export function createPrivacy({ accounts, store, audit, blacklist }) {
   /** Everything about one account, as a JSON-able object. */
   async function exportFor(a, currentSessionId = null) {
     const names = new Set([a.name, a.recName].filter(Boolean)), D = store.docs;
@@ -77,6 +77,7 @@ export function createPrivacy({ accounts, store, audit }) {
       for (const i of Object.values(D.ideas || {})) { i.by = sub(i.by); if (i.voters) i.voters = i.voters.map(sub); }
       if (D.seen) delete D.seen[a.id];
     });
+    blacklist.rename(names, pseudonym);
     const oldName = a.name;
     accounts.anonymise(a, pseudonym);
     await audit.rename(a.id, pseudonym);

@@ -16,11 +16,18 @@ const am = { id: 'u-am', name: 'Anouk', role: 'accountmanager' };
 
 test('role defaults, grants and revokes', () => {
   assert.equal(rightsOf(dev).size, RIGHT_KEYS.length);
-  assert.deepEqual([...rightsOf(kim)], ['feedback.own']);
+  assert.deepEqual([...rightsOf(kim)], ['feedback.own', 'blacklist.view']);
   const k2 = { ...kim, grants: ['feedback.client'], revokes: ['feedback.own'] };
-  assert.deepEqual([...rightsOf(k2)], ['feedback.client']);
+  assert.deepEqual([...rightsOf(k2)], ['blacklist.view', 'feedback.client']);
   assert.equal(can({ ...mkt, grants: ['nonsense'] }, 'nonsense'), false);
-  assert.deepEqual(overridesFor('recruiter', ['feedback.client']), { grants: ['feedback.client'], revokes: ['feedback.own'] });
+  assert.deepEqual(overridesFor('recruiter', ['feedback.client', 'blacklist.view']), { grants: ['feedback.client'], revokes: ['feedback.own'] });
+});
+
+test('blacklist: recruiters look candidates up and propose them, the teamlead decides', () => {
+  assert.ok(can(kim, 'blacklist.view') && !can(kim, 'blacklist.manage'));
+  assert.ok(can(lead, 'blacklist.view') && can(lead, 'blacklist.manage'));
+  for (const who of [mkt, am]) assert.ok(!can(who, 'blacklist.view') && !can(who, 'blacklist.manage'), who.role);
+  assert.equal(manageError(lead, kim, { role: 'recruiter', rights: ['feedback.own', 'blacklist.view', 'blacklist.manage'] }), '', 'a teamlead can let a recruiter decide too');
 });
 
 test('who may manage whom', () => {
@@ -77,7 +84,7 @@ test('campaign changes the app makes by itself are allowed for anyone', () => {
   assert.equal(a('campaigns', 'c2', c, { ...c, weeks: [...c.weeks, week(40, { q: 9 })] }), NO_RIGHT, 'but not a filled one');
   assert.equal(a('campaigns', 'c2', { ...c, rec: 'Sanne' }, { ...c, rec: 'Robin' }), '', 'old demo names are renamed');
   assert.equal(a('campaigns', 'c2', c, { ...c, rec: 'Kim' }), NO_RIGHT, 'reassigning needs "assign"');
-  assert.equal(a('campaigns', 'c9', undefined, camp('c9', 'Kim')), NO_RIGHT, 'creating needs trello.link');
+  assert.equal(a('campaigns', 'c9', undefined, camp('c9', 'Kim')), NO_RIGHT, 'creating needs assign');
   assert.equal(a('campaigns', 'c2', c, undefined), NO_RIGHT, 'deleting needs dev');
   assert.equal(a('campaigns', 'c2', c, { ...c, actions: [{ id: 'a', w: 39, type: 'Budget', text: 'x' }] }), NO_RIGHT);
 });
@@ -120,6 +127,14 @@ test('assignments need assign or trello.link, and are stamped', () => {
   assert.equal(makeAuthorizer(lead, {})('assignLog', '1', undefined, e).value.by, 'Robbin');
   assert.equal(makeAuthorizer(mkt, {})('live.mkt', 'b1', '', 'Danielle'), NO_RIGHT);
   assert.equal(makeAuthorizer(lead, {})('live.inactive', 'b1', undefined, true), '');
+});
+
+test('Toewijzing alone links new clients and sets boards to Geen klant', () => {
+  const assigner = makeAuthorizer({ ...mkt, grants: ['assign'] }, {}), plain = makeAuthorizer(mkt, {});
+  for (const [doc, key, after] of [['live.links', 't-b1-all', { id: 't-b1-all', boardId: 'b1', rec: 'Kim' }], ['live.ignored', 'b1', true], ['trIgnored', 'Hotel X', true], ['campaigns', 'n1', camp('n1', 'Kim')]]) {
+    assert.equal(assigner(doc, key, undefined, after), '', doc);
+    assert.equal(plain(doc, key, undefined, after), NO_RIGHT, doc);
+  }
 });
 
 test('account manager sees campaigns but changes nothing', () => {

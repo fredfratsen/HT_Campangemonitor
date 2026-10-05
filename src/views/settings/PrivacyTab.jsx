@@ -6,6 +6,7 @@ import { Section, Badge, Notice, Err, useAction, select, muted, row, linkBtn, da
 const FIXED = [
   ['Sessies', '30 dagen'], ['Uitnodigingslinks', '7 dagen'], ['Wachtwoord-resetlinks', '24 uur'], ['Setuplink eerste account', '1 uur'],
   ['Auditlog', '12 maanden'], ['Back-ups van de data', '14 dagen'],
+  ['Blacklist', '6, 12 of 24 maanden, per kandidaat gekozen'], ['Voordrachten voor de blacklist', '30 dagen'],
 ];
 
 export default function PrivacyTab({ s }) {
@@ -52,6 +53,7 @@ export default function PrivacyTab({ s }) {
           <li>De <a href="/privacy">privacytekst</a> laten controleren en de contactpersoon invullen (in <code>server/pages.js</code>).</li>
           <li>De Campagnemonitor opnemen in het verwerkingsregister van Horeca Toppers.</li>
           <li>Verwerkersovereenkomsten met de hostingpartij (Render of Netlify) en Atlassian (Trello).</li>
+          <li>Voor de blacklist: een DPIA (de Autoriteit Persoonsgegevens noemt zwarte lijsten als verwerking waarvoor die verplicht is), en de blacklist noemen in de privacyverklaring voor kandidaten, met hoe ze bezwaar maken of inzage vragen. Inzage, correctie en verwijdering voor een kandidaat doe je onder Kandidaten › Blacklist.</li>
         </ul>
       </Section>
       <Err>{a.error}</Err>

@@ -110,7 +110,7 @@ export default function TrelloTestView({ v, tget }) {
               <Check ok={an.has('contact')} warn>Lijst “Contactpoging”</Check>
               <Check ok={!!an.sd} warn sub={an.sd ? 'week van sollicitatie' : 'ontbreekt: de aanmaakdatum van de kaart wordt gebruikt'}>Veld “Sollicitatiedatum”</Check>
               <Check ok={!!an.rf} warn sub={an.rf ? `${(an.rf.options || []).length} redenen` : 'ontbreekt: geen afwijsredenen in de monitor'}>Veld “Reden afgewezen”</Check>
-              <Check ok={an.labels.length > 0} warn sub={an.labels.length ? `${an.labels.length} labels, te koppelen als functie` : 'geen labels: het hele bord wordt één campagne'}>Labels</Check>
+              <Check ok={an.labels.length > 0} warn sub={an.labels.length ? `${an.labels.length} labels, elk een functie met een eigen campagne` : 'geen labels: het hele bord wordt één campagne'}>Labels</Check>
             </div>
             <div>
               <div style={{ ...eyebrow, marginBottom: '6px' }}>Lijsten · {an.total} kandidaten</div>
@@ -131,9 +131,9 @@ export default function TrelloTestView({ v, tget }) {
       {conn.state === 'ok' ? <section style={{ ...card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', background: '#FFF8E0', border: 0 }}>
           <div>
             <div style={h2}>Klaar om live te gaan</div>
-            <div style={{ fontSize: '14px', color: '#3C3C3A', marginTop: '2px' }}>Zet de databron op Trello live en koppel borden aan recruiters.</div>
+            <div style={{ fontSize: '14px', color: '#3C3C3A', marginTop: '2px' }}>Zet de databron op Trello live en wijs de borden toe aan recruiters.</div>
           </div>
-          <Button variant="accent" onClick={goTrelloLive}>Naar Klanten uit Trello</Button>
+          <Button variant="accent" onClick={goTrelloLive}>Naar Toewijzing</Button>
         </section> : null}
     </div>
   );

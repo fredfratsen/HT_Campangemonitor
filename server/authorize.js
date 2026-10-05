@@ -58,7 +58,7 @@ export function makeAuthorizer(actor, docs) {
 
   const rules = {
     campaigns(key, before, after) {
-      if (before === undefined) return need(any('trello.link', 'dev'));
+      if (before === undefined) return need(any('assign', 'trello.link', 'dev')); // a new client from Toewijzing (demo)
       if (after === undefined) return need(has('dev'));
       for (const k of keysOf(before, after)) {
         if (k === 'weeks' || k === 'actions' || same(before[k], after[k])) continue;
@@ -87,10 +87,11 @@ export function makeAuthorizer(actor, docs) {
       if (before === undefined && key in DEF_RULES && same(after, DEF_RULES[key])) return '';
       return NO_RIGHT;
     },
-    trIgnored: () => need(has('trello.link')),
+    // "Geen klant" in Toewijzing; trello.link still counts for whoever had it when this was a page of its own.
+    trIgnored: () => need(any('assign', 'trello.link')),
     mktDemo: () => need(has('assign')),
     'live.links': () => need(any('trello.link', 'assign')),
-    'live.ignored': () => need(has('trello.link')),
+    'live.ignored': () => need(any('assign', 'trello.link')),
     'live.inactive': () => need(has('assign')),
     'live.mkt': () => need(has('assign')),
     'live.fb'(key, before, after) {

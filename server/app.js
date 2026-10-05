@@ -8,6 +8,7 @@ import { createAccounts } from './accounts.js';
 import { createAuth, sameOrigin } from './auth.js';
 import { createSecrets } from './secrets.js';
 import { createPrivacy } from './privacy.js';
+import { createBlacklist } from './blacklist.js';
 import { trelloRouter } from './trello.js';
 import { apiRouter } from './api.js';
 
@@ -35,7 +36,8 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   const store = createStore(docs);
   const secrets = createSecrets(docs, secretsKey);
   const accounts = createAccounts(docs, secretsKey);
-  const privacy = createPrivacy({ accounts, store, audit });
+  const blacklist = createBlacklist(docs);
+  const privacy = createPrivacy({ accounts, store, audit, blacklist });
   const auth = createAuth({ accounts, audit, secure, hosting });
   const trello = trelloRouter(() => secrets.get('trello'));
 
@@ -71,7 +73,7 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   app.use(auth.guard);
 
   app.use('/api/trello', trello);
-  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, pollMs }));
+  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, pollMs }));
 
   // The app itself
   if (distDir && fs.existsSync(distDir)) {
@@ -81,12 +83,13 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
     app.get('/', (req, res) => res.type('text').send('Nog geen build gevonden. Draai "npm run build" of gebruik "npm run dev".'));
   }
 
-  /** Expired sessions and links, automatic anonymisation, old audit months. */
+  /** Expired sessions and links, automatic anonymisation, old audit months, blacklist entries whose term ended. */
   async function housekeeping() {
     accounts.cleanup();
     await privacy.autoAnonymise();
     await audit.prune();
+    for (const e of blacklist.prune()) audit.log('blacklist.expired', { details: blacklist.auditDetails(e, { status: e.status }) });
   }
 
-  return { app, store, accounts, secrets, audit, privacy, housekeeping };
+  return { app, store, accounts, secrets, audit, privacy, blacklist, housekeeping };
 }

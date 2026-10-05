@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import NewTabLink, { cardClick } from '../components/NewTabLink.jsx';
 
 export default function WeekView({ v }) {
-  const { canLinkTrello, canRemind, canSendRemind, emptyHint, goCampaigns, goTrello, groups, liveEmpty, remind, remindLabel, remindNote, sum, wk } = v;
+  const { canAssign, canRemind, canSendRemind, emptyHint, goAssign, goCampaigns, groups, liveEmpty, remind, remindLabel, remindNote, sum, wk } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '36px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
@@ -54,7 +54,7 @@ export default function WeekView({ v }) {
             <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px' }}>Nog geen campagnes gekoppeld</div>
             <div style={{ fontSize: '14px', color: '#5C5C5A' }}>{emptyHint}</div>
           </div>
-          {canLinkTrello ? <Button variant="primary" onClick={goTrello}>Naar Klanten uit Trello</Button> : null}
+          {canAssign ? <Button variant="primary" onClick={goAssign}>Naar Toewijzing</Button> : null}
         </div> : null}
       {groups.map((g, i) => <section key={i} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>

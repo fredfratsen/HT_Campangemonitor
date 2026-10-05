@@ -8,19 +8,22 @@ import { qrDataUrl } from './pages.js';
 import { makeAuthorizer } from './authorize.js';
 import { INTEGRATIONS } from './secrets.js';
 import { testTrello } from './trello.js';
+import { BlacklistError } from './blacklist.js';
+import { MON, stamp } from '../src/lib/weeks.js';
 
 const MONTH_OPTIONS = [0, 3, 6, 12, 24];
 
-export function apiRouter({ accounts, audit, secrets, store, privacy, trello, pollMs = 15000 }) {
+export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, pollMs = 15000 }) {
   const api = express.Router();
   const json = express.json({ limit: '100kb' });
   api.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
-  const need = right => (req, res, next) => can(req.account, right) ? next() : res.status(403).json({ error: 'forbidden', message: 'Je hebt hier geen rechten voor.' });
+  const forbidden = res => res.status(403).json({ error: 'forbidden', message: 'Je hebt hier geen rechten voor.' });
+  const need = right => (req, res, next) => can(req.account, right) ? next() : forbidden(res);
   const wrap = fn => async (req, res) => {
     try { await fn(req, res); }
     catch (e) {
-      if (e instanceof AccountError) return res.status(400).json({ error: 'invalid', message: e.message });
+      if (e instanceof AccountError || e instanceof BlacklistError) return res.status(400).json({ error: 'invalid', message: e.message });
       console.error(e);
       res.status(500).json({ error: 'server_error', message: 'Er ging iets mis op de server.' });
     }
@@ -244,6 +247,75 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, po
     res.json({ ok: true, pseudonym: r.pseudonym });
   }));
   api.use('/admin/privacy', priv);
+
+  // ── Blacklist ────────────────────────────────────────────────────────
+  // Candidates' personal data, so only through these routes and never in /api/state (see blacklist.js). With
+  // blacklist.view you look someone up and propose them; with blacklist.manage you see the whole list and decide.
+  const bl = express.Router();
+  const manages = a => can(a, 'blacklist.manage');
+  const mustManage = (req, res, next) => manages(req.account) ? next() : forbidden(res);
+  bl.use((req, res, next) => can(req.account, 'blacklist.view') || manages(req.account) ? next() : forbidden(res));
+  /** Without blacklist.manage you see confirmed entries and your own proposals, not other people's proposals. */
+  const visible = (a, e) => manages(a) || e.status === 'actief' || e.addedById === a.id;
+  const day = t => { const d = new Date(t); return `${d.getDate()} ${MON[d.getMonth()]}`; };
+  /** The proposer's current name, if they still work here. */
+  const proposer = e => { const a = accounts.get(e.addedById); return a && a.status === 'active' ? a.name : null; };
+  /** Notifications under Meldingen. Everyone receives the inbox with /api/state, so they never name the candidate. */
+  function notify(from, to, title, items) {
+    if (!to.length) return;
+    store.mutate(D => {
+      const inbox = D.inbox || (D.inbox = {}), at = stamp();
+      for (const name of to) { const id = Date.now() + Math.random(); inbox[String(id)] = { id, to: name, from: from.name, at, read: false, kind: 'blacklist', title, items }; }
+    });
+  }
+
+  bl.get('/', wrap(async (req, res) => {
+    const q = String(req.query.q || '').trim();
+    if (q && q.length < 3) return bad(res, 'Typ minstens 3 tekens.');
+    const list = q ? blacklist.search(q) : manages(req.account) ? blacklist.all() : blacklist.all().filter(e => e.addedById === req.account.id);
+    res.json({ entries: list.filter(e => visible(req.account, e)), ...blacklist.counts() });
+  }));
+  bl.get('/summary', (req, res) => res.json(blacklist.counts()));
+  bl.post('/', json, wrap(async (req, res) => {
+    const b = req.body || {}, direct = manages(req.account) && !b.propose;
+    const e = blacklist.add(req.account, b, { direct });
+    audit.log(direct ? 'blacklist.added' : 'blacklist.proposed', { actor: req.account, details: blacklist.auditDetails(e) });
+    if (!direct) notify(req.account, accounts.live().filter(a => a.status === 'active' && a.id !== req.account.id && manages(a)).map(a => a.name),
+      'Voordracht voor de blacklist', [`${req.account.name} draagt een kandidaat voor. Reden: ${e.reason}.`, 'Bevestig of wijs af onder Kandidaten › Blacklist.']);
+    res.json({ entry: e, ...blacklist.counts() });
+  }));
+  bl.patch('/:id', mustManage, json, wrap(async (req, res) => {
+    const { entry, changed } = blacklist.update(req.account, req.params.id, req.body || {});
+    if (changed.length) audit.log('blacklist.updated', { actor: req.account, details: blacklist.auditDetails(entry, { gewijzigd: changed }) });
+    res.json({ entry, ...blacklist.counts() });
+  }));
+  bl.post('/:id/approve', mustManage, wrap(async (req, res) => {
+    const e = blacklist.approve(req.account, req.params.id), to = proposer(e);
+    audit.log('blacklist.approved', { actor: req.account, details: blacklist.auditDetails(e) });
+    if (to && to !== req.account.name) notify(req.account, [to], 'Je voordracht staat op de blacklist', [`Je voordracht van ${day(e.addedAt)} (${e.reason}) is bevestigd door ${req.account.name}.`]);
+    res.json({ entry: e, ...blacklist.counts() });
+  }));
+  // Removing: with blacklist.manage any entry (a proposal of someone else is then rejected); your own proposal you
+  // can withdraw yourself.
+  bl.delete('/:id', wrap(async (req, res) => {
+    const e = blacklist.get(req.params.id);
+    if (!e) return bad(res, 'Deze vermelding bestaat niet (meer).');
+    const own = e.status === 'voorstel' && e.addedById === req.account.id;
+    if (!own && !manages(req.account)) return forbidden(res);
+    blacklist.remove(e.id);
+    const type = own ? 'blacklist.withdrawn' : e.status === 'voorstel' ? 'blacklist.rejected' : 'blacklist.removed', to = proposer(e);
+    audit.log(type, { actor: req.account, details: blacklist.auditDetails(e) });
+    if (type === 'blacklist.rejected' && to && to !== req.account.name) notify(req.account, [to], 'Je voordracht is afgewezen', [`Je voordracht van ${day(e.addedAt)} (${e.reason}) is afgewezen door ${req.account.name}. De gegevens zijn verwijderd.`]);
+    res.json({ ok: true, ...blacklist.counts() });
+  }));
+  // For an inzageverzoek of the candidate.
+  bl.get('/:id/export', mustManage, wrap(async (req, res) => {
+    const e = blacklist.get(req.params.id);
+    if (!e) return bad(res, 'Deze vermelding bestaat niet (meer).');
+    audit.log('blacklist.export', { actor: req.account, details: blacklist.auditDetails(e) });
+    download(res, `blacklist-${fileName(e.name)}-${new Date().toISOString().slice(0, 10)}.json`, blacklist.exportOf(e));
+  }));
+  api.use('/blacklist', bl);
 
   api.use((req, res) => res.status(404).json({ error: 'not_found' }));
   return api;

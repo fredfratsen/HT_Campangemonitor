@@ -15,8 +15,11 @@ export const EVENTS = {
   'privacy.export': 'Gegevens gedownload', 'privacy.settings': 'Bewaartermijn gewijzigd',
   'data.rules': 'Health-regels gewijzigd', 'data.assign': 'Toewijzing gewijzigd', 'data.trello_link': 'Trello-koppeling gewijzigd', 'data.campaign_removed': 'Campagne verwijderd', 'data.denied': 'Wijziging geweigerd: geen rechten',
   'dev.view_as': 'Bekijk als', 'setup.link_issued': 'Setuplink gemaakt', 'owner.recovery': 'Eigenaarsherstel gestart',
+  'blacklist.added': 'Op de blacklist gezet', 'blacklist.proposed': 'Voorgedragen voor de blacklist', 'blacklist.approved': 'Voordracht blacklist bevestigd',
+  'blacklist.rejected': 'Voordracht blacklist afgewezen', 'blacklist.withdrawn': 'Voordracht blacklist ingetrokken', 'blacklist.updated': 'Blacklist-vermelding gewijzigd',
+  'blacklist.removed': 'Van de blacklist gehaald', 'blacklist.expired': 'Blacklist-vermelding verlopen', 'blacklist.export': 'Blacklist-vermelding gedownload',
 };
-const TYPES = [['', 'Alles'], ['login', 'Inloggen'], ['member', 'Leden'], ['2fa', 'Tweestapsverificatie'], ['password', 'Wachtwoorden'], ['integration', 'Integraties'], ['privacy', 'Privacy'], ['data', 'Regels & toewijzing'], ['dev', 'Dev']];
+const TYPES = [['', 'Alles'], ['login', 'Inloggen'], ['member', 'Leden'], ['2fa', 'Tweestapsverificatie'], ['password', 'Wachtwoorden'], ['integration', 'Integraties'], ['privacy', 'Privacy'], ['data', 'Regels & toewijzing'], ['blacklist', 'Blacklist'], ['dev', 'Dev']];
 const TONE = t => /fail|locked|denied|removed|deactivated|anonymised|reset$|disabled/.test(t) ? 'red' : /^login|logout/.test(t) ? 'neutral' : /^member|^2fa|^password|^account|^session/.test(t) ? 'navy' : 'amber';
 
 const rightLabel = k => (RIGHTS.find(r => r.key === k) || {}).label || k;
