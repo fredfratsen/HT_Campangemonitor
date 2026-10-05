@@ -62,10 +62,17 @@ Everyone logs in with a personal account. What you see and can do depends on you
   a client inactive, set a board that isn't a client to *Geen klant* or a label that isn't a function to *Geen functie*.
 - **Trello-koppeling testen**: check the Trello setup against the conventions below.
 - Editing the health rules.
+- **Bugs & ideeën** (Instellingen, right *Bugs en ideeën afhandelen*): everything sent with *Bug of idee melden*,
+  open ones first, with who sent it, from which screen and how many +1's. Set the status (*Nieuw*, *Opgepakt*,
+  *Opgelost*, *Doen we niet*) or remove one. New ones show as a count on Instellingen and on the tab. With the Dev
+  right you also set the **address that gets a mail about every new report** (empty: no mail), send a test mail,
+  and see whether the last mail went out. The link in the mail (`/#ideeen`) opens this tab. Mail goes through the
+  mail server under Integraties.
 
 **Everyone**: **Meldingen** (in-app notifications), **Wat is er nieuw** (changelog), **Bug of idee melden**
-(report a bug or idea), the **Databron** switch between demo data and live Trello data, and **Instellingen**
-(your account, password, two-factor, sessions and a download of your own data).
+(report a bug or idea; it goes to the developer, others can give it a +1), the **Databron** switch between demo
+data and live Trello data, and **Instellingen** (your account, password, two-factor, sessions and a download of
+your own data).
 
 ### Monitor status and health rules
 
@@ -153,12 +160,20 @@ variable afterwards.
 
 ### Integrations (API keys)
 
-**Instellingen › Integraties** (Dev only) holds the API keys for connected services, currently Trello.
+**Instellingen › Integraties** (Dev only) holds the API keys for connected services: Trello, and the mail server
+(**E-mail (SMTP)**) that sends new bugs and ideas to the developer.
 
 - Keys are tested before saving and stored encrypted (AES-256-GCM, key from `SECRETS_KEY`) in
-  `DATA_DIR/secrets.json`.
-- The browser only ever sees the last 4 characters. Every change goes into the audit log.
-- `TRELLO_KEY` / `TRELLO_TOKEN` environment variables still work as a fallback when nothing is stored in the app.
+  `DATA_DIR/secrets.json`. For the mail server the test logs in without sending anything.
+- The browser only ever sees the last 4 characters of a key or password; a mail server's address, port, login and
+  sender address are shown in full. Every change goes into the audit log.
+- `TRELLO_KEY` / `TRELLO_TOKEN` and `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` environment
+  variables still work as a fallback when nothing is stored in the app.
+- Any SMTP server works. Brevo (EU, free up to 300 mails a day): `smtp-relay.brevo.com`, port 587, the SMTP login
+  and key from *SMTP & API*, and a sender address confirmed in Brevo. Gmail: `smtp.gmail.com`, port 465, an app
+  password. Port 465 uses SSL; on other ports the password only goes over STARTTLS (except to `localhost`).
+- Every mail, sent or failed, goes into the audit log (recipient and kind, not the text). On Netlify, mails go out
+  after the request's data was saved, so a request that is rerun never sends one twice.
 
 ## Privacy (GDPR)
 
@@ -175,7 +190,10 @@ variable afterwards.
   sensitive data or suspicions of crimes, and the form warns against putting those in the note.
 - **Audit log** (Instellingen › Auditlog): logins (with IP address), failed attempts and lockouts, invites, role
   and rights changes, two-factor changes, API-key changes, exports, anonymisation, rule and assignment changes,
-  every blacklist change, and refused changes. Individual feedback edits are not logged.
+  every blacklist change, every mail the app sends (recipient and kind, not the text), and refused changes.
+  Individual feedback edits are not logged.
+- **Mail about bugs and ideas** carries the reporter's name and text to the address the Dev set, through the mail
+  server under Integraties. The privacy notice says so. Anonymising an account later can't reach mails already sent.
 - **Right of access.** Everyone can download their own data (Instellingen › Mijn account). The Dev can export
   anyone's data (Instellingen › Privacy). For a candidate on the blacklist, *Gegevens downloaden* on the entry;
   correcting and removing are done there too.
@@ -200,7 +218,8 @@ variable afterwards.
 - **Privacy notice** at `/privacy`, linked from the login page. It is a draft: have it checked and fill in the
   contact person in `server/pages.js`.
 - **Outside the app:** add the Campagnemonitor to Horeca Toppers' record of processing (verwerkingsregister), and
-  have data processing agreements with Render (hosting, Frankfurt) and Atlassian (Trello). Before the blacklist is
+  have data processing agreements with Render (hosting, Frankfurt), Atlassian (Trello) and the mail service set
+  under Integraties (for example Brevo). Before the blacklist is
   used: do a DPIA (the Dutch DPA lists blacklists as processing that requires one), and mention the blacklist in
   the privacy statement for candidates, including how to object or ask for access. Don't share the list with
   clients: that would be a different, heavier kind of processing that needs its own legal check.
@@ -253,6 +272,7 @@ shell or in Render's **Environment** tab. `.env.example` lists them all.
 | `NODE_ENV` | in production | Set to `production` for secure (HTTPS-only) cookies. |
 | `APP_URL` | no | Base URL for the setup and recovery links printed at startup. Default: Render's `RENDER_EXTERNAL_URL`, else `http://localhost:PORT` (`npm run dev` sets `http://localhost:5173`). |
 | `TRELLO_KEY`, `TRELLO_TOKEN` | no | Fallback for the Trello keys when none are stored under Instellingen › Integraties. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | no | Fallback for the mail server when none is stored under Instellingen › Integraties. All five are needed. |
 | `OWNER_RECOVERY` | only when locked out | `1` prints reset links for the Dev accounts at startup (on Netlify: when you open `/setup`). See [First start](#first-start-the-dev-account). |
 | `PORT` | no | Default `3000`. Render sets it automatically. |
 
@@ -357,12 +377,13 @@ seconds. That way, when several people open the app at once, they share a single
   minutes, and the lockout is logged.
 - **Web protections.** The server rejects cross-site writes, sends a strict Content Security Policy, and tells
   search engines not to index the site.
-- **Keys stay server-side.** Trello keys never reach the browser, and changing one needs the Dev role.
+- **Keys stay server-side.** Trello keys and the mail server's password never reach the browser, and changing one
+  needs the Dev role.
 
 ## Known limitations
 
-- **No email yet.** Invites, reset links and reminders are copied and sent by hand, or arrive under Meldingen.
-  An email service (for example Brevo, EU-based) can be added as an integration.
+- **Email only for bugs and ideas.** Invites, reset links and reminders are still copied and sent by hand, or
+  arrive under Meldingen. They can use the same mail server later (`server/mail.js`).
 - **Everyone with campaign access sees all clients.** Access per client (like Trello board membership) and guest
   accounts are planned for later.
 - **One instance only on Render.** There, data is held in memory and written to files, so don't scale the service
@@ -378,12 +399,13 @@ server/
   auth.js         login, two-factor, sessions, setup/invite/reset pages
   accounts.js     accounts, sessions, one-time links, two-factor (DATA_DIR/accounts.json)
   authorize.js    which right each change to the shared data needs
-  api.js          JSON API: me, members, integrations, audit log, privacy
+  api.js          JSON API: me, members, integrations, mail for bugs and ideas, audit log, privacy
   store.js        shared data in memory + JSON file
   secrets.js      encrypted API keys (DATA_DIR/secrets.json)
   audit.js        audit log (DATA_DIR/audit/*.jsonl)
   privacy.js      data export and anonymisation
   blacklist.js    the candidate blacklist (DATA_DIR/blacklist.json): checks, search, terms, expiry
+  mail.js         mail through the SMTP server under Integraties (new bugs and ideas to the developer)
   crypto.js       scrypt, TOTP, AES-GCM helpers
   pages.js        server-rendered pages (login, 2FA, invite, reset, privacy)
   jsonfile.js     document storage: files with daily backups, or Netlify Blobs with conditional writes
@@ -421,6 +443,7 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | GET, PUT, DELETE, POST | `/api/admin/integrations/…` | API keys (*integrations*) |
 | GET | `/api/admin/audit` | Audit log (*audit.view*) |
 | GET, PUT, POST | `/api/admin/privacy/…` | Retention, export, anonymise (*privacy*) |
+| GET, PUT, POST | `/api/admin/idea-mail`, `/api/admin/idea-mail/test` | The address for mails about new bugs and ideas, the last delivery, a test mail (*dev*) |
 | GET | `/api/blacklist?q=`, `/api/blacklist/summary` | Search (at least 3 characters), the list, and the counts for the menu (*blacklist.view* or *blacklist.manage*; without the second, only confirmed entries and your own proposals) |
 | POST | `/api/blacklist` | Add (*blacklist.manage*) or propose (*blacklist.view*) a candidate |
 | PATCH, DELETE | `/api/blacklist/:id` | Correct or extend, remove or reject (*blacklist.manage*); withdraw your own proposal |

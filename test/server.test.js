@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { totpAt } from '../server/crypto.js';
+import { fakeSmtp } from './fake-smtp.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const freePort = () => new Promise(res => { const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => res(p)); }); });
@@ -154,6 +155,52 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     const audit = JSON.stringify((await S.dev.get('/api/admin/audit?type=blacklist')).data.entries);
     for (const t of ['blacklist.proposed', 'blacklist.approved', 'blacklist.export', 'blacklist.removed']) assert.ok(audit.includes(t), t);
     assert.ok(!audit.includes('Vries'), 'the audit log has initials, not the name');
+  });
+
+  test('a new bug or idea is mailed to the address the Dev set, through the mail server under Integraties', async () => {
+    const smtp = fakeSmtp(), port = await smtp.listen();
+    // The long-running server sends in the background; the Netlify function before it answers.
+    const until = async (ok, what) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 50)); assert.ok(ok(), what); };
+    try {
+      assert.equal((await S.rec.get('/api/admin/idea-mail')).status, 403, 'only with the dev right');
+      assert.equal((await S.dev.api('PUT', '/api/admin/idea-mail', { to: 'geen-adres' })).status, 400);
+      assert.equal((await S.dev.api('PUT', '/api/admin/idea-mail', { to: ' Bugs@Example.com ' })).data.to, 'bugs@example.com');
+      assert.match((await S.dev.api('POST', '/api/admin/idea-mail/test')).data.message, /geen mailserver/);
+
+      const creds = { host: '127.0.0.1', port: String(port), user: 'monitor', pass: 'fout', from: 'monitor@example.com' };
+      const wrong = await S.dev.api('PUT', '/api/admin/integrations/smtp', { values: creds });
+      assert.equal(wrong.data.error, 'test_failed');
+      assert.match(wrong.data.message, /weigert de gebruikersnaam of het wachtwoord/);
+      const ok = await S.dev.api('PUT', '/api/admin/integrations/smtp', { values: { ...creds, pass: 'goed-geheim' } });
+      assert.equal(ok.status, 200, ok.text);
+      assert.equal(ok.data.integration.masked.host, '127.0.0.1', 'the server address is shown in full');
+      assert.equal(ok.data.integration.masked.pass, '••••heim', 'the password is not');
+      assert.equal(smtp.mails.length, 0, 'testing the login sends nothing');
+
+      assert.equal((await S.dev.api('POST', '/api/admin/idea-mail/test')).status, 200);
+      await until(() => smtp.mails.length === 1, 'the test mail arrives');
+      assert.deepEqual(smtp.mails[0].to, ['bugs@example.com']);
+      assert.match(smtp.mails[0].data, /Subject: Testmail van de Campagnemonitor/);
+
+      const idea = { id: 'm1', type: 'bug', text: 'Het weekoverzicht laadt niet\nna inloggen', page: 'Weekoverzicht', status: 'nieuw', voters: [] };
+      assert.deepEqual((await S.rec.api('POST', '/api/state/patch', { patches: [{ doc: 'ideas', set: { m1: idea } }] })).data.rejected, []);
+      await until(() => smtp.mails.length === 2, 'the bug is mailed');
+      assert.match(smtp.mails[1].data, /Subject: Bug van Test Recruiter: Het weekoverzicht laadt niet na inloggen/);
+      assert.match(smtp.mails[1].data, /Het weekoverzicht laadt niet\r\nna inloggen/);
+      assert.match(smtp.mails[1].data, new RegExp(`${BASE}/#ideeen`));
+
+      // A +1 is no new report.
+      await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'ideas', set: { m1: { ...idea, by: 'Test Recruiter', voters: ['Tsjerk'] } } }] });
+      assert.deepEqual((await S.dev.get('/api/state')).data.docs.ideas.m1.voters, ['Tsjerk']);
+      await new Promise(r => setTimeout(r, 300));
+      assert.equal(smtp.mails.length, 2);
+
+      const last = (await S.dev.get('/api/admin/idea-mail')).data.last;
+      assert.deepEqual([last.ok, last.kind, last.to], [true, 'bug', 'bugs@example.com']);
+      const audit = (await S.dev.get('/api/admin/audit?type=mail')).data.entries;
+      assert.deepEqual(audit.map(e => e.type), ['mail.sent', 'mail.sent', 'mail.failed', 'mail.to']);
+      assert.ok(!JSON.stringify(audit).includes('weekoverzicht'), 'the audit log has no text of the mail');
+    } finally { await smtp.close(); }
   });
 
   test('cross-site requests are refused', async () => {

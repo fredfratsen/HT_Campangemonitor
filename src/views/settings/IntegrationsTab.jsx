@@ -15,6 +15,16 @@ function TrelloHelp() {
   );
 }
 
+function SmtpHelp() {
+  return (
+    <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', lineHeight: 1.55, color: '#3C3C3A' }}>
+      <li><b>Brevo</b> (Europees, gratis tot 300 mails per dag): mailserver <span style={code}>smtp-relay.brevo.com</span>, poort 587, en de SMTP-login en SMTP-sleutel onder <em>SMTP &amp; API</em>. Het afzenderadres moet in Brevo bevestigd zijn.</li>
+      <li><b>Gmail of Google Workspace</b>: mailserver <span style={code}>smtp.gmail.com</span>, poort 465, je e-mailadres als gebruikersnaam en een app-wachtwoord (Google-account › Beveiliging, met tweestapsverificatie aan). Afzender is hetzelfde adres.</li>
+      <li>De server logt direct in om de gegevens te testen; er gaat dan nog geen mail uit. Een testmail stuur je onder Bugs &amp; ideeën.</li>
+    </ul>
+  );
+}
+
 function Integration({ s, it, reload }) {
   const [edit, setEdit] = useState(false);
   const [vals, setVals] = useState({});
@@ -30,9 +40,11 @@ function Integration({ s, it, reload }) {
   };
   const runTest = async () => { const r = await a.run(() => api('POST', `/api/admin/integrations/${it.name}/test`)); if (r) setTest(r.test); };
   const remove = async () => {
-    if (!window.confirm(`De ${it.label}-sleutels uit de app verwijderen?${it.fields.some(f => f.env) ? ' Staan er environment variabelen, dan worden die weer gebruikt.' : ''}`)) return;
-    if (await a.run(() => api('DELETE', `/api/admin/integrations/${it.name}`), `${it.label}-sleutels verwijderd`)) { setTest(null); reload(); s.reloadConfig(); }
+    if (!window.confirm(`De gegevens van ${it.label} uit de app verwijderen?${it.fields.some(f => f.env) ? ' Staan er environment variabelen, dan worden die weer gebruikt.' : ''}`)) return;
+    if (await a.run(() => api('DELETE', `/api/admin/integrations/${it.name}`), `${it.label} verwijderd`)) { setTest(null); reload(); s.reloadConfig(); }
   };
+  // Plain fields (not secret) start with what is set now, so you only retype the password.
+  const startEdit = () => { setVals(it.state === 'set' ? Object.fromEntries(it.fields.filter(f => f.plain).map(f => [f.key, it.masked[f.key]])) : {}); setEdit(true); };
   const status = it.state === 'set' ? <Badge tone="green">Ingesteld</Badge> : it.state === 'unreadable' ? <Badge tone="red">Onleesbaar</Badge> : <Badge tone="gold">Niet ingesteld</Badge>;
   return (
     <Section title={it.label} sub={it.desc} right={status}>
@@ -42,20 +54,20 @@ function Integration({ s, it, reload }) {
           <div><div style={{ ...muted, fontSize: '12px' }}>Bron</div><div style={{ fontWeight: 600 }}>{it.source === 'app' ? `In de app · ${it.updatedBy}, ${fmtDateTime(it.updatedAt)}` : `Environment (${it.fields.map(f => f.env).join(', ')})`}</div></div>
         </div> : null}
       {test ? test.ok
-        ? <Notice tone="ok">Verbonden als {test.fullName} (@{test.username}){test.boards != null ? ` · ${test.boards} open borden` : ''}.</Notice>
+        ? <Notice tone="ok">{test.message || <>Verbonden als {test.fullName} (@{test.username}){test.boards != null ? ` · ${test.boards} open borden` : ''}.</>}</Notice>
         : <Notice tone="error">{test.error}</Notice> : null}
       {edit ? <form onSubmit={e => { e.preventDefault(); save(false); }} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {it.name === 'trello' ? <TrelloHelp /> : null}
+          {it.name === 'trello' ? <TrelloHelp /> : it.name === 'smtp' ? <SmtpHelp /> : null}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '12px' }}>
             {it.fields.map(f => <label key={f.key} style={label}>{f.label}
-                <input type="password" autoComplete="off" spellCheck={false} value={vals[f.key] || ''} onChange={e => { const v = e.target.value; setVals(x => ({ ...x, [f.key]: v })); }} required style={{ ...input, ...mono }} />
+                <input type={f.plain ? 'text' : 'password'} autoComplete="off" spellCheck={false} value={vals[f.key] || ''} onChange={e => { const v = e.target.value; setVals(x => ({ ...x, [f.key]: v })); }} required style={{ ...input, ...mono }} />
                 <span style={{ fontSize: '12px', fontWeight: 400, color: '#8C8C8A' }}>{f.hint}</span>
               </label>)}
           </div>
           {failed ? <Notice tone="error">{failed} <button type="button" onClick={() => save(true)} style={{ ...linkBtn, color: '#D32F2F', textDecoration: 'underline' }}>Toch opslaan</button></Notice> : null}
           <div style={row}><Button type="submit" variant="accent" size="sm" disabled={a.busy}>Testen en opslaan</Button><button type="button" onClick={() => { setEdit(false); setVals({}); setFailed(''); }} style={linkBtn}>Annuleren</button></div>
         </form> : <div style={{ ...row, gap: '16px' }}>
-          <Button variant={it.state === 'set' ? 'ghost' : 'accent'} size="sm" onClick={() => setEdit(true)}>{it.state === 'set' ? 'Sleutels vervangen' : 'Instellen'}</Button>
+          <Button variant={it.state === 'set' ? 'ghost' : 'accent'} size="sm" onClick={startEdit}>{it.state !== 'set' ? 'Instellen' : it.fields.some(f => f.plain) ? 'Wijzigen' : 'Sleutels vervangen'}</Button>
           {it.state === 'set' ? <button onClick={runTest} style={linkBtn} disabled={a.busy}>{a.busy ? 'Testen…' : 'Verbinding testen'}</button> : null}
           {it.source === 'app' ? <button onClick={remove} style={dangerBtn}>Verwijderen</button> : null}
         </div>}
@@ -71,9 +83,8 @@ export default function IntegrationsTab({ s }) {
   useEffect(() => { load(); }, []);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '860px' }}>
-      <Notice>API-sleutels worden versleuteld op de server bewaard en komen nooit in de browser: je ziet alleen de laatste 4 tekens. Elke wijziging staat in de auditlog.</Notice>
+      <Notice>API-sleutels en wachtwoorden worden versleuteld op de server bewaard en komen nooit in de browser: je ziet alleen de laatste 4 tekens. Elke wijziging staat in de auditlog.</Notice>
       {(list || []).map(it => <Integration key={it.name} s={s} it={it} reload={load} />)}
-      <Section title="Later" sub="E-mail (voor uitnodigingen, resetlinks en herinneringen) kan hier als volgende integratie bij, bijvoorbeeld via een Europese dienst als Brevo." />
       <Err>{a.error}</Err>
     </div>
   );

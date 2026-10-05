@@ -51,6 +51,7 @@ export default function SidePanel({ v }) {
                 </div>)}
             </> : null}
           {isIdea ? <>
+              <div style={{ fontSize: '13px', color: '#5C5C5A', lineHeight: '1.5' }}>Je melding gaat naar de ontwikkelaar. Staat hij hieronder al? Geef dan een +1.</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: '#FDFBF8', borderRadius: '12px', padding: '14px 16px' }}>
                 <div style={{ display: 'flex', gap: '2px', background: '#F5F2ED', borderRadius: '999px', padding: '3px', alignSelf: 'flex-start' }}>
                   {idea.types.map((t, i) => <button key={i} onClick={t.onClick} style={{ border: '0', borderRadius: '999px', padding: '6px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', background: t.bg, color: t.fg, boxShadow: t.sh }}>{t.label}</button>)}

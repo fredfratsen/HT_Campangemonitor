@@ -30,7 +30,7 @@ const SEED = [
 
 export const twoFactorRequired = a => ['owner', 'admin'].includes(levelOf(a));
 export const normEmail = e => String(e || '').trim().toLowerCase();
-const validEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 200;
+export const validEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 200;
 const cleanName = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 60);
 
 export class AccountError extends Error {}

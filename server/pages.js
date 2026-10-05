@@ -159,6 +159,7 @@ export const privacyPage = ({ back = '/', hosting = 'render' } = {}) => page({ t
     <li>Je wachtwoord, alleen als onomkeerbare hash. Bij tweestapsverificatie een versleutelde sleutel en gehashte herstelcodes.</li>
     <li>Je sessies: wanneer je inlogde en welke browser je gebruikte, zodat je kunt zien waar je bent ingelogd en daar kunt uitloggen.</li>
     <li>Wat je in de app vastlegt, met je naam erbij: feedback, klantfeedback, toewijzingen, meldingen en ideeën.</li>
+    <li>Een bug of idee dat je meldt, gaat met je naam ook per e-mail naar de ontwikkelaar van de app.</li>
     <li>Een auditlog van beveiligingsgebeurtenissen (inloggen, rechten, sleutels, privacy-acties), met het IP-adres bij inlogpogingen.</li>
   </ul>
   <h2>En over kandidaten?</h2>

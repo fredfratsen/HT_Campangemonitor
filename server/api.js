@@ -2,18 +2,22 @@
 // it needs on the server, whatever the app shows.
 import express from 'express';
 import { can, canViewAs, ROLES, manageError, rightsOf } from '../src/lib/permissions.js';
-import { AccountError, TTL } from './accounts.js';
+import { AccountError, TTL, normEmail, validEmail } from './accounts.js';
 import { passwordProblem, otpauthUrl } from './crypto.js';
 import { qrDataUrl } from './pages.js';
 import { makeAuthorizer } from './authorize.js';
 import { INTEGRATIONS } from './secrets.js';
 import { testTrello } from './trello.js';
+import { testSmtp } from './mail.js';
 import { BlacklistError } from './blacklist.js';
 import { MON, stamp } from '../src/lib/weeks.js';
+import { IDEA_TYPES } from '../src/lib/constants.js';
 
 const MONTH_OPTIONS = [0, 3, 6, 12, 24];
+// Checks an integration's values before they are saved, and on request afterwards.
+const TESTS = { trello: testTrello, smtp: testSmtp };
 
-export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, pollMs = 15000 }) {
+export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, mailer, pollMs = 15000 }) {
   const api = express.Router();
   const json = express.json({ limit: '100kb' });
   api.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -51,6 +55,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     try { r = store.patch(req.body && req.body.patches, makeAuthorizer(req.account, store.docs)); }
     catch (e) { return res.status(400).json({ error: e.message }); }
     auditPatch(req.account, r.applied);
+    for (const a of r.applied) if (a.doc === 'ideas' && a.before === undefined && a.after) mailIdea(req, a.after);
     if (r.rejected.length && Date.now() - (lastDenied.get(req.account.id) || 0) > 60000) {
       lastDenied.set(req.account.id, Date.now());
       audit.log('data.denied', { actor: req.account, details: { wijzigingen: r.rejected.slice(0, 10).map(x => `${x.doc}/${x.key}`) } });
@@ -193,8 +198,8 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     if (problem) return bad(res, problem);
     const clean = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, String(v).trim()]));
     let test = null;
-    if (name === 'trello' && !(req.body || {}).skipTest) {
-      test = await testTrello(clean);
+    if (TESTS[name] && !(req.body || {}).skipTest) {
+      test = await TESTS[name](clean);
       if (!test.ok) return res.status(400).json({ error: 'test_failed', message: test.error });
     }
     secrets.set(name, clean, req.account);
@@ -208,13 +213,52 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     res.json({ integration: secrets.status(req.params.name) });
   }));
   integ.post('/:name/test', wrap(async (req, res) => {
-    if (req.params.name !== 'trello') return bad(res, 'Voor deze integratie is geen test.');
-    const creds = secrets.get('trello');
+    const run = TESTS[req.params.name];
+    if (!run) return bad(res, 'Voor deze integratie is geen test.');
+    const creds = secrets.get(req.params.name);
     if (!creds) return bad(res, 'Er is nog geen sleutel ingesteld.');
-    res.json({ test: await testTrello(creds) });
+    res.json({ test: await run(creds) });
   }));
   api.use('/admin/integrations', integ);
   secrets.onChange(name => { if (name === 'trello') trello.clearCache(); });
+
+  // ── Bugs & ideeën ────────────────────────────────────────────────────
+  // Ideas are shared data (/api/state); every new one also goes by mail to the address the Dev set here.
+  function mailIdea(req, idea) {
+    const to = accounts.settings.ideaMailTo;
+    if (!to) return;
+    const type = (IDEA_TYPES[idea.type] || ['Melding'])[0], text = String(idea.text || '').trim(), line = text.replace(/\s+/g, ' ');
+    mailer.send({ to, kind: idea.type, subject: `${type} van ${idea.by}: ${line.length > 70 ? line.slice(0, 69) + '…' : line}`, text: [
+      `${idea.by} meldde een ${type.toLowerCase()} in de Campagnemonitor${idea.page ? `, op het scherm ${idea.page}` : ''}:`, '',
+      text, '',
+      `Bekijken en afhandelen: ${linkUrl(req, '/#ideeen')} (Instellingen › Bugs & ideeën)`,
+    ].join('\n') });
+  }
+  const ideaMail = express.Router();
+  ideaMail.use(need('dev'));
+  ideaMail.get('/', wrap(async (req, res) => {
+    const last = (await audit.query({ type: 'mail.', limit: 20 })).find(e => e.type !== 'mail.to'), d = (last && last.details) || {};
+    res.json({ to: accounts.settings.ideaMailTo || null, smtp: secrets.status('smtp').state === 'set',
+      last: last ? { at: last.at, ok: last.type === 'mail.sent', to: d.aan, kind: d.soort, error: d.fout || null } : null });
+  }));
+  ideaMail.put('/', json, wrap(async (req, res) => {
+    const to = normEmail((req.body || {}).to) || null, before = accounts.settings.ideaMailTo || null;
+    if (to && !validEmail(to)) return bad(res, 'Vul een geldig e-mailadres in, of laat het leeg.');
+    accounts.saveSettings({ ideaMailTo: to });
+    if (to !== before) audit.log('mail.to', { actor: req.account, details: { adres: { van: before, naar: to } } });
+    res.json({ to });
+  }));
+  ideaMail.post('/test', wrap(async (req, res) => {
+    const to = accounts.settings.ideaMailTo;
+    if (!to) return bad(res, 'Stel eerst een e-mailadres in.');
+    const error = await mailer.deliver({ to, kind: 'test', subject: 'Testmail van de Campagnemonitor', text: [
+      'Dit is een testmail van de Campagnemonitor. Komt hij aan, dan krijg je op dit adres voortaan elke nieuwe bug, elk idee en elke verbetering die iemand meldt.', '',
+      `Verstuurd door ${req.account.name} vanaf ${linkUrl(req, '/')}`,
+    ].join('\n') });
+    if (error) return bad(res, error);
+    res.json({ ok: true, to });
+  }));
+  api.use('/admin/idea-mail', ideaMail);
 
   // ── Audit log ────────────────────────────────────────────────────────
   api.get('/admin/audit', need('audit.view'), wrap(async (req, res) => {

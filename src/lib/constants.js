@@ -62,6 +62,7 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 14, date: '5 okt', tag: 'Verbeterd', title: 'Je bugs en ideeën komen aan', text: 'Wat je via ‘Bug of idee melden’ instuurt, komt nu direct bij de ontwikkelaar binnen, ook per e-mail. Staat jouw punt er al tussen? Geef dan een +1, zo zie je wat het vaakst speelt.' },
   { id: 13, date: '5 okt', tag: 'Nieuw', title: 'Blacklist voor kandidaten', text: 'Onder Kandidaten › Blacklist zoek je op naam, e-mail of telefoonnummer of een kandidaat op de blacklist staat, en waarom. Recruiters dragen iemand voor; de teamlead bevestigt of wijst af. Een vermelding geldt voor alle klanten of alleen voor één klant, en verloopt vanzelf na de gekozen termijn.' },
   { id: 12, date: '5 okt', tag: 'Verbeterd', title: 'Klanten uit Trello zit nu in Toewijzing', text: 'Nieuwe borden en functies uit Trello verschijnen direct in Toewijzing; het scherm Klanten uit Trello is vervallen. Elke functie houdt een eigen campagne met eigen feedback, maar de recruiter en Recruitment Marketeer kies je per klant: zij volgen alle functies. Vink meerdere klanten aan om ze in één keer toe te wijzen. Een label dat geen functie is, zet je op Geen functie.' },
   { id: 11, date: '2 okt', tag: 'Nieuw', title: 'Monitorstatus voor Recruitment Marketeers', text: 'Het weekoverzicht toont nu de monitorstatus: Actie nodig, In afwachting van klant (bijvoorbeeld saldo of foto’s) of Check. Op een campagne zet je de status en schrijf je een update voor de recruiter; die krijgt een melding. Een campagne open je vanuit het weekoverzicht ook in een nieuw tabblad. Herinneringen voor feedback gaan hooguit eens per 48 uur naar dezelfde recruiter.' },
@@ -78,5 +79,7 @@ export const NEWS = [
 ];
 export const IDEA_TYPES = { bug: ['Bug', '#FDECEA', '#D32F2F', 'Wat ging er mis? Wat deed je, en wat verwachtte je?'], idee: ['Idee', '#E7E7F0', '#1B1B63', 'Wat zou je handig vinden?'], verbetering: ['Verbetering', '#FEF3C7', '#B45309', 'Wat werkt nu onhandig, en hoe zou het beter kunnen?'] };
 export const IDEA_STATUS = { nieuw: ['Nieuw', '#5C5C5A'], opgepakt: ['Opgepakt', '#B45309'], opgelost: ['Opgelost', '#1A7A4A'], niet: ['Doen we niet', '#8C8C8A'] };
+// Historie & analyse is parked for now: hidden from the menu and not reachable. Set to true to bring it back.
+export const HISTORY_ENABLED = false;
 export const VIEW_NAMES = { settings: 'Instellingen', week: 'Weekoverzicht', campaigns: 'Campagnes', klant: 'Feedback klant', 'trello-test': 'Trello-koppeling testen', toewijzing: 'Toewijzing', history: 'Historie & analyse', rules: 'Health-regels', detail: 'Campagnedetail', checkin: 'Wekelijkse feedback recruiter', live: 'Live campagnes', mine: 'Mijn campagnes', blacklist: 'Blacklist' };
 export const ACT_TYPES = ['Advertentie', 'Doelgroep', 'Budget', 'Vacaturetekst', 'Screening', 'Klantafspraak', 'Besluit'];

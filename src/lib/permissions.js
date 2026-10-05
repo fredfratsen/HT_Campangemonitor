@@ -17,13 +17,13 @@ export const RIGHTS = [
   { key: 'rules.edit', group: 'beheer', label: 'Health-regels aanpassen', desc: 'Regels aan- en uitzetten en drempels wijzigen. Geldt voor het hele team.' },
   { key: 'trello.link', group: 'beheer', label: 'Trello-koppeling testen', desc: 'Op de testpagina nagaan of de borden uit Trello goed binnenkomen.' },
   { key: 'assign', group: 'beheer', label: 'Toewijzing beheren', desc: 'Klanten uit Trello toewijzen: recruiter en Recruitment Marketeer per klant kiezen, nieuwe functies toevoegen, een klant op Niet actief zetten, of een bord op Geen klant.' },
-  { key: 'ideas.manage', group: 'beheer', label: 'Bugs en ideeën afhandelen', desc: 'De status van meldingen wijzigen.' },
+  { key: 'ideas.manage', group: 'beheer', label: 'Bugs en ideeën afhandelen', desc: 'Alle gemelde bugs en ideeën zien onder Instellingen, hun status wijzigen en ze verwijderen.' },
   { key: 'members.manage', group: 'beheer', label: 'Leden en rechten beheren', desc: 'Mensen uitnodigen, rollen en rechten wijzigen, accounts deactiveren.' },
   { key: 'blacklist.manage', group: 'beheer', label: 'Blacklist beheren', desc: 'De hele blacklist zien, kandidaten erop zetten, voordrachten bevestigen of afwijzen, vermeldingen wijzigen en verwijderen.' },
-  { key: 'integrations', group: 'eigenaar', label: 'Integraties en API-sleutels', desc: 'Sleutels voor Trello (en later andere diensten) instellen en testen.' },
+  { key: 'integrations', group: 'eigenaar', label: 'Integraties en API-sleutels', desc: 'Sleutels voor Trello en de mailserver instellen en testen.' },
   { key: 'audit.view', group: 'eigenaar', label: 'Auditlog bekijken', desc: 'Wie heeft wanneer ingelogd, rechten gewijzigd of sleutels aangepast.' },
   { key: 'privacy', group: 'eigenaar', label: 'Privacy-tools', desc: 'Gegevens van een persoon exporteren of anonimiseren, bewaartermijnen instellen.' },
-  { key: 'dev', group: 'eigenaar', label: 'Dev-tools', desc: '“Bekijk als” voor iedereen, demo-data herstellen.' },
+  { key: 'dev', group: 'eigenaar', label: 'Dev-tools', desc: '“Bekijk als” voor iedereen, demo-data herstellen, en kiezen naar welk adres nieuwe bugs en ideeën gemaild worden.' },
 ];
 export const RIGHT_KEYS = RIGHTS.map(r => r.key);
 export const RIGHT_GROUPS = { werk: 'Werk', beheer: 'Beheer', eigenaar: 'Eigenaar' };

@@ -4,7 +4,8 @@
 // Serverless functions keep nothing between requests and can run as several instances at once, so every
 // request: loads the documents fresh, runs the app, then saves the changed documents only if nobody else changed
 // them in the meantime. If someone did, the request is run again on the fresh data before anything is sent back,
-// so two people saving at the same moment never overwrite each other. Audit events are written after the save.
+// so two people saving at the same moment never overwrite each other. Mails go out and audit events are written
+// after the save, so a rerun never sends a mail twice.
 import serverless from 'serverless-http';
 import { createServer } from './app.js';
 import { blobDocs } from './jsonfile.js';
@@ -60,7 +61,7 @@ export function createNetlifyHandler({ store, env = process.env }) {
   function instance() {
     if (inst) return inst;
     const docs = blobDocs(store), audit = createBlobAudit(store);
-    const s = createServer({ docs, audit, secretsKey: [deriveKey(env.SECRETS_KEY)], secure: true, hosting: 'netlify', pollMs: 60000 });
+    const s = createServer({ docs, audit, secretsKey: [deriveKey(env.SECRETS_KEY)], secure: true, hosting: 'netlify', pollMs: 60000, deferMail: true });
     inst = { ...s, docs, handle: serverless(s.app, { binary: false }) };
     return inst;
   }
@@ -79,12 +80,13 @@ export function createNetlifyHandler({ store, env = process.env }) {
     const I = instance(), event = await toEvent(request, context);
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
       await I.docs.loadAll();
-      I.audit.begin();
+      I.audit.begin(); I.mailer.begin();
       // Housekeeping on the first request after an hour (there are no timers in a function).
       const meta = I.accounts.meta, tidy = Date.now() - (meta.lastHousekeeping || 0) > HOUSEKEEPING_MS;
       if (tidy) { meta.lastHousekeeping = Date.now(); await I.housekeeping(); }
       const res = await I.handle(event, {});
       if (await I.docs.commitAll()) {
+        await I.mailer.commit(); // before the audit commit: deliveries are logged
         await I.audit.commit();
         if (tidy) await I.docs.backupAll().catch(e => console.error('[backup]', e));
         return toResponse(res);

@@ -9,6 +9,7 @@ import { createAuth, sameOrigin } from './auth.js';
 import { createSecrets } from './secrets.js';
 import { createPrivacy } from './privacy.js';
 import { createBlacklist } from './blacklist.js';
+import { createMailer } from './mail.js';
 import { trelloRouter } from './trello.js';
 import { apiRouter } from './api.js';
 
@@ -28,10 +29,11 @@ export const SECURITY_HEADERS = {
  * @param o.secure      secure (HTTPS-only) cookies
  * @param o.hosting     'render' or 'netlify': texts about where things run and where logs are
  * @param o.pollMs      how often the app checks for other people's changes
+ * @param o.deferMail   send mails only at mailer.commit(), after the data was saved (Netlify; see mail.js)
  * @param o.publicDir   serve logo, favicon and fonts (a long-running server; Netlify serves them as static files)
  * @param o.distDir     serve the built app
  */
-export function createServer({ docs, audit, secretsKey, secure, hosting = 'render', pollMs = 15000, publicDir = null, distDir = null }) {
+export function createServer({ docs, audit, secretsKey, secure, hosting = 'render', pollMs = 15000, deferMail = false, publicDir = null, distDir = null }) {
   // Created in this order on purpose: the team data first (see blobDocs).
   const store = createStore(docs);
   const secrets = createSecrets(docs, secretsKey);
@@ -39,6 +41,7 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   const blacklist = createBlacklist(docs);
   const privacy = createPrivacy({ accounts, store, audit, blacklist });
   const auth = createAuth({ accounts, audit, secure, hosting });
+  const mailer = createMailer({ secrets, audit, deferred: deferMail });
   const trello = trelloRouter(() => secrets.get('trello'));
 
   const app = express();
@@ -73,7 +76,7 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   app.use(auth.guard);
 
   app.use('/api/trello', trello);
-  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, pollMs }));
+  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, mailer, pollMs }));
 
   // The app itself
   if (distDir && fs.existsSync(distDir)) {
@@ -91,5 +94,5 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
     for (const e of blacklist.prune()) audit.log('blacklist.expired', { details: blacklist.auditDetails(e, { status: e.status }) });
   }
 
-  return { app, store, accounts, secrets, audit, privacy, blacklist, housekeeping };
+  return { app, store, accounts, secrets, audit, privacy, blacklist, mailer, housekeeping };
 }

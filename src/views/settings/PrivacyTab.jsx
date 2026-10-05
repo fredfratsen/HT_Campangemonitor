@@ -52,7 +52,7 @@ export default function PrivacyTab({ s }) {
         <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '14px', lineHeight: 1.5 }}>
           <li>De <a href="/privacy">privacytekst</a> laten controleren en de contactpersoon invullen (in <code>server/pages.js</code>).</li>
           <li>De Campagnemonitor opnemen in het verwerkingsregister van Horeca Toppers.</li>
-          <li>Verwerkersovereenkomsten met de hostingpartij (Render of Netlify) en Atlassian (Trello).</li>
+          <li>Verwerkersovereenkomsten met de hostingpartij (Render of Netlify), Atlassian (Trello) en de maildienst onder Integraties (bijvoorbeeld Brevo).</li>
           <li>Voor de blacklist: een DPIA (de Autoriteit Persoonsgegevens noemt zwarte lijsten als verwerking waarvoor die verplicht is), en de blacklist noemen in de privacyverklaring voor kandidaten, met hoe ze bezwaar maken of inzage vragen. Inzage, correctie en verwijdering voor een kandidaat doe je onder Kandidaten › Blacklist.</li>
         </ul>
       </Section>

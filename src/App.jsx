@@ -4,7 +4,7 @@ import React from 'react';
 import { CUR, MON, wl, range, rangeLong, todayLong, stamp, weekOf, isoDate, mondayOf } from './lib/weeks.js';
 import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, RANK, stageOf, cardTs,
-  NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES
+  NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
 } from './lib/constants.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
@@ -71,7 +71,9 @@ export default class App extends React.Component {
   // ── Loading & syncing ────────────────────────────────────────────────
   async componentDidMount() {
     this._hashOpen = this.hashId();
-    this._hash = () => { this._hashOpen = this.hashId(); this.openPending(); };
+    // The link in the mail about a new bug or idea; read now, as the address bar is reset once the app is loaded.
+    this._ideasLink = window.location.hash === '#ideeen';
+    this._hash =() => { this._hashOpen = this.hashId(); this.openPending(); };
     window.addEventListener('hashchange', this._hash);
     this._k = e => {
       if (e.key === 'Escape' && this.state.navOpen) { this.setState({ navOpen: false }); return; }
@@ -112,8 +114,8 @@ export default class App extends React.Component {
       assignLog, inbox: sh.inbox, ideas: sh.ideas, seen: sh.seen, meta: { ...meta, seeded: true },
       ...(source === 'trello' ? { demoCampaigns: campaigns, campaigns: [] } : { campaigns })
     }, () => {
-      const me = this.me(), home = this.homeView(me);
-      this.setState({ view: home, back: home, ci: { rec: me.rec || 'all' } }, () => this.openPending());
+      const me = this.me(), home = this.homeView(me), ideas = this._ideasLink && account.rights.includes('ideas.manage');
+      this.setState({ view: ideas ? 'settings' : home, back: home, ci: { rec: me.rec || 'all' }, ...(ideas ? { settingsTab: 'ideas' } : {}) }, () => this.openPending());
       this.sync.begin();
       this.touchLogin(account.id);
       this.loadBlSummary();
@@ -575,7 +577,7 @@ export default class App extends React.Component {
       submitIdea: () => {
         if (!I.text.trim()) { this.flash('Beschrijf eerst wat je wilt melden'); return; }
         saveIdeas([{ id: Date.now(), type: I.type, text: I.text.trim(), by: au, at: stamp(), page: VIEW_NAMES[st.view] || st.view, status: 'nieuw', voters: [] }, ...st.ideas]);
-        this.setState(s => ({ idea: { ...s.idea, text: '', filter: 'all' } })); this.flash('Bedankt, je melding is opgeslagen');
+        this.setState(s => ({ idea: { ...s.idea, text: '', filter: 'all' } })); this.flash('Bedankt, je melding is doorgestuurd naar de ontwikkelaar');
       }
     };
   }
@@ -658,7 +660,7 @@ export default class App extends React.Component {
   }
   viewOk(view, me = this.me()) {
     const r = k => me.rights.has(k), rec = !!me.rec && r('feedback.own');
-    return ({ week: r('campaigns.all'), campaigns: r('campaigns.all'), history: r('campaigns.all'), rules: r('campaigns.all'),
+    return ({ week: r('campaigns.all'), campaigns: r('campaigns.all'), history: HISTORY_ENABLED && r('campaigns.all'), rules: r('campaigns.all'),
       klant: r('feedback.client'), 'trello-test': r('trello.link') || r('integrations'), toewijzing: r('assign'),
       live: rec, checkin: rec || r('feedback.all'), mine: rec, detail: r('campaigns.all') || rec,
       blacklist: r('blacklist.view') || r('blacklist.manage'), settings: true })[view] || false;
@@ -897,9 +899,10 @@ export default class App extends React.Component {
         ...(can('campaigns.all') ? [['week', 'Weekoverzicht'], ['campaigns', 'Campagnes']] : []),
         ...(can('feedback.client') ? [['klant', 'Feedback klant']] : []),
         ...(can('assign') ? [['toewijzing', 'Toewijzing', this.assignData().open]] : []),
-        ...(can('campaigns.all') ? [['history', 'Historie & analyse'], ['rules', 'Health-regels']] : [])] },
+        ...(HISTORY_ENABLED && can('campaigns.all') ? [['history', 'Historie & analyse']] : []),
+        ...(can('campaigns.all') ? [['rules', 'Health-regels']] : [])] },
       this.viewOk('blacklist', me) && { title: 'Kandidaten', items: [['blacklist', 'Blacklist', can('blacklist.manage') && st.blSum ? st.blSum.pending : 0]] },
-      { title: '', items: [['settings', 'Instellingen']] }
+      { title: '', items: [['settings', 'Instellingen', acc.rights.includes('ideas.manage') ? this.newIdeas() : 0]] }
     ].filter(x => x && x.items.length).map(x => ({ title: x.title, items: x.items.map(navItem) }));
 
     const levels = MONITOR_KEYS.map(k => ({ n: cnt[k], label: MONITOR[k].label, fg: MONITOR[k].fg, bg: MONITOR[k].bg, pct: (cnt[k] / Math.max(D.length, 1) * 100) + '%', onClick: () => { setF({ status: k }); this.go('campaigns'); } }));
@@ -1204,13 +1207,18 @@ export default class App extends React.Component {
       groups: Object.keys(ROLES).map(r => ({ label: ROLES[r].label, members: list.filter(m => m.role === r) })).filter(g => g.members.length)
     };
   }
+  /** Bugs and ideas nobody has looked at yet (Instellingen › Bugs & ideeën). */
+  newIdeas() { return this.state.ideas.filter(x => x.status === 'nieuw').length; }
   settingsVals(me) {
     const st = this.state;
     return {
       tab: st.settingsTab, setTab: t => { this.setState({ settingsTab: t }); window.scrollTo(0, 0); },
       account: st.account, members: st.members, canReal: r => st.account.rights.includes(r),
       flash: t => this.flash(t), reloadMe: () => this.reloadMe(), reloadConfig: () => this.reloadConfig(),
-      isPreview: me.isPreview, previewName: me.name
+      isPreview: me.isPreview, previewName: me.name, isLocal: this.sync.mode === 'local',
+      ideas: st.ideas, newIdeas: this.newIdeas(),
+      setIdea: (id, p) => this.setState(s => ({ ideas: s.ideas.map(x => x.id === id ? { ...x, ...p } : x) })),
+      removeIdea: id => this.setState(s => ({ ideas: s.ideas.filter(x => x.id !== id) }))
     };
   }
   liveData(me) {
