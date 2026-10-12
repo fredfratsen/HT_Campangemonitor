@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data/
+migrated/
 .netlify/
 .env
 .DS_Store

@@ -281,8 +281,8 @@ shell or in Render's **Environment** tab. `.env.example` lists them all.
 ## Deploy to Render
 
 1. Push this repository to GitHub.
-2. In Render, choose **New → Blueprint** and pick the repository. `render.yaml` sets up everything else,
-   including a generated `SECRETS_KEY`.
+2. In Render, choose **New → Blueprint** and pick the repository. `render.yaml` sets up everything else. It asks
+   for `SECRETS_KEY`: paste a long random value (`openssl rand -hex 32`), keep it somewhere safe, never change it.
 3. Open **Logs**, copy the setup link, and set up the Dev account.
 4. Invite the team from Instellingen › Leden, and set the Trello keys under Instellingen › Integraties.
 
@@ -292,10 +292,27 @@ restart. Every push to the main branch deploys automatically.
 
 **Moving an existing Render deployment from the team password:**
 
-1. Check that `SECRETS_KEY` exists in the Environment tab. A Blueprint sync adds it; otherwise add a long random
-   value yourself.
+1. Check that `SECRETS_KEY` exists in the Environment tab; otherwise add a long random value yourself.
 2. Deploy. The team password stops working right away.
 3. Take the setup link from the logs, set up the Dev account, and send everyone their invite link.
+
+**Moving from Netlify to Render** (keeps all data, accounts and 2FA):
+
+1. Create the Render service from the Blueprint. When it asks for `SECRETS_KEY`, paste the **exact** value from
+   Netlify. A different key makes everyone's 2FA and the stored integration keys unreadable. Copy any `TRELLO_*` or
+   `SMTP_*` variables from Netlify too. Don't open the app yet.
+2. Pick a quiet moment and ask the team not to use the app for half an hour.
+3. Export from Netlify into a new folder, with the same key so the script can check it:
+   `NETLIFY_SITE_ID=… NETLIFY_TOKEN=… SECRETS_KEY=… node scripts/export-netlify.js ./migrated`
+   It must end with "SECRETS_KEY past". Optionally test locally first:
+   `DATA_DIR=./migrated SECRETS_KEY=… npm start` and log in.
+4. Copy the folder to the disk, into a **new** subfolder (not into `/var/data` itself, where the running server
+   would write over it): set up SSH for the service, then `scp -s -r ./migrated <service-id>@ssh.frankfurt.render.com:/var/data/`.
+5. Change `DATA_DIR` to `/var/data/migrated` (in `render.yaml`, then push; Render redeploys). The startup log
+   should show the accounts and `trello: ingesteld (in de app)`, with no "onleesbaar" warnings.
+6. Log in, check the data, share the new URL. Everyone logs in once more (cookies are per domain).
+7. Delete `./migrated` and the Netlify token. After a week without issues, remove the Netlify site and its
+   Blobs data, and update the data processing agreement (Render instead of Netlify).
 
 ## Deploy to Netlify
 
@@ -324,8 +341,8 @@ How it works:
   `backups/` in the store, last 14 days) runs on the first request after an hour, since functions have no timers.
 - **Polling:** the app checks for other people's changes every 60 seconds instead of 15, to stay within the free
   plan's credits.
-- **Separate data:** Netlify and Render each have their own data; nothing is copied between them, or from your
-  local `./data`.
+- **Separate data:** Netlify and Render each have their own data; nothing is copied between them automatically.
+  To move from Netlify to Render, see `scripts/export-netlify.js` and [Deploy to Render](#deploy-to-render).
 
 To try the Netlify setup locally (after `npm run build`):
 
