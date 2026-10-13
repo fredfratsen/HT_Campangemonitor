@@ -23,7 +23,7 @@ export const RIGHTS = [
   { key: 'integrations', group: 'eigenaar', label: 'Integraties en API-sleutels', desc: 'Sleutels voor Trello en de mailserver instellen en testen.' },
   { key: 'audit.view', group: 'eigenaar', label: 'Auditlog bekijken', desc: 'Wie heeft wanneer ingelogd, rechten gewijzigd of sleutels aangepast.' },
   { key: 'privacy', group: 'eigenaar', label: 'Privacy-tools', desc: 'Gegevens van een persoon exporteren of anonimiseren, bewaartermijnen instellen.' },
-  { key: 'dev', group: 'eigenaar', label: 'Dev-tools', desc: '“Bekijk als” voor iedereen, demo-data herstellen, en kiezen naar welk adres nieuwe bugs en ideeën gemaild worden.' },
+  { key: 'dev', group: 'eigenaar', label: 'Dev-tools', desc: '“Bekijk als” voor iedereen, demo-data gebruiken en herstellen, en kiezen naar welk adres nieuwe bugs en ideeën gemaild worden.' },
 ];
 export const RIGHT_KEYS = RIGHTS.map(r => r.key);
 export const RIGHT_GROUPS = { werk: 'Werk', beheer: 'Beheer', eigenaar: 'Eigenaar' };

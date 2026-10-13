@@ -1,7 +1,7 @@
 // Campagnemonitor — app logic. Ported from the Claude Design prototype: renderVals() computes everything the
 // views show; the views in ./views are plain markup. Shared data is kept in sync with the server by ./lib/sync.js.
 import React from 'react';
-import { CUR, MON, wl, range, rangeLong, todayLong, stamp, weekOf, isoDate, mondayOf } from './lib/weeks.js';
+import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, weekOf, isoDate, mondayOf } from './lib/weeks.js';
 import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, RANK, stageOf, cardTs,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
@@ -107,7 +107,8 @@ export default class App extends React.Component {
       if (!assignLog.length) assignLog = seedAssign();
     }
     campaigns = prepCampaigns(campaigns);
-    const source = this.state.source || (cfg.trello ? 'trello' : 'demo');
+    // Only the dev right can switch to demo data; everyone else always works on Trello (also when an old choice is stored).
+    const source = account.rights.includes('dev') ? this.state.source || (cfg.trello ? 'trello' : 'demo') : 'trello';
     this.setState({
       account, members, viewAs,
       loaded: true, config: cfg, source, rules: sh.rules, trIgnored: sh.trIgnored, mktDemo: sh.mktDemo, live: sh.live,
@@ -997,8 +998,8 @@ export default class App extends React.Component {
       qPoints: ws.map((w, i) => w.q == null ? null : `${((i + 0.5) / n * 100).toFixed(2)},${100 - w.q * 10}`).filter(Boolean).join(' '),
       qDots: ws.map((w, i) => w.q == null ? null : { x: ((i + 0.5) / n * 100) + '%', y: (w.q * 10) + '%', q: w.q, fg: qc(w.q) }).filter(Boolean),
       story: ws.slice().reverse().map(w => ({
-        w: w.w, wl: wl(w.w), range: range(w.w), leads: w.leads, qText: w.q == null ? 'Geen score' : `Kwaliteit ${w.q}/10`, qBg: qb(w.q), qFg: qc(w.q),
-        missing: w.q == null, hasFb: w.q != null, rec: w.rec || '—',
+        w: w.w, wl: wl(w.w), range: range(w.w), leads: w.leads, qText: w.q != null ? `Kwaliteit ${w.q}/10` : w.w < FB_START ? 'Voor start monitor' : 'Geen score', qBg: qb(w.q), qFg: qc(w.q),
+        missing: w.q == null && w.w >= FB_START, hasFb: w.q != null, rec: w.rec || '—',
         klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A',
         canFill: canFb && w.w === CUR && !selC.ended, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !selC.ended, addKlant: () => this.startKlant(selC.id),
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
@@ -1054,7 +1055,7 @@ export default class App extends React.Component {
       return {
         client: c.client, vac: c.vac + (c.ended ? ' (afgerond)' : ''),
         dot: c.ended ? '#C0BDB9' : MONITOR[monitor(c, health(c, R)).s].fg,
-        cells: hw.map(w => { const e = c.weeks.find(x => x.w === w); return e ? { t: e.q ?? '?', bg: qb(e.q), fg: qc(e.q), act: aw.has(w) } : { t: '', bg: 'transparent', fg: '#8C8C8A', act: false }; }),
+        cells: hw.map(w => { const e = c.weeks.find(x => x.w === w); return e ? { t: e.q ?? (w < FB_START ? '–' : '?'), bg: qb(e.q), fg: qc(e.q), act: aw.has(w) } : { t: '', bg: 'transparent', fg: '#8C8C8A', act: false }; }),
         total: inP.reduce((s, w) => s + w.leads, 0), avgN: a ?? 0, avg: a == null ? '—' : nl(a), avgFg: qc(a == null ? null : Math.round(a)),
         placed: inP.reduce((s, w) => s + w.tr.geplaatst, 0), acts: c.actions.filter(x => hw.includes(x.w)).length,
         open: () => this.open(c.id)
@@ -1124,7 +1125,7 @@ export default class App extends React.Component {
       campTitle: isMine ? 'Mijn campagnes' : 'Actieve campagnes',
       isKlant: st.view === 'klant', goKlant: () => this.go('klant'), goMine: () => this.go('mine'),
       hasKform: !!kC, kform: st.kform || {}, kc, skipKlant: () => this.skipKlant(),
-      sourceTabs: [['demo', 'Demo-data'], ['trello', 'Trello live']].map(([k, label]) => ({ label, bg: st.source === k ? '#FFFFFF' : 'transparent', fg: st.source === k ? '#1D1D1B' : '#5C5C5A', sh: st.source === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => this.setSource(k) })),
+      sourceTabs: !acc.rights.includes('dev') ? [] : [['demo', 'Demo-data'], ['trello', 'Trello live']].map(([k, label]) => ({ label, bg: st.source === k ? '#FFFFFF' : 'transparent', fg: st.source === k ? '#1D1D1B' : '#5C5C5A', sh: st.source === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => this.setSource(k) })),
       syncText: this.syncInfo().text, syncDot: this.syncInfo().dot,
       reloadTrello: () => { if (st.source === 'trello') this.startLive(); },
       liveEmpty: st.source === 'trello' && active.length === 0, emptyHint: can('assign') ? 'Wijs eerst de actieve Trello-borden toe aan een recruiter.' : 'De teamlead wijst de Trello-borden toe aan recruiters. Daarna verschijnen ze hier.', goAssign: () => this.go('toewijzing'),

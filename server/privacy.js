@@ -5,21 +5,18 @@
 const eq = (names, v) => typeof v === 'string' && names.has(v);
 
 export function createPrivacy({ accounts, store, audit, blacklist }) {
-  /** Everything about one account, as a JSON-able object. */
+  /**
+   * Everything about one account, as a JSON-able object. Only the real data from Trello: the demo data (the
+   * `campaigns` and `mktDemo` documents and demo assignments) is made up, and its names can match real people.
+   */
   async function exportFor(a, currentSessionId = null) {
     const names = new Set([a.name, a.recName].filter(Boolean)), D = store.docs;
-    const camps = Object.values(D.campaigns || {}), links = D['live.links'] || {}, fb = D['live.fb'] || {};
-    const label = c => `${c.client} – ${c.vac}`;
+    const links = D['live.links'] || {}, fb = D['live.fb'] || {};
     const recFb = [], klantFb = [], monFb = [];
     const mon = (bron, campagne, week, e) => {
       if (eq(names, e.monBy)) monFb.push({ bron, campagne, week, monitorstatus: e.mon });
       if (eq(names, e.updBy)) monFb.push({ bron, campagne, week, updateVoorRecruiter: e.upd });
     };
-    for (const c of camps) for (const w of c.weeks || []) {
-      if (eq(names, w.recBy) || (w.recBy == null && w.rec && eq(names, c.rec))) recFb.push({ bron: 'demo', campagne: label(c), week: w.w, kwaliteit: w.q, kandidaten: w.leads, feedback: w.rec, notitie: w.note, bijsturing: !!w.needsAction });
-      if (eq(names, w.klantBy)) klantFb.push({ bron: 'demo', campagne: label(c), week: w.w, klantfeedback: w.klant });
-      mon('demo', label(c), w.w, w);
-    }
     for (const [id, weeks] of Object.entries(fb)) {
       const l = links[id], name = l ? `${l.boardName} – ${l.vac}` : id;
       for (const [w, e] of Object.entries(weeks || {})) {
@@ -34,15 +31,13 @@ export function createPrivacy({ accounts, store, audit, blacklist }) {
       account: { ...accounts.selfView(a), createdAt: a.createdAt, deactivatedAt: a.deactivatedAt },
       sessies: accounts.sessionsOf(a.id, currentSessionId),
       laatstGezien: (D.seen || {})[a.id] || null,
-      campagnesAlsRecruiter: [...camps.filter(c => eq(names, c.rec)).map(c => ({ bron: 'demo', campagne: label(c), afgerond: !!c.ended })),
-        ...Object.values(links).filter(l => eq(names, l.rec)).map(l => ({ bron: 'trello', campagne: `${l.boardName} – ${l.vac}` }))],
-      klantenAlsMarketeer: [...Object.entries(D.mktDemo || {}).filter(([, v]) => eq(names, v)).map(([k]) => k),
-        ...Object.entries(D['live.mkt'] || {}).filter(([, v]) => eq(names, v)).map(([k]) => (Object.values(links).find(l => l.boardId === k) || {}).boardName || k)],
+      campagnesAlsRecruiter: Object.values(links).filter(l => eq(names, l.rec)).map(l => ({ bron: 'trello', campagne: `${l.boardName} – ${l.vac}` })),
+      klantenAlsMarketeer: Object.entries(D['live.mkt'] || {}).filter(([, v]) => eq(names, v)).map(([k]) => (Object.values(links).find(l => l.boardId === k) || {}).boardName || k),
       recruiterfeedback: recFb,
       klantfeedback: klantFb,
       monitorstatusEnUpdates: monFb,
       meldingen: Object.values(D.inbox || {}).filter(n => eq(names, n.to) || eq(names, n.from)),
-      toewijzingen: Object.values(D.assignLog || {}).filter(e => eq(names, e.to) || eq(names, e.from) || eq(names, e.by)),
+      toewijzingen: Object.values(D.assignLog || {}).filter(e => e.mode !== 'demo' && (eq(names, e.to) || eq(names, e.from) || eq(names, e.by))),
       ideeen: Object.values(D.ideas || {}).filter(i => eq(names, i.by)),
       stemmen: Object.values(D.ideas || {}).filter(i => (i.voters || []).some(v => eq(names, v))).map(i => ({ id: i.id, tekst: i.text })),
       auditlog: await audit.query({ person: a.id, limit: 5000 }),

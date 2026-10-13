@@ -27,6 +27,9 @@ export const wl = w => isoWeek(mondayOf(w));
 // The Monday check-in round is about the week that just ended, so the "current" feedback week is last week.
 const now = new Date();
 export const CUR = weekOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime());
+// First week recruiters give feedback on: the app went live with the round of Monday 12 October 2026 (about week 41).
+// Earlier weeks still show their Trello numbers, but never count as missing feedback.
+export const FB_START = weekOf(new Date(2026, 9, 5).getTime());
 
 /** "21–27 sep" or "28 sep – 4 okt" */
 export function range(w) {

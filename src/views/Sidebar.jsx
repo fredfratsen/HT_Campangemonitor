@@ -34,9 +34,9 @@ export default function Sidebar({ v }) {
         {canTrelloTest ? <button onClick={goTrelloTest} className="link-btn">Trello-koppeling testen →</button> : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={eyebrow}>Databron</div>
-          <div style={{ display: 'flex', gap: '2px', background: '#F5F2ED', borderRadius: '999px', padding: '3px' }}>
+          {sourceTabs.length ? <div style={{ display: 'flex', gap: '2px', background: '#F5F2ED', borderRadius: '999px', padding: '3px' }}>
             {sourceTabs.map((t, i) => <button key={i} onClick={t.onClick} style={{ flex: '1', border: '0', borderRadius: '999px', padding: '6px 8px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', whiteSpace: 'nowrap', background: t.bg, color: t.fg, boxShadow: t.sh }}>{t.label}</button>)}
-          </div>
+          </div> : null}
           <button onClick={reloadTrello} title="Opnieuw laden" style={{ border: '0', background: 'none', padding: '0', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#5C5C5A', cursor: 'pointer', textAlign: 'left' }}><span style={{ width: '7px', height: '7px', borderRadius: '50%', flex: 'none', background: syncDot }} />{syncText}</button>
         </div>
         <div style={{ borderTop: '1px solid #E4E1DE', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
