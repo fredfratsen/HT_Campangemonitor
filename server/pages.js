@@ -164,7 +164,7 @@ export const privacyPage = ({ back = '/', hosting = 'render' } = {}) => page({ t
     <li>Hoeveel tijd het team actief in de app werkt, per week en per soort scherm, opgeteld voor iedereen samen. Wie die tijd besteedde, wordt niet bewaard.</li>
   </ul>
   <h2>En over kandidaten?</h2>
-  <p>De app telt kaarten op de Trello-borden per lijst, label en week, en leest de afwijsreden. Namen, contactgegevens en beschrijvingen van kandidaten worden daarbij niet opgehaald of opgeslagen.</p>
+  <p>De app telt kaarten op de Trello-borden per lijst, label en week, en leest de afwijsreden. Namen, contactgegevens en beschrijvingen van kandidaten worden daarbij niet opgehaald of opgeslagen. Alleen de tellingen per campagne (nieuwe kandidaten per week, en hoeveel er vandaag gebeld moeten worden) worden bewaard, zodat de cijfers na het inloggen direct zichtbaar zijn; afwijsredenen niet.</p>
   <p>Alleen voor de blacklist legt het team zelf gegevens van een kandidaat vast: naam, e-mailadres en/of telefoonnummer, de reden (uit een vaste lijst, zoals een no-show of ongepast gedrag), een korte toelichting en bij welke klant het gebeurde. Zo voorkomen we dat we iemand opnieuw voorstellen terwijl daar een goede reden tegen is (gerechtvaardigd belang). Recruiters kunnen iemand opzoeken en voordragen; de teamlead beslist. Alleen wie daar het recht voor heeft, ziet de blacklist, en hij wordt niet met klanten gedeeld.</p>
   <h2>Waarom?</h2>
   <p>Om het werk van het team te organiseren (uitvoering van de arbeidsovereenkomst) en om de gegevens te beveiligen (gerechtvaardigd belang).</p>
