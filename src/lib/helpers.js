@@ -13,9 +13,12 @@ export const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)
 /** Deterministic pseudo-random 0..1 from a string (FNV-1a). */
 export function rnd(s) { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return ((h >>> 0) % 1000) / 1000; }
 
-/** Health level (0 goed, 1 monitoren, 2 actie nodig) and the rules that fired. */
+/**
+ * Health level (0 goed, 1 monitoren, 2 actie nodig) and the rules that fired. The inflow rules look at last week
+ * (the week before the campaign's last one), because the current week is still filling up.
+ */
 export function health(c, R) {
-  const ws = c.weeks, cur = ws[ws.length - 1], reasons = [];
+  const ws = c.weeks, cur = ws[ws.length - 1], last = ws.length >= 2 ? ws[ws.length - 2] : null, reasons = [];
   const qs = ws.filter(w => w.q != null).map(w => w.q);
   const lastQ = qs.length ? qs[qs.length - 1] : null;
   let lvl = 0;
@@ -26,12 +29,12 @@ export function health(c, R) {
     for (let i = 0; i < R.declWeeks; i++) if (!(qs[qs.length - 1 - i] < qs[qs.length - 2 - i])) d = false;
     if (d) add(2, `${R.declWeeks} weken dalende kwaliteit`, 'decl');
   }
-  if (R.minLeadsOn && cur.leads <= R.minLeads) add(2, `Maar ${cur.leads} kandidaten`, 'minLeads');
+  if (R.minLeadsOn && last && last.leads <= R.minLeads) add(2, `Maar ${last.leads} kandidaten vorige week`, 'minLeads');
   if (R.manualOn && cur.needsAction) add(2, 'Bijsturing gevraagd', 'manual');
   if (R.qOrangeOn && lastQ != null && lastQ > (R.qRedOn ? R.qRed : 0) && lastQ <= R.qOrange) add(1, `Kwaliteit ${lastQ}/10`, 'qOrange');
-  if (R.dropOn && ws.length >= 3) {
-    const prior = ws.slice(-4, -1), avg = prior.reduce((s, w) => s + w.leads, 0) / prior.length;
-    if (cur.leads <= avg * (1 - R.dropPct / 100)) add(1, `Instroom −${Math.round((1 - cur.leads / avg) * 100)}%`, 'drop');
+  if (R.dropOn && ws.length >= 4) {
+    const prior = ws.slice(-5, -2), avg = prior.reduce((s, w) => s + w.leads, 0) / prior.length;
+    if (last.leads <= avg * (1 - R.dropPct / 100)) add(1, `Instroom vorige week −${Math.round((1 - last.leads / avg) * 100)}%`, 'drop');
   }
   if (R.missingOn && cur.q == null) add(1, 'Feedback ontbreekt', 'missing');
   return { lvl, reasons };

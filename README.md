@@ -101,8 +101,11 @@ nodig*. Anyone with the right *Health-regels aanpassen* can switch each rule on 
 
 | Signal | Rules |
 |---|---|
-| **Red** | quality is 4 or lower · quality has dropped 2 weeks in a row · 2 or fewer new candidates this week · recruiter ticked *Bijsturing nodig* |
-| **Orange** | quality is 6 or lower · new candidates 30% or more below the average of the previous 3 weeks · no feedback yet this week |
+| **Red** | quality is 4 or lower · quality has dropped 2 weeks in a row · 2 or fewer new candidates last week · recruiter ticked *Bijsturing nodig* |
+| **Orange** | quality is 6 or lower · new candidates last week 30% or more below the average of the 3 weeks before · no feedback yet this week |
+
+The two inflow rules look at last week, because the current week is still filling up with candidates. Everything
+else, including the feedback round, is about the current week.
 
 The status is stored on the week (`mon`: `check`, `klant`, or `open` to hand it back to the rules; with `monBy`
 and, for a check, the signals seen at that moment in `monSig`). The update for the recruiter is `upd` / `updBy`.
@@ -404,7 +407,8 @@ Then open <http://localhost:8888/setup>; the link appears in that terminal.
   overwrite each other. Other people's changes appear within about 15 seconds, or right away when you switch back
   to the tab.
 - Each browser remembers the chosen **Databron**, which news you've read, and the Dev's *Bekijk als* choice.
-- The feedback week moves on automatically: the Monday round is about the week that just ended.
+- The feedback week moves on automatically: each round is about the current week, and all feedback for a week is
+  due by the end of that same week.
 - `data/` is in `.gitignore`. Never commit it, because it holds the team's real data and accounts.
 
 ## Trello conventions

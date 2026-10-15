@@ -90,7 +90,7 @@ export const ensureReasons = c => c.trello ? c : { ...c, weeks: c.weeks.map(w =>
 const dayTxt = d => `${d.getDate()} ${MON[d.getMonth()]}`;
 
 export function build() {
-  const fri = mondayOf(CUR); fri.setDate(fri.getDate() + 4);
+  const mon = mondayOf(CUR);
   return RAW.map(([id, client, vac, rec, start, L, Q, ended]) => {
     const weeks = L.map((leads, i) => {
       const dw = start + i, w = dw + OFF, q = Q[i], key = id + '-' + dw, t = TX[key] || [], r = rnd(key);
@@ -100,7 +100,7 @@ export function build() {
         rec: q == null ? '' : (t[0] || POOL.rec[band(q)][Math.floor(r * 3)]),
         klant: q == null ? '' : (t[1] || (r > 0.8 ? '' : POOL.kl[band(q)][Math.floor(rnd(key + 'k') * 3)])),
         note: t[2] || '', needsAction: !!t[3],
-        at: w === CUR && q != null ? (r > 0.45 ? dayTxt(new Date()) : 'Vr ' + dayTxt(fri)) : '',
+        at: w === CUR && q != null ? (r > 0.45 ? dayTxt(new Date()) : 'Ma ' + dayTxt(mon)) : '',
         tr: { nieuw: leads, gescreend: Math.round(leads * 0.85), voorgesteld: vg, gesprek: Math.round(vg * 0.6), geplaatst: q >= 7 && r > 0.72 ? 1 : 0, reasons: genReasons(key, leads, q) }
       };
     });

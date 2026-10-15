@@ -6,15 +6,15 @@ import { createTiming } from '../server/timing.js';
 
 /** In-memory documents with the interface of jsonfile.js. */
 const memDocs = () => (name, initial) => ({ data: initial(), save() {}, flush() {} });
-// Internal week 41 is ISO week 41: Monday 5 – Sunday 11 October 2026. Its feedback round runs in the week after.
+// Internal week 42 is ISO week 42: Monday 12 – Sunday 18 October 2026. Its feedback round runs in that same week.
 const wed14 = new Date(2026, 9, 14, 11, 0).getTime(), sun18 = new Date(2026, 9, 18, 23, 0).getTime(), mon19 = new Date(2026, 9, 19, 0, 30).getTime();
 
-test('time is filed under the feedback week: the week before the one it was spent in', () => {
+test('time is filed under the feedback week: the week it was spent in', () => {
   const t = createTiming(memDocs());
   t.add({ feedback: 120, other: 30 }, wed14);
   t.add({ feedback: 60 }, sun18);
   t.add({ overview: 45 }, mon19);
-  assert.deepEqual(t.report().weeks, { 41: { feedback: 180, other: 30 }, 42: { overview: 45 } });
+  assert.deepEqual(t.report().weeks, { 42: { feedback: 180, other: 30 }, 43: { overview: 45 } });
 });
 
 test('only known screens, whole seconds, at most a quarter of an hour per send', () => {
@@ -27,7 +27,7 @@ test('only known screens, whole seconds, at most a quarter of an hour per send',
   assert.throws(add(null), /Ongeldige/);
   add({ feedback: 600, overview: 300 })();
   add({})();
-  assert.deepEqual(t.report().weeks, { 41: { feedback: 600, overview: 300 } }, 'refused sends leave nothing behind');
+  assert.deepEqual(t.report().weeks, { 42: { feedback: 600, overview: 300 } }, 'refused sends leave nothing behind');
 });
 
 test('agreed minutes per task: set, changed and cleared, with what changed for the audit log', () => {

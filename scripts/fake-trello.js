@@ -5,7 +5,7 @@
 // to api.trello.com is then answered here, with six demo clients, each with a few functions and candidates over the
 // last weeks. Trello keys are filled in when none are set. Each board takes FAKE_TRELLO_DELAY ms to load (default
 // 2000), so you can see the app show the snapshot first and update it after. Every minute the first function of
-// each client gets one more candidate (in Nieuw, applied last week), so the numbers move: up to 4 more, then back.
+// each client gets one more candidate (in Nieuw, applied this week), so the numbers move: up to 4 more, then back.
 //
 // Without FAKE_TRELLO=1 this file does nothing, and the real Trello is used.
 import { feedbackWeek, mondayOf } from '../src/lib/weeks.js';
@@ -47,11 +47,13 @@ function board(b, now) {
     idLabels: label ? [label.id] : [], closed: false, customFieldItems: [], ...extra });
 
   // Candidates per function per week, from 7 weeks before the feedback week up to today. Recent ones are still in
-  // Nieuw or Contactpoging; older ones got further, or were rejected (with a reason).
-  for (let w = cur - 7; w <= cur + 1; w++) for (const lb of groups) {
+  // Nieuw or Contactpoging; older ones got further, or were rejected (with a reason). The first one of the feedback
+  // week comes in at the very start of it, so every function has new candidates there, even on Monday morning.
+  for (let w = cur - 7; w <= cur; w++) for (const lb of groups) {
     const key = [b, lb ? lb.name : '*', w], recent = w >= cur, mon = mondayOf(w);
     for (let i = 0, count = 1 + Math.floor(rnd(...key) * 7); i < count; i++) {
-      const created = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + Math.floor(rnd(...key, i, 'day') * 7), 9 + Math.floor(rnd(...key, i, 'hour') * 9)).getTime();
+      const created = recent && i === 0 ? mon.getTime()
+        : new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + Math.floor(rnd(...key, i, 'day') * 7), 9 + Math.floor(rnd(...key, i, 'hour') * 9)).getTime();
       if (created > now) continue;
       const r = rnd(...key, i, 'list');
       const list = recent ? (r < 0.45 ? 'Nieuw' : r < 0.75 ? 'Contactpoging' : r < 0.9 ? 'Gescreend' : 'Afgewezen')
@@ -61,9 +63,9 @@ function board(b, now) {
         customFieldItems: [{ id: id('cf17', n), idCustomField: rf, idValue: reason.id }] });
     }
   }
-  // The first function gets one more candidate per minute, in Nieuw, who applied last week, so the feedback week and
+  // The first function gets one more candidate per minute, in Nieuw, who applied this week, so the feedback week and
   // the call list move. At most MOVE - 1, then back to none.
-  const m = mondayOf(cur), applied = new Date(m.getFullYear(), m.getMonth(), m.getDate() + 4, 12).toISOString();
+  const m = mondayOf(cur), applied = new Date(m.getFullYear(), m.getMonth(), m.getDate(), 12).toISOString();
   for (let i = 0; i < Math.floor(now / 6e4) % MOVE; i++) {
     card(now - i * 6e4, 'Nieuw', groups[0], { customFieldItems: [{ id: id('cf17', n), idCustomField: sd, value: { date: applied } }] });
   }

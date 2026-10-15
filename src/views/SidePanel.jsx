@@ -38,7 +38,7 @@ export default function SidePanel({ v }) {
                     </div> : null}
                 </div>)}
               {inbox.empty ? <div style={{ padding: '24px 0', textAlign: 'center', fontSize: '14px', color: '#8C8C8A' }}>Geen meldingen.</div> : null}
-              <div style={{ fontSize: '12px', color: '#8C8C8A', lineHeight: '1.5', borderTop: '1px solid #F5F2ED', paddingTop: '12px' }}>Herinneringen verschijnen hier. Een e-mail (of Slack/Teams) en de automatische herinnering op maandag 09:00 volgen zodra die koppeling is ingesteld.</div>
+              <div style={{ fontSize: '12px', color: '#8C8C8A', lineHeight: '1.5', borderTop: '1px solid #F5F2ED', paddingTop: '12px' }}>Herinneringen verschijnen hier. Een e-mail (of Slack/Teams) en de automatische herinnering op vrijdag 09:00 volgen zodra die koppeling is ingesteld.</div>
             </> : null}
           {isNews ? <>
               {news.items.map((it, i) => <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingBottom: '14px', borderBottom: '1px solid #F5F2ED' }}>

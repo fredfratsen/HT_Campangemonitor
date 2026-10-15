@@ -24,12 +24,12 @@ export function isoWeek(date) {
 /** ISO week number shown to people for internal week w. */
 export const wl = w => isoWeek(mondayOf(w));
 
-// The Monday check-in round is about the week that just ended, so the "current" feedback week is last week.
-export const feedbackWeek = (ts = Date.now()) => { const d = new Date(ts); return weekOf(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7).getTime()); };
+// The feedback round is about the week it happens in: all feedback for a week is in by the end of that same week.
+export const feedbackWeek = (ts = Date.now()) => weekOf(ts);
 export const CUR = feedbackWeek();
-// First week recruiters give feedback on: the app went live with the round of Monday 12 October 2026 (about week 41).
-// Earlier weeks still show their Trello numbers, but never count as missing feedback.
-export const FB_START = weekOf(new Date(2026, 9, 5).getTime());
+// First week recruiters give feedback on: week 42 (12–18 October 2026), the first round held in its own week.
+// Earlier weeks still show their Trello numbers and any feedback given, but never count as missing feedback.
+export const FB_START = weekOf(new Date(2026, 9, 12).getTime());
 
 /** "21–27 sep" or "28 sep – 4 okt" */
 export function range(w) {

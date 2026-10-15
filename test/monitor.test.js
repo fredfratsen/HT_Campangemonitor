@@ -33,3 +33,12 @@ test('waiting for the client carries over to later weeks until someone changes i
   const checked = { ...waiting, weeks: [...waiting.weeks.slice(0, 2), { ...waiting.weeks[2], mon: 'check', monSig: ['qRed'] }] };
   assert.equal(mon(checked).s, 'check');
 });
+
+test('the inflow signals look at last week, not at the week that is still filling up', () => {
+  const keys = ws => health(camp(ws), DEF_RULES).reasons.map(r => r.k);
+  assert.deepEqual(keys([week(37), week(38), week(39), week(40), week(41, { leads: 0 })]), [], 'a quiet start of the week is fine');
+  assert.deepEqual(keys([week(37), week(38), week(39), week(40, { leads: 1 }), week(41)]), ['minLeads', 'drop'], 'too few last week');
+  assert.deepEqual(keys([week(37), week(38), week(39), week(40, { leads: 5 }), week(41)]), ['drop'], '5 is 38% below the 8 before it');
+  assert.deepEqual(keys([week(41, { leads: 0 })]), [], 'a campaign that started this week has no last week yet');
+  assert.equal(health(camp([week(39), week(40, { leads: 2 }), week(41)]), DEF_RULES).reasons[0].t, 'Maar 2 kandidaten vorige week');
+});

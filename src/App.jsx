@@ -1137,10 +1137,10 @@ export default class App extends React.Component {
     const rules = [
       rule(2, 'qRedOn', 'Kwaliteit is', 'qRed', 'of lager', 'qRed'),
       rule(2, 'declOn', 'Kwaliteit daalt', 'declWeeks', 'weken achter elkaar', 'decl'),
-      rule(2, 'minLeadsOn', 'Instroom deze week is', 'minLeads', 'kandidaten of minder', 'minLeads'),
+      rule(2, 'minLeadsOn', 'Instroom vorige week was', 'minLeads', 'kandidaten of minder', 'minLeads'),
       rule(2, 'manualOn', 'Recruiter heeft ‘Bijsturing nodig’ aangevinkt', null, '', 'manual'),
       rule(1, 'qOrangeOn', 'Kwaliteit is', 'qOrange', 'of lager', 'qOrange'),
-      rule(1, 'dropOn', 'Instroom ligt', 'dropPct', '% of meer onder het gemiddelde van de 3 weken ervoor', 'drop'),
+      rule(1, 'dropOn', 'Instroom vorige week lag', 'dropPct', '% of meer onder het gemiddelde van de 3 weken ervoor', 'drop'),
       rule(1, 'missingOn', 'Er is nog geen feedback ingevuld voor deze week', null, '', 'missing')
     ];
 
