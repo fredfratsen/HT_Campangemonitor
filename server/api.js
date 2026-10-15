@@ -233,7 +233,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     mailer.send({ to, kind: idea.type, subject: `${type} van ${idea.by}: ${line.length > 70 ? line.slice(0, 69) + '…' : line}`, text: [
       `${idea.by} meldde een ${type.toLowerCase()} in de Campagnemonitor${idea.page ? `, op het scherm ${idea.page}` : ''}:`, '',
       text, '',
-      `Bekijken en afhandelen: ${linkUrl(req, '/#ideeen')} (Instellingen › Bugs & ideeën)`,
+      `Bekijken en afhandelen: ${linkUrl(req, '/#ideeen')} (Dev › Bugs & ideeën)`,
     ].join('\n') });
   }
   const ideaMail = express.Router();

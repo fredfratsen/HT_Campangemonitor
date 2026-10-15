@@ -83,7 +83,9 @@ export const NEWS = [
 ];
 export const IDEA_TYPES = { bug: ['Bug', '#FDECEA', '#D32F2F', 'Wat ging er mis? Wat deed je, en wat verwachtte je?'], idee: ['Idee', '#E7E7F0', '#1B1B63', 'Wat zou je handig vinden?'], verbetering: ['Verbetering', '#FEF3C7', '#B45309', 'Wat werkt nu onhandig, en hoe zou het beter kunnen?'] };
 export const IDEA_STATUS = { nieuw: ['Nieuw', '#5C5C5A'], opgepakt: ['Opgepakt', '#B45309'], opgelost: ['Opgelost', '#1A7A4A'], niet: ['Doen we niet', '#8C8C8A'] };
+// The columns of the Dev's board (Dev › Bugs & ideeën), in order; '' is a report nobody sorted yet. Only the Dev sees them.
+export const IDEA_PRIO = { '': ['Ongesorteerd', '#5C5C5A'], bespreken: ['Te bespreken', '#1B1B63'], p1: ['Prio 1', '#D32F2F'], p2: ['Prio 2', '#B45309'], p3: ['Prio 3', '#8A6D00'], nice: ['Nice-to-have', '#1A7A4A'] };
 // Historie & analyse is parked for now: hidden from the menu and not reachable. Set to true to bring it back.
 export const HISTORY_ENABLED = false;
-export const VIEW_NAMES = { settings: 'Instellingen', week: 'Weekoverzicht', campaigns: 'Campagnes', klant: 'Feedback klant', 'trello-test': 'Trello-koppeling testen', toewijzing: 'Toewijzing', history: 'Historie & analyse', rules: 'Health-regels', detail: 'Campagnedetail', checkin: 'Wekelijkse feedback recruiter', live: 'Live campagnes', mine: 'Mijn campagnes', blacklist: 'Blacklist' };
+export const VIEW_NAMES = { settings: 'Instellingen', week: 'Weekoverzicht', campaigns: 'Campagnes', klant: 'Feedback klant', 'trello-test': 'Trello-koppeling testen', toewijzing: 'Toewijzing', history: 'Historie & analyse', rules: 'Health-regels', detail: 'Campagnedetail', checkin: 'Wekelijkse feedback recruiter', live: 'Live campagnes', mine: 'Mijn campagnes', blacklist: 'Blacklist', dev: 'Bugs & ideeën' };
 export const ACT_TYPES = ['Advertentie', 'Doelgroep', 'Budget', 'Vacaturetekst', 'Screening', 'Klantafspraak', 'Besluit'];

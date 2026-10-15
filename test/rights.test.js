@@ -121,6 +121,20 @@ test('rules, seen, meta, inbox and ideas', () => {
   assert.equal(a('ideas', '5', saved, { ...saved, status: 'opgelost' }), NO_RIGHT);
 });
 
+test('ideas: only the Dev sorts them into a group (prio) and deletes them; the teamlead still sets the status', () => {
+  const idea = { id: 5, type: 'bug', text: 'x', by: 'Kim', status: 'nieuw', voters: [] };
+  const D = makeAuthorizer(dev, {}), L = makeAuthorizer(lead, {}), K = makeAuthorizer(kim, {});
+  assert.equal(K('ideas', '5', undefined, { ...idea, prio: 'p1' }).value.prio, undefined, 'a new report comes in unsorted');
+  assert.equal(L('ideas', '5', undefined, { ...idea, by: 'Robbin', prio: 'p1' }).value.prio, undefined, 'also from a teamlead');
+  assert.equal(D('ideas', '5', undefined, { ...idea, by: 'Tsjerk', prio: 'p1' }), '', 'the Dev may file their own straight away');
+  assert.equal(L('ideas', '5', idea, { ...idea, prio: 'p1' }), NO_RIGHT);
+  assert.equal(D('ideas', '5', idea, { ...idea, prio: 'p1' }), '');
+  assert.equal(D('ideas', '5', { ...idea, prio: 'p1' }, idea), '', 'back to Ongesorteerd');
+  assert.equal(L('ideas', '5', idea, { ...idea, status: 'opgepakt' }), '', 'status: ideas.manage');
+  assert.equal(L('ideas', '5', idea, undefined), NO_RIGHT, 'deleting: dev');
+  assert.equal(D('ideas', '5', idea, undefined), '');
+});
+
 test('assignments need assign or trello.link, and are stamped', () => {
   const e = { id: 1, client: 'X', from: '', to: 'Kim', at: 1, by: 'Iemand' };
   assert.equal(makeAuthorizer(kim, {})('assignLog', '1', undefined, e), NO_RIGHT);

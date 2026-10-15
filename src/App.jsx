@@ -30,6 +30,7 @@ import RulesView from './views/RulesView.jsx';
 import BlacklistView from './views/BlacklistView.jsx';
 import SidePanel from './views/SidePanel.jsx';
 import SettingsView from './views/settings/SettingsView.jsx';
+import DevView from './views/DevView.jsx';
 
 // Per-browser settings (chosen data source, news read, "Bekijk als")
 const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as';
@@ -118,8 +119,8 @@ export default class App extends React.Component {
       assignLog, inbox: sh.inbox, ideas: sh.ideas, seen: sh.seen, meta: { ...meta, seeded: true },
       ...(source === 'trello' ? { demoCampaigns: campaigns, campaigns: this.liveCampaigns(sh.live) } : { campaigns })
     }, () => {
-      const me = this.me(), home = this.homeView(me), ideas = this._ideasLink && account.rights.includes('ideas.manage');
-      this.setState({ view: ideas ? 'settings' : home, back: home, ci: { rec: me.rec || 'all' }, ...(ideas ? { settingsTab: 'ideas' } : {}) }, () => this.openPending());
+      const me = this.me(), home = this.homeView(me), ideas = this._ideasLink && account.rights.includes('dev');
+      this.setState({ view: ideas ? 'dev' : home, back: home, ci: { rec: me.rec || 'all' } }, () => this.openPending());
       this.sync.begin();
       this.touchLogin(account.id);
       this.loadBlSummary();
@@ -704,7 +705,8 @@ export default class App extends React.Component {
     return ({ week: r('campaigns.all'), campaigns: r('campaigns.all'), history: HISTORY_ENABLED && r('campaigns.all'), rules: r('campaigns.all'),
       klant: r('feedback.client'), 'trello-test': r('trello.link') || r('integrations'), toewijzing: r('assign'),
       live: rec, checkin: rec || r('feedback.all'), mine: rec, detail: r('campaigns.all') || rec,
-      blacklist: r('blacklist.view') || r('blacklist.manage'), settings: true })[view] || false;
+      blacklist: r('blacklist.view') || r('blacklist.manage'), settings: true,
+      dev: this.state.account.rights.includes('dev') })[view] || false; // your own right, also in Bekijk als
   }
   /** Can `me` fill in the recruiter feedback of campaign c? */
   canFeedback(c, me = this.me()) { return me.rights.has('feedback.all') || (me.rights.has('feedback.own') && !!me.rec && c.rec === me.rec); }
@@ -944,7 +946,8 @@ export default class App extends React.Component {
         ...(HISTORY_ENABLED && can('campaigns.all') ? [['history', 'Historie & analyse']] : []),
         ...(can('campaigns.all') ? [['rules', 'Health-regels']] : [])] },
       this.viewOk('blacklist', me) && { title: 'Kandidaten', items: [['blacklist', 'Blacklist', can('blacklist.manage') && st.blSum ? st.blSum.pending : 0]] },
-      { title: '', items: [['settings', 'Instellingen', acc.rights.includes('ideas.manage') ? this.newIdeas() : 0]] }
+      this.viewOk('dev', me) && { title: 'Dev', items: [['dev', 'Bugs & ideeën', this.unsortedIdeas()]] },
+      { title: '', items: [['settings', 'Instellingen']] }
     ].filter(x => x && x.items.length).map(x => ({ title: x.title, items: x.items.map(navItem) }));
 
     const levels = MONITOR_KEYS.map(k => ({ n: cnt[k], label: MONITOR[k].label, fg: MONITOR[k].fg, bg: MONITOR[k].bg, pct: (cnt[k] / Math.max(D.length, 1) * 100) + '%', onClick: () => { setF({ status: k }); this.go('campaigns'); } }));
@@ -1123,26 +1126,22 @@ export default class App extends React.Component {
     // rules
     const hits = k => { const n = active.filter(c => health(c, R).reasons.some(r => r.k === k)).length; return n === 1 ? '1 campagne' : `${n} campagnes`; };
     const lead = can('rules.edit');
-    const rule = (onKey, pre, valKey, post, hitKey) => ({
-      pre, post, hasVal: !!valKey, val: valKey ? R[valKey] : '', fg: R[onKey] ? '#1D1D1B' : '#8C8C8A',
+    const rule = (lvl, onKey, pre, valKey, post, hitKey) => ({
+      pre, post, hasVal: !!valKey, val: valKey ? R[valKey] : '', fg: R[onKey] ? '#1D1D1B' : '#8C8C8A', dot: STAT[lvl].fg,
       locked: !lead, cursor: lead ? 'pointer' : 'default', op: lead ? 1 : 0.6,
       setVal: e => { if (lead) this.setRule(valKey, Math.max(0, +e.target.value || 0)); },
       toggle: () => { if (lead) this.setRule(onKey, !R[onKey]); }, tBg: R[onKey] ? '#1B1B63' : '#C0BDB9', knob: R[onKey] ? '18px' : '2px',
       hits: R[onKey] ? hits(hitKey) : 'uit'
     });
-    // Both groups put a campaign on Actie nodig; red signals come first in the lists.
-    const ruleGroups = [
-      { label: 'Rode signalen', fg: STAT[2].fg, sub: 'Zet de campagne op Actie nodig, bovenaan', rules: [
-        rule('qRedOn', 'Kwaliteit is', 'qRed', 'of lager', 'qRed'),
-        rule('declOn', 'Kwaliteit daalt', 'declWeeks', 'weken achter elkaar', 'decl'),
-        rule('minLeadsOn', 'Instroom deze week is', 'minLeads', 'kandidaten of minder', 'minLeads'),
-        rule('manualOn', 'Recruiter heeft ‘Bijsturing nodig’ aangevinkt', null, '', 'manual')
-      ] },
-      { label: 'Oranje signalen', fg: STAT[1].fg, sub: 'Zet de campagne ook op Actie nodig, na de rode', rules: [
-        rule('qOrangeOn', 'Kwaliteit is', 'qOrange', 'of lager', 'qOrange'),
-        rule('dropOn', 'Instroom ligt', 'dropPct', '% of meer onder het gemiddelde van de 3 weken ervoor', 'drop'),
-        rule('missingOn', 'Er is nog geen feedback ingevuld voor deze week', null, '', 'missing')
-      ] }
+    // Every rule puts a campaign on Actie nodig; red (2) signals come before orange (1) in the lists.
+    const rules = [
+      rule(2, 'qRedOn', 'Kwaliteit is', 'qRed', 'of lager', 'qRed'),
+      rule(2, 'declOn', 'Kwaliteit daalt', 'declWeeks', 'weken achter elkaar', 'decl'),
+      rule(2, 'minLeadsOn', 'Instroom deze week is', 'minLeads', 'kandidaten of minder', 'minLeads'),
+      rule(2, 'manualOn', 'Recruiter heeft ‘Bijsturing nodig’ aangevinkt', null, '', 'manual'),
+      rule(1, 'qOrangeOn', 'Kwaliteit is', 'qOrange', 'of lager', 'qOrange'),
+      rule(1, 'dropOn', 'Instroom ligt', 'dropPct', '% of meer onder het gemiddelde van de 3 weken ervoor', 'drop'),
+      rule(1, 'missingOn', 'Er is nog geen feedback ingevuld voor deze week', null, '', 'missing')
     ];
 
     const tv = e => e.target.value;
@@ -1162,6 +1161,7 @@ export default class App extends React.Component {
       viewAs: this.viewAsVals(), navSections, goSettings: () => { this.setState({ settingsTab: 'account' }); this.go('settings'); },
       navOpen: st.navOpen, openNav: () => this.setState({ navOpen: true }), closeNav: () => this.setState({ navOpen: false }),
       isSettings: st.view === 'settings', settings: this.settingsVals(me),
+      isDev: st.view === 'dev' && this.viewOk('dev', me), dev: this.devVals(),
       recNames, isMine, sortOptions, sortValue,
       campTitle: isMine ? 'Mijn campagnes' : 'Actieve campagnes',
       isKlant: st.view === 'klant', goKlant: () => this.go('klant'), goMine: () => this.go('mine'),
@@ -1224,7 +1224,7 @@ export default class App extends React.Component {
       setHistRec: e => { const v = tv(e); this.setState(s => ({ hist: { ...s.hist, rec: v } })); },
       setHistPeriod: e => { const v = tv(e); this.setState(s => ({ hist: { ...s.hist, period: v } })); },
       exportCsv: () => this.exportCsv(),
-      ruleGroups, rulesLocked: !lead, resetRules: () => { this.setState({ rules: { ...DEF_RULES } }); this.flash('Standaardregels hersteld'); },
+      rules, rulesLocked: !lead, resetRules: () => { this.setState({ rules: { ...DEF_RULES } }); this.flash('Standaardregels hersteld'); },
       isBlacklist: st.view === 'blacklist',
       bl: { canManage: can('blacklist.manage'), me: { id: me.id, name: me.name }, isLocal: this.sync.mode === 'local',
         campaigns: active.map(c => ({ client: c.client, vac: c.vac })).sort((a, b) => a.client.localeCompare(b.client) || a.vac.localeCompare(b.vac)),
@@ -1249,8 +1249,19 @@ export default class App extends React.Component {
       groups: Object.keys(ROLES).map(r => ({ label: ROLES[r].label, members: list.filter(m => m.role === r) })).filter(g => g.members.length)
     };
   }
-  /** Bugs and ideas nobody has looked at yet (Instellingen › Bugs & ideeën). */
-  newIdeas() { return this.state.ideas.filter(x => x.status === 'nieuw').length; }
+  /** Open bugs and ideas the Dev hasn't put in a group yet (Dev › Bugs & ideeën). */
+  unsortedIdeas() { return this.state.ideas.filter(x => !x.prio && (x.status === 'nieuw' || x.status === 'opgepakt')).length; }
+  devVals() {
+    const st = this.state;
+    return {
+      ideas: st.ideas, email: st.account.email, isLocal: this.sync.mode === 'local', flash: t => this.flash(t),
+      canIntegrations: st.account.rights.includes('integrations'), goIntegrations: () => { this.setState({ settingsTab: 'integrations' }); this.go('settings'); },
+      setIdea: (id, p) => this.setState(s => ({ ideas: s.ideas.map(x => x.id === id ? { ...x, ...p } : x) })),
+      // '' is Ongesorteerd: the field goes, so the report looks like a new one.
+      setPrio: (id, k) => this.setState(s => ({ ideas: s.ideas.map(x => { if (x.id !== id) return x; const { prio, ...rest } = x; return k ? { ...rest, prio: k } : rest; }) })),
+      removeIdea: id => this.setState(s => ({ ideas: s.ideas.filter(x => x.id !== id) }))
+    };
+  }
   settingsVals(me) {
     const st = this.state;
     return {
@@ -1258,9 +1269,7 @@ export default class App extends React.Component {
       account: st.account, members: st.members, canReal: r => st.account.rights.includes(r),
       flash: t => this.flash(t), reloadMe: () => this.reloadMe(), reloadConfig: () => this.reloadConfig(),
       isPreview: me.isPreview, previewName: me.name, isLocal: this.sync.mode === 'local',
-      ideas: st.ideas, newIdeas: this.newIdeas(), campaigns: st.campaigns, onDemo: st.source !== 'trello',
-      setIdea: (id, p) => this.setState(s => ({ ideas: s.ideas.map(x => x.id === id ? { ...x, ...p } : x) })),
-      removeIdea: id => this.setState(s => ({ ideas: s.ideas.filter(x => x.id !== id) }))
+      campaigns: st.campaigns, onDemo: st.source !== 'trello'
     };
   }
   liveData(me) {
@@ -1333,6 +1342,7 @@ export default class App extends React.Component {
               {v.isRules ? <RulesView v={v} /> : null}
               {v.isBlacklist ? <BlacklistView b={v.bl} /> : null}
               {v.isSettings ? <SettingsView s={v.settings} /> : null}
+              {v.isDev ? <DevView d={v.dev} /> : null}
             </div>
           </main>
         </div>

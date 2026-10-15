@@ -139,13 +139,15 @@ export function makeAuthorizer(actor, docs) {
       if (changed.length && changed.every(k => k === 'read' || k === 'answered') && mine.has(before.to)) return '';
       return need(has('dev'));
     },
+    // The status is for ideas.manage; the group on the Dev's board (prio) and deleting only for the Dev.
     ideas(key, before, after) {
       if (before === undefined) {
         const value = { ...after, by: actor.name, voters: (after.voters || []).filter(n => n === actor.name) };
         if (!has('ideas.manage')) value.status = 'nieuw';
+        if (!has('dev')) delete value.prio;
         return same(value, after) ? '' : { value };
       }
-      if (after === undefined) return need(has('ideas.manage'));
+      if (after === undefined) return need(has('dev'));
       for (const k of keysOf(before, after)) {
         if (same(before[k], after[k])) continue;
         if (k === 'voters') {
@@ -153,7 +155,7 @@ export function makeAuthorizer(actor, docs) {
           const diff = [...a].filter(n => !b.has(n)).concat([...b].filter(n => !a.has(n)));
           if (diff.every(n => n === actor.name)) continue; // your own +1
         }
-        if (!has('ideas.manage')) return NO_RIGHT;
+        if (!has(k === 'prio' ? 'dev' : 'ideas.manage')) return NO_RIGHT;
       }
       return '';
     },

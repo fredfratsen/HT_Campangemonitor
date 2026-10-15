@@ -62,14 +62,22 @@ Everyone logs in with a personal account. What you see and can do depends on you
   a client inactive, set a board that isn't a client to *Geen klant* or a label that isn't a function to *Geen functie*.
 - **Trello-koppeling testen**: check the Trello setup against the conventions below.
 - Editing the health rules.
-- **Bugs & ideeën** (Instellingen, right *Bugs en ideeën afhandelen*): everything sent with *Bug of idee melden*,
-  open ones first, with who sent it, from which screen and how many +1's. Set the status (*Nieuw*, *Opgepakt*,
-  *Opgelost*, *Doen we niet*) or remove one. New ones show as a count on Instellingen and on the tab. With the Dev
-  right you also set the **address that gets a mail about every new report** (empty: no mail), send a test mail,
-  and see whether the last mail went out. The link in the mail (`/#ideeen`) opens this tab. Mail goes through the
-  mail server under Integraties.
+- Setting the status of bugs and ideas (*Nieuw*, *Opgepakt*, *Opgelost*, *Doen we niet*) in the *Bug of idee
+  melden* panel (right *Bugs en ideeën afhandelen*).
 - **Tijdwinst** (Instellingen, right *Tijdwinst bekijken*): the active time the team spends in the app is measured per
   week for the whole team together, and shown per task next to the agreed time per task from before the app.
+
+**Dev** (the *Dev-tools* right; a menu section of its own, also while using *Bekijk als*)
+
+- **Bugs & ideeën**: everything sent with *Bug of idee melden* on a board with the columns *Ongesorteerd*, *Te
+  bespreken*, *Prio 1*, *Prio 2*, *Prio 3* and *Nice-to-have*. Drag a card to another column, or pick the column on
+  the card (phones). Each card shows who sent it, when, from which screen and how many +1's; set the status there,
+  or open it to remove it. Finished ones (*Opgelost*, *Doen we niet*) are hidden until you pick *Afgehandeld* or
+  *Alles*. The menu shows how many open reports are still unsorted. The column is stored on the report (`prio`); only
+  the Dev can set it, and colleagues don't see it in the app (it is in the shared data, though). Above the board you
+  set the **address that gets a mail about every new report** (empty: no mail), send a test mail, and see whether
+  the last mail went out. The link in the mail (`/#ideeen`) opens the board. Mail goes through the mail server under
+  Integraties.
 
 **Everyone**: **Meldingen** (in-app notifications), **Wat is er nieuw** (changelog), **Bug of idee melden**
 (report a bug or idea; it goes to the developer, others can give it a +1), the **Databron** switch between demo
@@ -107,8 +115,8 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 
 | Role | Level | Default rights |
 |---|---|---|
-| **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset) |
-| **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, handling bugs and ideas, managing the blacklist, Tijdwinst |
+| **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset, the Bugs & ideeën board) |
+| **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, the status of bugs and ideas, managing the blacklist, Tijdwinst |
 | **Recruitment Marketeer** | Lid (member) | Campaign overview, monitor status and updates for the recruiter, client feedback, logging campaign changes, reminders |
 | **Account Manager** | Lid (member) | Campaign overview (sees what a Recruitment Marketeer sees) and asking questions about campaigns; changes nothing |
 | **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |

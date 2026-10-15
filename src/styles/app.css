@@ -48,6 +48,13 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .ts-row > [data-l]:empty{display:none}
 }
 
+/* Dev › Bugs & ideeën: one column per group (IDEA_PRIO); scrolls sideways when the screen is too narrow for all six */
+.dev-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(168px,1fr);gap:12px;align-items:start;overflow-x:auto;padding-bottom:8px}
+@media (max-width: 640px){
+  .dev-board{grid-auto-columns:minmax(240px,78vw);scroll-snap-type:x proximity;margin:0 -16px;padding:0 16px 8px;scroll-padding:0 16px}
+  .dev-board > section{scroll-snap-align:start}
+}
+
 @keyframes navItemIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
 @keyframes panelIn{from{transform:translate3d(100%,0,0)}to{transform:none}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}

@@ -210,6 +210,8 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
       assert.match(smtp.mails[1].data, /Subject: Bug van Test Recruiter: Het weekoverzicht laadt niet na inloggen/);
       assert.match(smtp.mails[1].data, /Het weekoverzicht laadt niet\r\nna inloggen/);
       assert.match(smtp.mails[1].data, new RegExp(`${BASE}/#ideeen`));
+      assert.match(smtp.mails[1].data, /\(Dev /, 'the link opens the Dev menu');
+      assert.doesNotMatch(smtp.mails[1].data, /Instellingen/);
 
       // A +1 is no new report.
       await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'ideas', set: { m1: { ...idea, by: 'Test Recruiter', voters: ['Tsjerk'] } } }] });
