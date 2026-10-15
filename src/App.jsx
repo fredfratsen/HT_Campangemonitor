@@ -1,16 +1,18 @@
 // Campagnemonitor — app logic. Ported from the Claude Design prototype: renderVals() computes everything the
 // views show; the views in ./views are plain markup. Shared data is kept in sync with the server by ./lib/sync.js.
 import React from 'react';
-import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, weekOf, isoDate, mondayOf } from './lib/weeks.js';
+import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, isoDate, mondayOf } from './lib/weeks.js';
 import {
-  RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, RANK, stageOf, cardTs,
+  RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS, stageOf,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
 } from './lib/constants.js';
+import { boardStats, liveCampaign } from './lib/boardStats.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
 import { ROLES, LEVELS, RIGHT_KEYS, canViewAs } from './lib/permissions.js';
 import { api } from './lib/api.js';
+import { ActivityMeter, groupOf, MAX_SEND_SEC } from './lib/activity.js';
 
 import Sidebar from './views/Sidebar.jsx';
 import MobileBar from './views/MobileBar.jsx';
@@ -36,8 +38,6 @@ const PHONE_MQ = '(max-width: 900px)';
 // Without a server (the built files opened as a static site) there are no accounts: everything is allowed.
 const LOCAL_ACCOUNT = { id: 'local', name: 'Lokaal', role: 'dev', recName: null, level: 'owner', rights: RIGHT_KEYS, grants: [], revokes: [] };
 const prepCampaigns = cs => rollForward(cs.map(c => RENAME[c.rec] ? { ...c, rec: RENAME[c.rec] } : c).map(ensureReasons));
-// Week fields written by the marketeer: monitor status (see monitor() in lib/helpers.js) and the update for the recruiter.
-const MON_FIELDS = ['mon', 'monBy', 'monSig', 'upd', 'updBy'];
 // When a reminder was sent; older ones only have their id (Date.now() + name).
 const sentAt = n => n.ts ?? (parseFloat(String(n.id)) || 0);
 const DAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
@@ -93,9 +93,10 @@ export default class App extends React.Component {
       getState: () => this.state, apply: (docs, done) => this.applyShared(docs, done), onStatus: s => this.setState({ saveState: s }),
       onRejected: () => { if (Date.now() - (this._rejAt || 0) > 10000) { this._rejAt = Date.now(); this.flash('Niet opgeslagen: daar heb je geen rechten voor'); } }
     });
-    let docs, who;
-    try { docs = await this.sync.start(); if (docs) who = await this.sync.me(); } catch (e) { this.setState({ bootError: e.serverMessage || 'De server is niet bereikbaar. Probeer het zo opnieuw.' }); return; }
+    let docs, who, snap;
+    try { docs = await this.sync.start(); if (docs) [who, snap] = await Promise.all([this.sync.me(), this.loadSnapshot()]); } catch (e) { this.setState({ bootError: e.serverMessage || 'De server is niet bereikbaar. Probeer het zo opnieuw.' }); return; }
     if (!docs) return; // redirected to login
+    this._quick = (snap && snap.boards) || {};
     const account = who ? who.account : LOCAL_ACCOUNT, members = who ? who.members : [];
     const va = lsGet(VIEW_AS_KEY, null), viewAs = members.some(m => m.id === va && m.rights && canViewAs(account, m)) ? va : null;
     const sh = fromDocs(docs), cfg = this.sync.config;
@@ -109,17 +110,20 @@ export default class App extends React.Component {
     campaigns = prepCampaigns(campaigns);
     // Only the dev right can switch to demo data; everyone else always works on Trello (also when an old choice is stored).
     const source = account.rights.includes('dev') ? this.state.source || (cfg.trello ? 'trello' : 'demo') : 'trello';
+    // On Trello the campaigns start from the snapshot: numbers right away, the full boards follow (startLive).
+    if (source === 'trello') this._skipSync = true;
     this.setState({
       account, members, viewAs,
       loaded: true, config: cfg, source, rules: sh.rules, trIgnored: sh.trIgnored, mktDemo: sh.mktDemo, live: sh.live,
       assignLog, inbox: sh.inbox, ideas: sh.ideas, seen: sh.seen, meta: { ...meta, seeded: true },
-      ...(source === 'trello' ? { demoCampaigns: campaigns, campaigns: [] } : { campaigns })
+      ...(source === 'trello' ? { demoCampaigns: campaigns, campaigns: this.liveCampaigns(sh.live) } : { campaigns })
     }, () => {
       const me = this.me(), home = this.homeView(me), ideas = this._ideasLink && account.rights.includes('ideas.manage');
       this.setState({ view: ideas ? 'settings' : home, back: home, ci: { rec: me.rec || 'all' }, ...(ideas ? { settingsTab: 'ideas' } : {}) }, () => this.openPending());
       this.sync.begin();
       this.touchLogin(account.id);
       this.loadBlSummary();
+      this.startMeter();
       this._seenTimer = setInterval(() => this.setState(s => { const id = s.account.id, mine = s.seen[id]; return mine ? { seen: { ...s.seen, [id]: { ...mine, last: Date.now() } } } : null; }), 60000);
       if (this.state.view === 'checkin') this.enterCheckin();
       if (this.state.view === 'klant') this.enterKlant();
@@ -157,9 +161,10 @@ export default class App extends React.Component {
     this.syncLive();
     this.sync.changed();
     this.syncHash();
+    this.meterTick();
   }
 
-  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); this.stopMeter(); if (this.sync) this.sync.stop(); }
 
   /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
   navChanged() {
@@ -167,6 +172,40 @@ export default class App extends React.Component {
     document.body.classList.toggle('nav-locked', open);
     if (open) { const b = document.querySelector('.nav-close'); if (b) b.focus(); }
     else if (document.querySelector('.app-aside').contains(document.activeElement)) { const b = document.querySelector('.nav-toggle'); if (b) b.focus(); }
+  }
+
+  // ── Time in the app (Tijdwinst) ──────────────────────────────────────
+  /** Counts active time per kind of screen (lib/activity.js) and sends it every few minutes, without who it was. */
+  startMeter() {
+    if (this.sync.mode === 'local') return;
+    const meter = this.meter = new ActivityMeter(), poke = () => meter.interact(Date.now());
+    this._meterEvents = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'scroll', 'touchstart'];
+    for (const e of this._meterEvents) window.addEventListener(e, poke, { capture: true, passive: true });
+    this._meterPoke = poke;
+    this._meterLeave = () => { this.meterTick(); if (document.visibilityState === 'hidden') this.sendTime(true); };
+    document.addEventListener('visibilitychange', this._meterLeave);
+    window.addEventListener('pagehide', this._meterLeave);
+    this._meterTimers = [setInterval(() => this.meterTick(), 5000), setInterval(() => this.sendTime(), 5 * 60000)];
+    this.meterTick();
+  }
+  stopMeter() {
+    if (!this.meter) return;
+    for (const e of this._meterEvents) window.removeEventListener(e, this._meterPoke, { capture: true });
+    document.removeEventListener('visibilitychange', this._meterLeave);
+    window.removeEventListener('pagehide', this._meterLeave);
+    this._meterTimers.forEach(clearInterval);
+  }
+  /** Only real work counts: the tab is visible, on Trello data, and not in "Bekijk als". */
+  meterTick() {
+    if (!this.meter) return;
+    const st = this.state, on = document.visibilityState === 'visible' && st.source === 'trello' && !this.me().isPreview;
+    this.meter.tick(Date.now(), on ? groupOf(st.view) : null);
+  }
+  sendTime(leaving = false) {
+    const seconds = this.meter.take(MAX_SEND_SEC);
+    if (!Object.keys(seconds).length) return;
+    fetch('/api/timing', { method: 'POST', credentials: 'same-origin', keepalive: leaving, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seconds }) })
+      .then(r => { if (r.status >= 500) this.meter.giveBack(seconds); }, () => this.meter.giveBack(seconds));
   }
 
   // ── Trello ───────────────────────────────────────────────────────────
@@ -183,9 +222,17 @@ export default class App extends React.Component {
     if (body.error === 'trello_unreachable') throw new TrelloError('Kon Trello niet bereiken.');
     throw new TrelloError(`Trello gaf een fout (${body.status || r.status}).`);
   }
+  /**
+   * The home-screen numbers of the last Trello load, by anyone (server/trelloSnapshot.js): shown right after login,
+   * until the full boards are in. Without it the app just waits for the boards, as before.
+   */
+  loadSnapshot() {
+    if (this.sync.mode !== 'server' || !this.sync.config.trello) return null;
+    return api('GET', '/api/trello/snapshot').catch(() => null);
+  }
   async startLive() {
     if (!this.state.config.trello) { this.setState({ sync: { state: 'nocred' } }); return; }
-    this._bd = this._bd || {};
+    this._bd = this._bd || {}; this._st = this._st || {};
     const run = (this._run || 0) + 1; this._run = run;
     this.setState({ sync: { state: 'loading', done: 0, total: 0 } });
     try {
@@ -205,7 +252,7 @@ export default class App extends React.Component {
       while (i < list.length) {
         if (this._run !== run) return;
         const b = list[i++];
-        try { this._bd[b.id] = await this.tget(`/boards/${b.id}`); }
+        try { const bd = await this.tget(`/boards/${b.id}`); this._bd[b.id] = bd; this._st[b.id] = boardStats(bd); }
         catch (e) { this._bd[b.id] = { error: e.message }; }
         n++;
         if (n % 6 === 0 || n === total) this.setState({ boardData: { ...this._bd }, sync: { state: 'loading', done: n, total } }, () => this.rebuildLive());
@@ -223,36 +270,23 @@ export default class App extends React.Component {
     await this.loadBoards(list, run);
     if (this._run === run) this.setState({ sync: { state: 'ok', at: new Date() } });
   }
-  buildLive(k, bd, f, acts) {
-    if (!bd || bd.error || !bd.cards) return null;
-    const stg = {}; bd.lists.forEach(l => { stg[l.id] = stageOf(l.name); });
-    const cards = bd.cards.filter(c => stg[c.idList] !== 'info' && (!k.labelId || c.idLabels.includes(k.labelId)));
-    const cfs = bd.customFields || [], rf = cfs.find(f => /reden\s*afgewezen/i.test(f.name)), sd = cfs.find(f => /sollicitatiedatum/i.test(f.name)), ropt = {};
-    ((rf && rf.options) || []).forEach(o => { ropt[o.id] = o.value && o.value.text; });
-    const cw = cards.map(c => {
-      const it = c.customFieldItems || [], dv = sd && it.find(i => i.idCustomField === sd.id), rv = rf && it.find(i => i.idCustomField === rf.id);
-      const ts = dv && dv.value && dv.value.date ? Date.parse(dv.value.date) : cardTs(c.id);
-      return { c, w: weekOf(ts), r: RANK[stg[c.idList]] || 0, reason: rv ? (ropt[rv.idValue] || (rv.value && rv.value.text) || null) : null };
-    });
-    let minW = CUR; cw.forEach(x => { if (x.w < minW) minW = x.w; });
-    const start = Math.max(CUR - 11, Math.min(minW, CUR)), weeks = [];
-    for (let w = start; w <= CUR; w++) {
-      const inW = cw.filter(x => x.w === w);
-      const tr = { nieuw: inW.length, gescreend: inW.filter(x => x.r >= 1).length, gesprek: inW.filter(x => x.r >= 2).length, voorgesteld: inW.filter(x => x.r >= 3).length, geplaatst: inW.filter(x => x.r >= 4).length, reasons: inW.reduce((o, x) => { if (x.reason) o[x.reason] = (o[x.reason] || 0) + 1; return o; }, {}) };
-      const e = f[w] || {}, mon = {};
-      MON_FIELDS.forEach(k => { if (e[k] !== undefined) mon[k] = e[k]; });
-      weeks.push({ w, leads: e.leads ?? tr.nieuw, q: e.q ?? null, rec: e.rec || '', klant: e.klant || '', note: e.note || '', needsAction: !!e.needsAction, at: e.at || '', recBy: e.recBy, klantBy: e.klantBy, ...mon, tr });
-    }
-    const open = cards.filter(c => !c.closed);
-    return { id: k.id, boardId: k.boardId, client: k.boardName, vac: k.vac, rec: k.rec, start, ended: false, weeks, actions: acts, trello: true,
-      live: { nieuw: open.filter(c => stg[c.idList] === 'nieuw').length, contact: open.filter(c => stg[c.idList] === 'contact').length } };
+  /**
+   * The campaigns of the Trello links (lib/boardStats.js): from the full board once it's loaded, until then from the
+   * snapshot (marked quick: no pipeline or rejection reasons yet). A board in neither shows no campaign yet.
+   */
+  liveCampaigns(L = this.state.live) {
+    const full = this._st || {}, quick = this._quick || {};
+    return L.links.filter(k => !(L.inactive || {})[k.boardId]).map(k => {
+      const key = k.labelId || '*', f = L.fb[k.id] || {}, acts = L.actions[k.id] || [];
+      if (full[k.boardId]) return liveCampaign(k, full[k.boardId][key], f, acts);
+      if (quick[k.boardId]) return liveCampaign(k, quick[k.boardId].stats[key], f, acts, true);
+      return null;
+    }).filter(Boolean);
   }
   rebuildLive() {
     if (this.state.source !== 'trello') return;
-    const L = this.state.live, bd = this._bd || {};
-    const campaigns = L.links.filter(k => !(L.inactive || {})[k.boardId]).map(k => this.buildLive(k, bd[k.boardId], L.fb[k.id] || {}, L.actions[k.id] || [])).filter(Boolean);
     this._skipSync = true;
-    this.setState({ campaigns }, () => { if (this.state.view === 'checkin' && !this.state.form) this.enterCheckin(); this.openPending(); });
+    this.setState({ campaigns: this.liveCampaigns() }, () => { if (this.state.view === 'checkin' && !this.state.form) this.enterCheckin(); this.openPending(); });
   }
   /** In Trello mode, feedback typed into the (derived) campaigns is written back to live.fb / live.actions. */
   syncLive() {
@@ -280,7 +314,7 @@ export default class App extends React.Component {
     if (src === this.state.source) return;
     lsSet(SRC_KEY, src);
     if (src === 'trello') {
-      this.setState(s => ({ source: 'trello', demoCampaigns: s.campaigns, campaigns: [], form: null, kform: null, view: s.view === 'detail' ? s.back : s.view }), () => { if (this.state.boardList) this.rebuildLive(); else this.startLive(); });
+      this.setState(s => ({ source: 'trello', demoCampaigns: s.campaigns, campaigns: [], form: null, kform: null, view: s.view === 'detail' ? s.back : s.view }), () => { this.rebuildLive(); if (!this.state.boardList) this.startLive(); });
     } else {
       this.setState(s => ({ source: 'demo', campaigns: s.demoCampaigns || build(), form: null, kform: null, view: s.view === 'detail' ? s.back : s.view }), () => { if (this.state.view === 'checkin') this.enterCheckin(); });
     }
@@ -290,6 +324,12 @@ export default class App extends React.Component {
     if (st.source !== 'trello') return { text: 'Demo-data', dot: '#C0BDB9' };
     if (s.state === 'nocred') return { text: 'Niet verbonden met Trello', dot: '#D32F2F' };
     if (s.state === 'error') return { text: 'Trello-fout · opnieuw proberen', dot: '#D32F2F' };
+    // Numbers from the snapshot: say from when (the oldest board shown; a time today, else the day) while the boards come in.
+    const quick = st.campaigns.filter(c => c.quick).map(c => (this._quick[c.boardId] || {}).at).filter(Boolean);
+    if (s.state === 'loading' && quick.length) {
+      const t = new Date(Math.min(...quick)), today = t.toDateString() === new Date().toDateString();
+      return { text: `Stand ${today ? `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : `${t.getDate()} ${MON[t.getMonth()]}`} · bijwerken…`, dot: '#F9A800' };
+    }
     if (s.state === 'loading') return { text: s.total ? `Trello laden… ${s.done}/${s.total}` : 'Trello verbinden…', dot: '#F9A800' };
     if (s.state === 'ok') { const t = s.at; return { text: `Trello bijgewerkt ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, dot: '#1A7A4A' }; }
     return { text: 'Trello', dot: '#C0BDB9' };
@@ -832,6 +872,7 @@ export default class App extends React.Component {
   }
   setRule(k, v) { this.setState(s => ({ rules: { ...s.rules, [k]: v } })); }
   exportCsv() {
+    if (this.state.campaigns.some(c => c.quick)) { this.flash('Trello wordt nog geladen; probeer het zo opnieuw'); return; }
     const period = +this.state.hist.period, first = CUR - period + 1;
     const rows = [['klant', 'vacature', 'recruiter', 'week', 'week_start', 'nieuwe_kandidaten', 'kwaliteit', 'feedback_recruitment', 'feedback_klant', 'actie_notitie', 'bijsturing_nodig', 'monitorstatus_gezet', 'update_recruiter', 'trello_voorgesteld', 'trello_gesprek', 'trello_geplaatst']];
     this.state.campaigns.forEach(c => c.weeks.forEach(w => rows.push([c.client, c.vac, c.rec, wl(w.w), isoDate(mondayOf(w.w)), w.leads, w.q ?? '', w.rec, w.klant, w.note, w.needsAction ? 'ja' : 'nee', MONITOR[w.mon] ? MONITOR[w.mon].label : '', w.upd || '', w.tr.voorgesteld, w.tr.gesprek, w.tr.geplaatst])));
@@ -1005,7 +1046,7 @@ export default class App extends React.Component {
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
         upd: w.upd || '', hasUpd: !!w.upd, updBy: w.updBy || 'marketeer',
         monTag: MONITOR[w.mon] ? `${MONITOR[w.mon].label}${w.monBy ? ` · ${w.monBy}` : ''}` : '', monFg: MONITOR[w.mon] ? MONITOR[w.mon].fg : '', monBg: MONITOR[w.mon] ? MONITOR[w.mon].bg : '',
-        trText: `${w.tr.voorgesteld} voorgesteld · ${w.tr.gesprek} ${w.tr.gesprek === 1 ? 'gesprek' : 'gesprekken'}${w.tr.geplaatst ? ` · ${w.tr.geplaatst} geplaatst` : ''}`,
+        trText: selC.quick ? 'laden…' : `${w.tr.voorgesteld} voorgesteld · ${w.tr.gesprek} ${w.tr.gesprek === 1 ? 'gesprek' : 'gesprekken'}${w.tr.geplaatst ? ` · ${w.tr.geplaatst} geplaatst` : ''}`,
         reasons: reasonList(w.tr.reasons), hasReasons: reasonList(w.tr.reasons).length > 0, rejN: Object.values(w.tr.reasons || {}).reduce((a, b) => a + b, 0),
         acts: selC.actions.filter(a => a.w === w.w), fill: () => this.startCheckin(selC.id)
       })),
@@ -1019,7 +1060,7 @@ export default class App extends React.Component {
       weekOpts: ws.slice().reverse().map(w => ({ v: w.w, l: 'Week ' + wl(w.w) })),
       ...(() => { const agg = {}; ws.forEach(w => Object.entries(w.tr.reasons || {}).forEach(([k, v]) => { agg[k] = (agg[k] || 0) + v; })); const l = reasonList(agg), mx = Math.max(1, ...l.map(x => x.n)), tot = l.reduce((a, x) => a + x.n, 0);
         return { rej: l.map(x => ({ ...x, pct: (x.n / mx * 100) + '%', share: Math.round(x.n / Math.max(tot, 1) * 100) + '%' })), hasRej: l.length > 0, rejTotal: tot }; })(),
-      funnel: funnelDefs.map(([k, label]) => ({ label, n: tot(k), pct: (tot(k) / Math.max(tot('nieuw'), 1) * 100) + '%' })),
+      funnel: funnelDefs.map(([k, label]) => ({ label, n: tot(k), pct: (tot(k) / Math.max(tot('nieuw'), 1) * 100) + '%' })), pipeLoading: !!selC.quick,
       hasFill: !!fillMode && !selC.ended,
       fill: fillMode === 'rec' ? () => this.startCheckin(selC.id) : () => this.startKlant(selC.id),
       fillLabel: fillMode === 'rec' ? `${ownC ? 'Mijn feedback' : 'Recruiterfeedback'} week ${wl(CUR)}` : `Feedback klant week ${wl(CUR)}`,
@@ -1217,7 +1258,7 @@ export default class App extends React.Component {
       account: st.account, members: st.members, canReal: r => st.account.rights.includes(r),
       flash: t => this.flash(t), reloadMe: () => this.reloadMe(), reloadConfig: () => this.reloadConfig(),
       isPreview: me.isPreview, previewName: me.name, isLocal: this.sync.mode === 'local',
-      ideas: st.ideas, newIdeas: this.newIdeas(),
+      ideas: st.ideas, newIdeas: this.newIdeas(), campaigns: st.campaigns, onDemo: st.source !== 'trello',
       setIdea: (id, p) => this.setState(s => ({ ideas: s.ideas.map(x => x.id === id ? { ...x, ...p } : x) })),
       removeIdea: id => this.setState(s => ({ ideas: s.ideas.filter(x => x.id !== id) }))
     };

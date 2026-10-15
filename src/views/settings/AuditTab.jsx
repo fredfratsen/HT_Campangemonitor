@@ -19,8 +19,9 @@ export const EVENTS = {
   'blacklist.rejected': 'Voordracht blacklist afgewezen', 'blacklist.withdrawn': 'Voordracht blacklist ingetrokken', 'blacklist.updated': 'Blacklist-vermelding gewijzigd',
   'blacklist.removed': 'Van de blacklist gehaald', 'blacklist.expired': 'Blacklist-vermelding verlopen', 'blacklist.export': 'Blacklist-vermelding gedownload',
   'mail.sent': 'E-mail verstuurd', 'mail.failed': 'E-mail niet verstuurd', 'mail.to': 'Mailadres voor bugs en ideeën gewijzigd',
+  'timing.minutes': 'Afgesproken tijd van vroeger gewijzigd',
 };
-const TYPES = [['', 'Alles'], ['login', 'Inloggen'], ['member', 'Leden'], ['2fa', 'Tweestapsverificatie'], ['password', 'Wachtwoorden'], ['integration', 'Integraties'], ['privacy', 'Privacy'], ['data', 'Regels & toewijzing'], ['blacklist', 'Blacklist'], ['mail', 'E-mail'], ['dev', 'Dev']];
+const TYPES = [['', 'Alles'], ['login', 'Inloggen'], ['member', 'Leden'], ['2fa', 'Tweestapsverificatie'], ['password', 'Wachtwoorden'], ['integration', 'Integraties'], ['privacy', 'Privacy'], ['data', 'Regels & toewijzing'], ['blacklist', 'Blacklist'], ['mail', 'E-mail'], ['timing', 'Tijdwinst'], ['dev', 'Dev']];
 const TONE = t => /fail|locked|denied|removed|deactivated|anonymised|reset$|disabled/.test(t) ? 'red' : /^login|logout/.test(t) ? 'neutral' : /^member|^2fa|^password|^account|^session/.test(t) ? 'navy' : 'amber';
 
 const rightLabel = k => (RIGHTS.find(r => r.key === k) || {}).label || k;

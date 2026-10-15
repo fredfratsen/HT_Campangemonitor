@@ -9,21 +9,21 @@ import express from 'express';
 const BOARD_Q = 'fields=name&lists=open&list_fields=name&labels=all&label_fields=name,color&cards=all&card_fields=idList,idLabels,closed&card_customFieldItems=true&customFields=true';
 const ENDPOINTS = [
   { re: /^\/members\/me$/, q: 'fields=fullName,username' },
-  { re: /^\/members\/me\/boards$/, q: 'filter=open&fields=name,dateLastActivity' },
+  { re: /^\/members\/me\/boards$/, q: 'filter=open&fields=name,dateLastActivity', boards: true },
   { re: /^\/boards\/[0-9a-f]{24}$/, q: BOARD_Q, board: true },
 ];
 const USED_FIELDS = /reden\s*afgewezen|sollicitatiedatum/i;
 const TTL = 30 * 1000; // several people opening the app at once share one Trello call
 
-/** Keeps only the custom fields the monitor uses. */
-export function minimiseBoard(body) {
-  const bd = JSON.parse(body);
+/** Keeps only the custom fields the monitor uses (changes bd in place). */
+function minimise(bd) {
   const keep = (bd.customFields || []).filter(f => USED_FIELDS.test(f.name || ''));
   const ids = new Set(keep.map(f => f.id));
   bd.customFields = keep;
   for (const c of bd.cards || []) c.customFieldItems = (c.customFieldItems || []).filter(i => ids.has(i.idCustomField));
-  return JSON.stringify(bd);
+  return bd;
 }
+export const minimiseBoard = body => JSON.stringify(minimise(JSON.parse(body)));
 
 export const authHeader = creds => `OAuth oauth_consumer_key="${creds.key}", oauth_token="${creds.token}"`;
 
@@ -41,11 +41,27 @@ export async function testTrello(creds) {
   } catch (e) { return { ok: false, error: 'Kon Trello niet bereiken.' }; }
 }
 
-/** @param {() => ({key, token}|null)} getCreds */
-export function trelloRouter(getCreds) {
+/**
+ * @param {() => ({key, token}|null)} getCreds
+ * @param snapshot  createTrelloSnapshot (trelloSnapshot.js) to keep the home-screen numbers of every board loaded, or null
+ */
+export function trelloRouter(getCreds, snapshot = null) {
   const cache = new Map();
   const router = express.Router();
-  router.clearCache = () => cache.clear();
+  router.clearCache = () => { cache.clear(); if (snapshot) snapshot.clear(); };
+  /** What a board's numbers were at its last load, by anyone: the app shows these right after login. */
+  router.get('/snapshot', (req, res) => res.json({ boards: snapshot ? snapshot.get() : {} }));
+  /** Fresh from Trello (status 200): minimise a board, and keep it in the snapshot. */
+  const received = (ep, path, body) => {
+    if (!ep.board && !(ep.boards && snapshot)) return body;
+    const data = JSON.parse(body);
+    if (ep.board) minimise(data);
+    if (snapshot) {
+      try { if (ep.board) snapshot.board(path.split('/')[2], data); else snapshot.keepOnly(data); }
+      catch (e) { console.error('[trello] snapshot niet bijgewerkt:', e.message); }
+    }
+    return ep.board ? JSON.stringify(data) : body;
+  };
   router.use(async (req, res) => {
     if (req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' });
     const creds = getCreds();
@@ -62,7 +78,7 @@ export function trelloRouter(getCreds) {
         signal: AbortSignal.timeout(20000),
       }).then(async r => {
         const body = await r.text();
-        return { status: r.status, body: r.status === 200 && ep.board ? minimiseBoard(body) : body };
+        return { status: r.status, body: r.status === 200 ? received(ep, req.path, body) : body };
       });
       cache.set(url, { ...(hit || {}), pending: p });
       const r = await p;

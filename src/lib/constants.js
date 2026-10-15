@@ -50,6 +50,8 @@ export function stageOf(name) {
 }
 // Trello card ids start with the creation time (seconds, hex).
 export const cardTs = id => parseInt(id.slice(0, 8), 16) * 1000;
+// Week fields written by the marketeer: monitor status (see monitor() in lib/helpers.js) and the update for the recruiter.
+export const MON_FIELDS = ['mon', 'monBy', 'monSig', 'upd', 'updBy'];
 
 export const REASONS = ['Te weinig ervaring', 'Afstand', 'Taalbarrière', 'Geen interesse', 'Geen reactie', 'No show', 'Foutieve contactgegevens', 'Ander aanbod', 'Salaris te laag', 'Overgekwalificeerd', 'Overig'];
 
@@ -62,6 +64,8 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 16, date: '15 okt', tag: 'Verbeterd', title: 'Meteen cijfers na het inloggen', text: 'Na het inloggen zie je direct de cijfers van de laatste keer dat Trello is geladen, door wie dan ook, in plaats van nullen. Op de achtergrond haalt de app de actuele stand op en werkt de cijfers bij. Onder Databron in het menu zie je van wanneer ze zijn. De pipeline en redenen van afwijzing op een campagne komen daarna.' },
+  { id: 15, date: '14 okt', tag: 'Nieuw', title: 'Tijd in de app wordt gemeten', text: 'De app houdt bij hoeveel tijd het team actief in de app werkt, per week en per soort scherm, opgeteld voor iedereen samen. Wie die tijd besteedde, wordt niet bewaard. De teamlead ziet de totalen onder Instellingen › Tijdwinst.' },
   { id: 14, date: '5 okt', tag: 'Verbeterd', title: 'Je bugs en ideeën komen aan', text: 'Wat je via ‘Bug of idee melden’ instuurt, komt nu direct bij de ontwikkelaar binnen, ook per e-mail. Staat jouw punt er al tussen? Geef dan een +1, zo zie je wat het vaakst speelt.' },
   { id: 13, date: '5 okt', tag: 'Nieuw', title: 'Blacklist voor kandidaten', text: 'Onder Kandidaten › Blacklist zoek je op naam, e-mail of telefoonnummer of een kandidaat op de blacklist staat, en waarom. Recruiters dragen iemand voor; de teamlead bevestigt of wijst af. Een vermelding geldt voor alle klanten of alleen voor één klant, en verloopt vanzelf na de gekozen termijn.' },
   { id: 12, date: '5 okt', tag: 'Verbeterd', title: 'Klanten uit Trello zit nu in Toewijzing', text: 'Nieuwe borden en functies uit Trello verschijnen direct in Toewijzing; het scherm Klanten uit Trello is vervallen. Elke functie houdt een eigen campagne met eigen feedback, maar de recruiter en Recruitment Marketeer kies je per klant: zij volgen alle functies. Vink meerdere klanten aan om ze in één keer toe te wijzen. Een label dat geen functie is, zet je op Geen functie.' },

@@ -18,7 +18,7 @@ if (process.env.APP_PASSWORD) console.warn('APP_PASSWORD wordt niet meer gebruik
 const docs = fileDocs(DATA_DIR);
 const { app, accounts, secrets, audit, housekeeping } = createServer({
   docs, audit: createAudit(DATA_DIR), secretsKey: loadSecretsKey(DATA_DIR, PROD), secure: PROD,
-  hosting: 'render', publicDir: path.join(ROOT, 'public'), distDir: path.join(ROOT, 'dist'),
+  hosting: 'render', publicDir: path.join(ROOT, 'public'), distDir: path.join(ROOT, 'dist'), trelloSnapshot: true,
 });
 
 /** Prints a link to take ownership when nobody can (first start, or OWNER_RECOVERY=1). */

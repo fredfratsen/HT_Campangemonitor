@@ -68,6 +68,8 @@ Everyone logs in with a personal account. What you see and can do depends on you
   right you also set the **address that gets a mail about every new report** (empty: no mail), send a test mail,
   and see whether the last mail went out. The link in the mail (`/#ideeen`) opens this tab. Mail goes through the
   mail server under Integraties.
+- **Tijdwinst** (Instellingen, right *Tijdwinst bekijken*): the active time the team spends in the app is measured per
+  week for the whole team together, and shown per task next to the agreed time per task from before the app.
 
 **Everyone**: **Meldingen** (in-app notifications), **Wat is er nieuw** (changelog), **Bug of idee melden**
 (report a bug or idea; it goes to the developer, others can give it a +1), the **Databron** switch between demo
@@ -106,7 +108,7 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 | Role | Level | Default rights |
 |---|---|---|
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset) |
-| **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, handling bugs and ideas, managing the blacklist |
+| **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, handling bugs and ideas, managing the blacklist, Tijdwinst |
 | **Recruitment Marketeer** | Lid (member) | Campaign overview, monitor status and updates for the recruiter, client feedback, logging campaign changes, reminders |
 | **Account Manager** | Lid (member) | Campaign overview (sees what a Recruitment Marketeer sees) and asking questions about campaigns; changes nothing |
 | **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
@@ -182,6 +184,7 @@ variable afterwards.
 - **Data minimisation for candidates.** The server decides which Trello fields are fetched, not the browser. Only
   lists, labels, and per card its list, labels and the two custom fields the monitor uses (*Sollicitatiedatum*,
   *Reden afgewezen*) come through. Candidate names, descriptions and other custom fields are never fetched.
+  The server only stores counts from it (the [Trello snapshot](#trello-snapshot)), never cards or rejection reasons.
 - **The blacklist is the exception**: the only place the app stores candidates' personal data, typed in by the
   team. It is its own document (`DATA_DIR/blacklist.json`), only reachable through `/api/blacklist` with a
   blacklist right, and never part of `/api/state`, so people without the right never receive it. Notifications
@@ -194,6 +197,7 @@ variable afterwards.
   Individual feedback edits are not logged.
 - **Mail about bugs and ideas** carries the reporter's name and text to the address the Dev set, through the mail
   server under Integraties. The privacy notice says so. Anonymising an account later can't reach mails already sent.
+- **Time in the app** is stored as weekly totals for the whole team, without names.
 - **Right of access.** Everyone can download their own data (Instellingen › Mijn account). The Dev can export
   anyone's data (Instellingen › Privacy). For a candidate on the blacklist, *Gegevens downloaden* on the entry;
   correcting and removing are done there too.
@@ -214,6 +218,7 @@ variable afterwards.
   | Deactivated accounts | Anonymised automatically after 12 months (setting in Instellingen › Privacy) |
   | Blacklist entries | 6, 12 or 24 months, chosen per entry (can be extended) |
   | Blacklist proposals nobody decided on | 30 days |
+  | Trello snapshot (counts per campaign) | Until the next load of that board; boards gone from Trello are removed |
 
 - **Privacy notice** at `/privacy`, linked from the login page. It is a draft: have it checked and fill in the
   contact person in `server/pages.js`.
@@ -258,7 +263,7 @@ NODE_ENV=production SECRETS_KEY=something-long-and-random npm start   # http://l
 | `npm run build` | Builds the frontend into `dist/` |
 | `npm start` | Starts the server, which serves `dist/` and the API |
 | `npm run preview` | Build, then start |
-| `npm test` | Rights, monitor status, crypto, the blacklist, and an end-to-end test of login, invites, the blacklist, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
+| `npm test` | Rights, monitor status, crypto, the blacklist, time in the app, counting Trello boards and the Trello snapshot, and an end-to-end test of login, invites, the blacklist, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
 
 ## Configuration
 
@@ -270,6 +275,7 @@ shell or in Render's **Environment** tab. `.env.example` lists them all.
 | `SECRETS_KEY` | yes, in production; always on Netlify | Encrypts stored API keys and two-factor secrets. Render generates it; on Netlify you set it yourself. Locally, without it, a key file is created in the data folder. **Don't change it** once set: stored keys and two-factor would have to be set up again. |
 | `DATA_DIR` | yes, on Render | Folder for the data files. Default `./data`; on Render `/var/data` (the persistent disk). |
 | `NODE_ENV` | in production | Set to `production` for secure (HTTPS-only) cookies. |
+| `TZ` | yes, on Render | `Europe/Amsterdam` (set in `render.yaml`), so the server counts Trello cards in Dutch weeks for the [snapshot](#trello-snapshot). Render runs on UTC otherwise. |
 | `APP_URL` | no | Base URL for the setup and recovery links printed at startup. Default: Render's `RENDER_EXTERNAL_URL`, else `http://localhost:PORT` (`npm run dev` sets `http://localhost:5173`). |
 | `TRELLO_KEY`, `TRELLO_TOKEN` | no | Fallback for the Trello keys when none are stored under Instellingen › Integraties. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | no | Fallback for the mail server when none is stored under Instellingen › Integraties. All five are needed. |
@@ -362,7 +368,10 @@ Then open <http://localhost:8888/setup>; the link appears in that terminal.
   links are stored as SHA-256 hashes; two-factor secrets are encrypted.
 - Integration keys are in `DATA_DIR/secrets.json` (encrypted). The audit log is in `DATA_DIR/audit/YYYY-MM.jsonl`.
 - The blacklist is in `DATA_DIR/blacklist.json`, apart from the shared data (see [Privacy](#privacy-gdpr)).
-- For each JSON file, a dated copy is kept for each of the last 14 days as a safety net.
+- Time in the app (Tijdwinst) is in `DATA_DIR/timing.json`.
+- The last Trello numbers for the home screens are in `DATA_DIR/trello-snapshot.json` (see
+  [Trello snapshot](#trello-snapshot)).
+- For each JSON file except the Trello snapshot, a dated copy is kept for each of the last 14 days as a safety net.
 - The app sends only what changed (per campaign, per rule, ...), so two people saving at the same moment don't
   overwrite each other. Other people's changes appear within about 15 seconds, or right away when you switch back
   to the tab.
@@ -382,6 +391,25 @@ The monitor reads every board the Trello account can see. Each board is one clie
 
 The server only proxies a few read-only Trello endpoints, with fixed fields, and it caches responses for 30
 seconds. That way, when several people open the app at once, they share a single Trello call.
+
+### Trello snapshot
+
+So the screens don't start at zero after login, the server keeps the numbers of the last Trello load, by whoever
+did it, in `DATA_DIR/trello-snapshot.json`:
+
+- Right after login the app shows those: Weekoverzicht, Campagnes, Mijn campagnes and Live campagnes have their
+  numbers at once. The status in the menu says from when (*Stand 09:12 · bijwerken…*, or *Stand 13 okt ·
+  bijwerken…* from an earlier day).
+- In the background the app loads the boards as before, and the numbers move to the live state (*Trello bijgewerkt
+  09:14*). Until a campaign's board is in, its page shows *Laden uit Trello…* for the pipeline.
+- Only counts per campaign go in: new candidates per week (the 12 weeks a campaign shows) and today's call list
+  (open cards in *Nieuw* and *Contactpoging*). No cards, no pipeline, no rejection reasons.
+- The server fills it from every board it loads from Trello (`server/trelloSnapshot.js`); the app never writes to
+  it. Boards Trello no longer lists are removed, and a new Trello key starts it over. It has no daily copies: every
+  load rebuilds it.
+- The server and the app count the same way (`src/lib/boardStats.js`), so the snapshot matches the live numbers. The
+  server counts in Dutch weeks (`TZ`, see [Configuration](#configuration)).
+- Only on Render and locally. On Netlify the app loads the boards first, as before.
 
 ## Security
 
@@ -427,10 +455,12 @@ server/
   pages.js        server-rendered pages (login, 2FA, invite, reset, privacy)
   jsonfile.js     document storage: files with daily backups, or Netlify Blobs with conditional writes
   trello.js       read-only Trello proxy with fixed fields and a short cache
+  trelloSnapshot.js  the last Trello numbers for the home screens (DATA_DIR/trello-snapshot.json)
 src/
   App.jsx         app logic (from the design); renderVals() feeds the views
   views/          one component per screen; views/settings/ holds Instellingen
-  lib/            rights (permissions.js), week math, demo data, health rules, sync with the server
+  lib/            rights (permissions.js), week math, demo data, health rules, sync with the server, Trello boards
+                  → campaigns (boardStats.js, also used by the server)
   styles/         design tokens, app styles, fonts
 netlify/functions/server.mjs   the Netlify Function (routes its paths to server/netlify.js)
 test/             node:test suites (npm test), a fake Blobs store and a local Netlify harness
@@ -466,3 +496,4 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | PATCH, DELETE | `/api/blacklist/:id` | Correct or extend, remove or reject (*blacklist.manage*); withdraw your own proposal |
 | POST, GET | `/api/blacklist/:id/approve`, `/api/blacklist/:id/export` | Confirm a proposal, download an entry (*blacklist.manage*) |
 | GET | `/api/trello/…` | Read-only Trello proxy (`members/me`, `members/me/boards`, `boards/:id`) |
+| GET | `/api/trello/snapshot` | The [Trello snapshot](#trello-snapshot): `{ boards: { [boardId]: { at, stats } } }` |

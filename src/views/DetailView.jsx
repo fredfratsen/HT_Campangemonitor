@@ -193,7 +193,8 @@ export default function DetailView({ v }) {
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>Pipeline uit Trello</span>
                 <span style={{ fontSize: '12px', color: '#8C8C8A' }}>totaal · automatisch</span>
               </div>
-              {d.funnel.map((fu, i) => <div key={i} style={{ display: 'grid', gridTemplateColumns: '92px minmax(0,1fr) 32px', gap: '10px', alignItems: 'center', fontSize: '13px' }}>
+              {d.pipeLoading ? <div style={{ fontSize: '13px', color: '#8C8C8A' }}>Laden uit Trello…</div> : null}
+              {d.pipeLoading ? null : d.funnel.map((fu, i) => <div key={i} style={{ display: 'grid', gridTemplateColumns: '92px minmax(0,1fr) 32px', gap: '10px', alignItems: 'center', fontSize: '13px' }}>
                   <span style={{ color: '#3C3C3A' }}>{fu.label}</span>
                   <div style={{ height: '8px', background: '#F5F2ED', borderRadius: '999px', overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: fu.pct, background: '#1B1B63', borderRadius: '999px' }} />

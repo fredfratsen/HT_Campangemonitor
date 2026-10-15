@@ -10,14 +10,16 @@ import { INTEGRATIONS } from './secrets.js';
 import { testTrello } from './trello.js';
 import { testSmtp } from './mail.js';
 import { BlacklistError } from './blacklist.js';
+import { TimingError } from './timing.js';
 import { MON, stamp } from '../src/lib/weeks.js';
 import { IDEA_TYPES } from '../src/lib/constants.js';
+import { TASKS } from '../src/lib/timesaved.js';
 
 const MONTH_OPTIONS = [0, 3, 6, 12, 24];
 // Checks an integration's values before they are saved, and on request afterwards.
 const TESTS = { trello: testTrello, smtp: testSmtp };
 
-export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, mailer, pollMs = 15000 }) {
+export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs = 15000 }) {
   const api = express.Router();
   const json = express.json({ limit: '100kb' });
   api.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -27,7 +29,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   const wrap = fn => async (req, res) => {
     try { await fn(req, res); }
     catch (e) {
-      if (e instanceof AccountError || e instanceof BlacklistError) return res.status(400).json({ error: 'invalid', message: e.message });
+      if (e instanceof AccountError || e instanceof BlacklistError || e instanceof TimingError) return res.status(400).json({ error: 'invalid', message: e.message });
       console.error(e);
       res.status(500).json({ error: 'server_error', message: 'Er ging iets mis op de server.' });
     }
@@ -360,6 +362,17 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     download(res, `blacklist-${fileName(e.name)}-${new Date().toISOString().slice(0, 10)}.json`, blacklist.exportOf(e));
   }));
   api.use('/blacklist', bl);
+
+  // ── Tijdwinst ────────────────────────────────────────────────────────
+  // Every browser sends its active time; only team totals per week are stored, without who sent it (see timing.js).
+  api.post('/timing', json, wrap(async (req, res) => { timing.add((req.body || {}).seconds); res.json({ ok: true }); }));
+  api.get('/timing', need('timesaved'), (req, res) => res.json(timing.report()));
+  api.put('/timing/minutes', need('timesaved'), json, wrap(async (req, res) => {
+    const changed = timing.setMinutes((req.body || {}).minutes);
+    const label = k => TASKS.find(t => t.key === k).label;
+    if (Object.keys(changed).length) audit.log('timing.minutes', { actor: req.account, details: Object.fromEntries(Object.entries(changed).map(([k, v]) => [label(k), v])) });
+    res.json(timing.report());
+  }));
 
   api.use((req, res) => res.status(404).json({ error: 'not_found' }));
   return api;

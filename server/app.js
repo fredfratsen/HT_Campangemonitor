@@ -9,8 +9,10 @@ import { createAuth, sameOrigin } from './auth.js';
 import { createSecrets } from './secrets.js';
 import { createPrivacy } from './privacy.js';
 import { createBlacklist } from './blacklist.js';
+import { createTiming } from './timing.js';
 import { createMailer } from './mail.js';
 import { trelloRouter } from './trello.js';
+import { createTrelloSnapshot } from './trelloSnapshot.js';
 import { apiRouter } from './api.js';
 
 export const SECURITY_HEADERS = {
@@ -32,17 +34,19 @@ export const SECURITY_HEADERS = {
  * @param o.deferMail   send mails only at mailer.commit(), after the data was saved (Netlify; see mail.js)
  * @param o.publicDir   serve logo, favicon and fonts (a long-running server; Netlify serves them as static files)
  * @param o.distDir     serve the built app
+ * @param o.trelloSnapshot  keep the home-screen numbers of every Trello board loaded (trelloSnapshot.js; a long-running server)
  */
-export function createServer({ docs, audit, secretsKey, secure, hosting = 'render', pollMs = 15000, deferMail = false, publicDir = null, distDir = null }) {
+export function createServer({ docs, audit, secretsKey, secure, hosting = 'render', pollMs = 15000, deferMail = false, publicDir = null, distDir = null, trelloSnapshot = false }) {
   // Created in this order on purpose: the team data first (see blobDocs).
   const store = createStore(docs);
   const secrets = createSecrets(docs, secretsKey);
   const accounts = createAccounts(docs, secretsKey);
   const blacklist = createBlacklist(docs);
+  const timing = createTiming(docs);
   const privacy = createPrivacy({ accounts, store, audit, blacklist });
   const auth = createAuth({ accounts, audit, secure, hosting });
   const mailer = createMailer({ secrets, audit, deferred: deferMail });
-  const trello = trelloRouter(() => secrets.get('trello'));
+  const trello = trelloRouter(() => secrets.get('trello'), trelloSnapshot ? createTrelloSnapshot(docs) : null);
 
   const app = express();
   app.set('trust proxy', 1); // Render and Netlify sit behind a proxy
@@ -76,7 +80,7 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   app.use(auth.guard);
 
   app.use('/api/trello', trello);
-  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, mailer, pollMs }));
+  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs }));
 
   // The app itself
   if (distDir && fs.existsSync(distDir)) {

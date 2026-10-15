@@ -20,6 +20,7 @@ export const RIGHTS = [
   { key: 'ideas.manage', group: 'beheer', label: 'Bugs en ideeën afhandelen', desc: 'Alle gemelde bugs en ideeën zien onder Instellingen, hun status wijzigen en ze verwijderen.' },
   { key: 'members.manage', group: 'beheer', label: 'Leden en rechten beheren', desc: 'Mensen uitnodigen, rollen en rechten wijzigen, accounts deactiveren.' },
   { key: 'blacklist.manage', group: 'beheer', label: 'Blacklist beheren', desc: 'De hele blacklist zien, kandidaten erop zetten, voordrachten bevestigen of afwijzen, vermeldingen wijzigen en verwijderen.' },
+  { key: 'timesaved', group: 'beheer', label: 'Tijdwinst bekijken', desc: 'De tijd die het team per week in de app werkt naast de afgesproken tijd van vroeger per taak zien, en die afgesproken tijd instellen.' },
   { key: 'integrations', group: 'eigenaar', label: 'Integraties en API-sleutels', desc: 'Sleutels voor Trello en de mailserver instellen en testen.' },
   { key: 'audit.view', group: 'eigenaar', label: 'Auditlog bekijken', desc: 'Wie heeft wanneer ingelogd, rechten gewijzigd of sleutels aangepast.' },
   { key: 'privacy', group: 'eigenaar', label: 'Privacy-tools', desc: 'Gegevens van een persoon exporteren of anonimiseren, bewaartermijnen instellen.' },
@@ -31,11 +32,11 @@ export const RIGHT_GROUPS = { werk: 'Werk', beheer: 'Beheer', eigenaar: 'Eigenaa
 export const LEVELS = { owner: { label: 'Eigenaar', rank: 3 }, admin: { label: 'Beheerder', rank: 2 }, member: { label: 'Lid', rank: 1 } };
 
 const WORK = ['campaigns.all', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send', 'questions.ask', 'blacklist.view'];
-const ADMIN = ['rules.edit', 'trello.link', 'assign', 'ideas.manage', 'members.manage', 'blacklist.manage'];
+const ADMIN = ['rules.edit', 'trello.link', 'assign', 'ideas.manage', 'members.manage', 'blacklist.manage', 'timesaved'];
 
 export const ROLES = {
   dev: { label: 'Dev', level: 'owner', rights: RIGHT_KEYS, desc: 'Alles, inclusief integraties, auditlog en privacy-tools.' },
-  teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello, regels en de blacklist.' },
+  teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello, regels, de blacklist en tijdwinst.' },
   marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send'], desc: 'Campagnes, monitorstatus, klantfeedback, campagnewijzigingen en herinneringen.' },
   accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet alles wat een Recruitment Marketeer ziet, maar wijzigt niets. Kan vragen stellen over campagnes.' },
   recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own', 'blacklist.view'], desc: 'Eigen campagnes, wekelijkse feedback, Live campagnes en de blacklist raadplegen.' },

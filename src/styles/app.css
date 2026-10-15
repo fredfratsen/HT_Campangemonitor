@@ -37,6 +37,17 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .member-row > span:last-child{justify-content:flex-start !important}
 }
 
+/* Settings › Tijdwinst: a table per week; on phones each task stacks, with a label above each value */
+.ts-row{display:grid;grid-template-columns:minmax(150px,1.6fr) repeat(4,minmax(78px,1fr));gap:8px;align-items:baseline}
+@media (max-width: 640px){
+  .ts-head{display:none !important}
+  .ts-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;padding-bottom:8px}
+  .ts-row > .ts-name{grid-column:1 / -1}
+  .ts-row > [data-l]{text-align:left !important;padding:2px 0 !important}
+  .ts-row > [data-l]::before{content:attr(data-l);display:block;font-size:11px;font-weight:400;color:#8C8C8A}
+  .ts-row > [data-l]:empty{display:none}
+}
+
 @keyframes navItemIn{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
 @keyframes panelIn{from{transform:translate3d(100%,0,0)}to{transform:none}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}

@@ -8,6 +8,7 @@ import IntegrationsTab from './IntegrationsTab.jsx';
 import AuditTab from './AuditTab.jsx';
 import PrivacyTab from './PrivacyTab.jsx';
 import IdeasTab from './IdeasTab.jsx';
+import TimeSavedTab from './TimeSavedTab.jsx';
 
 // count: a number shown on the tab, such as new bugs and ideas.
 export const SETTINGS_TABS = [
@@ -15,6 +16,7 @@ export const SETTINGS_TABS = [
   { key: 'members', label: 'Leden', right: 'members.manage', C: MembersTab },
   { key: 'roles', label: 'Rollen & rechten', right: null, C: RolesTab },
   { key: 'ideas', label: 'Bugs & ideeën', right: 'ideas.manage', C: IdeasTab, count: s => s.newIdeas },
+  { key: 'timesaved', label: 'Tijdwinst', right: 'timesaved', C: TimeSavedTab },
   { key: 'integrations', label: 'Integraties', right: 'integrations', C: IntegrationsTab },
   { key: 'audit', label: 'Auditlog', right: 'audit.view', C: AuditTab },
   { key: 'privacy', label: 'Privacy', right: 'privacy', C: PrivacyTab },

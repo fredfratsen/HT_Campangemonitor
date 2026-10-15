@@ -22,6 +22,9 @@ services:
         value: production
       - key: DATA_DIR
         value: /var/data
+      # Weeks start on Monday in Dutch time: the server counts Trello cards per week for the snapshot.
+      - key: TZ
+        value: Europe/Amsterdam
       # Moving from Netlify: paste the exact SECRETS_KEY from Netlify, or 2FA and stored keys become unreadable.
       # New install: a long random value (openssl rand -hex 32). Never change it afterwards.
       - key: SECRETS_KEY

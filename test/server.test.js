@@ -157,6 +157,28 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.ok(!audit.includes('Vries'), 'the audit log has initials, not the name');
   });
 
+  test('time in the app: everyone sends it, only Tijdwinst sees the team totals, and they carry no names', async () => {
+    assert.equal((await S.rec.api('POST', '/api/timing', { seconds: { feedback: 120, other: 30 } })).status, 200);
+    assert.equal((await S.dev.api('POST', '/api/timing', { seconds: { feedback: 60 } })).status, 200);
+    assert.equal((await S.rec.api('POST', '/api/timing', { seconds: { feedback: 5000 } })).status, 400);
+    assert.equal((await S.rec.get('/api/timing')).status, 403);
+    assert.equal((await S.rec.api('PUT', '/api/timing/minutes', { minutes: { feedback: 1 } })).status, 403);
+
+    const r = await S.dev.get('/api/timing');
+    assert.deepEqual(Object.values(r.data.weeks), [{ feedback: 180, other: 30 }], 'one total for the team');
+    for (const who of ['Tessa', 'Test Recruiter', S.recId, 'Tsjerk', 'r-tsjerk']) assert.ok(!r.text.includes(who), who);
+    assert.ok(!(await S.dev.get('/api/state')).text.includes('"other":30'), 'not part of the shared data');
+
+    const set = await S.dev.api('PUT', '/api/timing/minutes', { minutes: { feedback: 12, overview: 'veel' } });
+    assert.equal(set.status, 400, 'nothing is saved when one value is wrong');
+    assert.deepEqual((await S.dev.get('/api/timing')).data.minutes, { feedback: null, klant: null, overview: null });
+    const ok = await S.dev.api('PUT', '/api/timing/minutes', { minutes: { feedback: 12, overview: 3 } });
+    assert.deepEqual(ok.data.minutes, { feedback: 12, klant: null, overview: 3 });
+    const audit = (await S.dev.get('/api/admin/audit?type=timing')).data.entries;
+    assert.deepEqual(audit.map(e => e.type), ['timing.minutes']);
+    assert.deepEqual(audit[0].details['Wekelijkse feedback'], { van: null, naar: 12 });
+  });
+
   test('a new bug or idea is mailed to the address the Dev set, through the mail server under Integraties', async () => {
     const smtp = fakeSmtp(), port = await smtp.listen();
     // The long-running server sends in the background; the Netlify function before it answers.

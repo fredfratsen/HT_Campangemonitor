@@ -161,6 +161,7 @@ export const privacyPage = ({ back = '/', hosting = 'render' } = {}) => page({ t
     <li>Wat je in de app vastlegt, met je naam erbij: feedback, klantfeedback, toewijzingen, meldingen en ideeën.</li>
     <li>Een bug of idee dat je meldt, gaat met je naam ook per e-mail naar de ontwikkelaar van de app.</li>
     <li>Een auditlog van beveiligingsgebeurtenissen (inloggen, rechten, sleutels, privacy-acties), met het IP-adres bij inlogpogingen.</li>
+    <li>Hoeveel tijd het team actief in de app werkt, per week en per soort scherm, opgeteld voor iedereen samen. Wie die tijd besteedde, wordt niet bewaard.</li>
   </ul>
   <h2>En over kandidaten?</h2>
   <p>De app telt kaarten op de Trello-borden per lijst, label en week, en leest de afwijsreden. Namen, contactgegevens en beschrijvingen van kandidaten worden daarbij niet opgehaald of opgeslagen.</p>
