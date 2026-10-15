@@ -257,9 +257,28 @@ npm run build
 NODE_ENV=production SECRETS_KEY=something-long-and-random npm start   # http://localhost:3000
 ```
 
+### Fake Trello
+
+To try the Trello side without a Trello account, `scripts/fake-trello.js` stands in for the Trello API: six demo
+clients with a few functions each and candidates over the last weeks. Each board takes 2 seconds to load
+(`FAKE_TRELLO_DELAY`, in ms), so you can see the app show the [Trello snapshot](#trello-snapshot) first and update
+it after. Every minute the first function of each client gets one more new candidate (up to 4, then back), so the
+numbers move between logins. It only works with `FAKE_TRELLO=1`, fills in Trello keys when none are set, and says
+so at the top of the log (`[nep-trello]`). **Never use it in production.**
+
+- Locally: `npm run dev:fake-trello`.
+- On the stage service (Render, branch `CI_Testing`): set the start command to
+  `node --import ./scripts/fake-trello.js server/index.js` (Settings › Build & Deploy) and add `FAKE_TRELLO=1` under
+  Environment. To go back to the real Trello, set the start command back to `npm start` and remove `FAKE_TRELLO`.
+
+To see the snapshot at work: link the demo boards in Toewijzing, wait for *Trello bijgewerkt* under Databron, log
+out and log in again. The numbers are there at once, with *Stand HH:MM · bijwerken…*, and update when the boards
+are in.
+
 | Script | What it does |
 |---|---|
 | `npm run dev` | Runs the API server on :3000 (restarts when `server/` changes) and the Vite dev server on :5173 |
+| `npm run dev:fake-trello` | The same, with demo boards instead of Trello (see [Fake Trello](#fake-trello)) |
 | `npm run build` | Builds the frontend into `dist/` |
 | `npm start` | Starts the server, which serves `dist/` and the API |
 | `npm run preview` | Build, then start |
@@ -281,6 +300,7 @@ shell or in Render's **Environment** tab. `.env.example` lists them all.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | no | Fallback for the mail server when none is stored under Instellingen › Integraties. All five are needed. |
 | `OWNER_RECOVERY` | only when locked out | `1` prints reset links for the Dev accounts at startup (on Netlify: when you open `/setup`). See [First start](#first-start-the-dev-account). |
 | `PORT` | no | Default `3000`. Render sets it automatically. |
+| `FAKE_TRELLO`, `FAKE_TRELLO_DELAY` | only for trying things | `1`: demo boards instead of Trello, with the server started through `scripts/fake-trello.js`; the delay per board in ms (default 2000). See [Fake Trello](#fake-trello). Never in production. |
 
 `APP_PASSWORD` and `SESSION_SECRET` are no longer used and can be removed.
 
@@ -466,6 +486,7 @@ netlify/functions/server.mjs   the Netlify Function (routes its paths to server/
 test/             node:test suites (npm test), a fake Blobs store and a local Netlify harness
 public/           logo, favicon, self-hosted fonts
 scripts/dev.js    runs the API server and Vite together
+scripts/fake-trello.js   demo boards instead of Trello, for trying things (FAKE_TRELLO=1; never in production)
 render.yaml       Render Blueprint
 Campagnemonitor.html   original Claude Design export (reference only)
 ```
