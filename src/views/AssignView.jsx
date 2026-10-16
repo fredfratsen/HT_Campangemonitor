@@ -17,7 +17,7 @@ export default function AssignView({ v }) {
         <div>
           <div style={eyebrow}>Beheer</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Toewijzing</h1>
-          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '640px', textWrap: 'pretty' }}>Elk Trello-bord is een klant en elk label een functie, met een eigen campagne voor de feedback van recruiter en klant. Wijs per klant een recruiter en een Recruitment Marketeer toe: zij volgen alle functies. Nieuwe borden en functies verschijnen hier vanzelf. Vink meerdere klanten aan om ze in één keer toe te wijzen.</div>
+          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '640px', textWrap: 'pretty' }}>Elk Trello-bord is een klant. Elke kolom ‘Nieuwe Sollicitant | functie’ en elk label is een functie, met een eigen campagne voor de feedback van recruiter en klant. Wijs per klant een recruiter en een Recruitment Marketeer toe: zij volgen alle functies. Nieuwe borden en functies verschijnen hier vanzelf. Vink meerdere klanten aan om ze in één keer toe te wijzen.</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#5C5C5A' }}><span style={{ width: '7px', height: '7px', borderRadius: '50%', background: asg.syncDot }} />{asg.syncText}</div>
       </header>

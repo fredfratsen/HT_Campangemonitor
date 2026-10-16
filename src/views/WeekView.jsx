@@ -3,14 +3,14 @@ import Button from '../components/Button.jsx';
 import NewTabLink, { cardClick } from '../components/NewTabLink.jsx';
 
 export default function WeekView({ v }) {
-  const { canAssign, canRemind, canSendRemind, emptyHint, goAssign, goCampaigns, groups, liveEmpty, remind, remindLabel, remindNote, sum, wk } = v;
+  const { canAssign, canRemind, canSendRemind, emptyHint, emptyTitle, goAssign, goCampaigns, groups, liveEmpty, remind, remindLabel, remindNote, sum, wk } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '36px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>{wk.today} · check-in ronde</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Week {wk.n}</h1>
-          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px' }}>{wk.range} · {sum.active} actieve campagnes</div>
+          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px' }}>{wk.range} · {sum.active} actieve campagnes{sum.scope}</div>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <Button variant="outline" onClick={goCampaigns}>Alle campagnes</Button>
@@ -51,7 +51,7 @@ export default function WeekView({ v }) {
       </div>
       {liveEmpty ? <div style={{ background: '#FFFFFF', border: '1px dashed #C0BDB9', borderRadius: '12px', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px' }}>Nog geen campagnes gekoppeld</div>
+            <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px' }}>{emptyTitle}</div>
             <div style={{ fontSize: '14px', color: '#5C5C5A' }}>{emptyHint}</div>
           </div>
           {canAssign ? <Button variant="primary" onClick={goAssign}>Naar Toewijzing</Button> : null}

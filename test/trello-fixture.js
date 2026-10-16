@@ -23,6 +23,53 @@ export const CARD = {
 
 const card = (id, list, labels, extra = {}) => ({ id, idList: L[list], idLabels: labels, closed: false, customFieldItems: [], ...extra });
 
+// A board that has its functions as intake lists ("Nieuwe Sollicitant | Kok") instead of labels. Cards that moved on
+// carry idIntake: the intake list they came in through, as the proxy adds it from Trello's history.
+export const IN = {
+  info: '2200000000000000000000a0', kok: '2200000000000000000000a1', bediening: '2200000000000000000000a2', afwas: '2200000000000000000000a3',
+  barista: '2200000000000000000000a4', contact: '2200000000000000000000a5', gescreend: '2200000000000000000000a6', afgewezen: '2200000000000000000000a7',
+};
+export const SPOED = 'dddddddddddddddddddddddd';
+export const INTAKE_CARD = {
+  inKok: idAt(dayOf(CUR, 0), 11),       // still in Nieuwe Sollicitant | Kok, no label
+  kokMoved: idAt(dayOf(CUR, 0), 12),    // moved on to Contactpoging, came in through Kok
+  bedMislabeled: idAt(dayOf(CUR, 1), 13), // came in through Bediening, now Gescreend, but labelled Kok
+  inBedSpoed: idAt(dayOf(CUR, 1), 14),  // in Nieuwe Sollicitant - Bediening, with the label Spoed
+  labelOnly: idAt(dayOf(CUR, 2), 15),   // older card without an intake list: follows its label Kok
+  none: idAt(dayOf(CUR, 2), 16),        // no intake list, no label: only the board as a whole
+  info: idAt(dayOf(CUR, 2), 17),        // Informatie: never counted
+  barista: idAt(dayOf(CUR, 3), 18),     // came in through an archived intake list, now Afgewezen
+};
+
+export function intakeBoard() {
+  const c = (id, list, labels = [], extra = {}) => ({ id, idList: IN[list], idLabels: labels, closed: false, customFieldItems: [], ...extra });
+  return {
+    id: BOARD_ID, name: 'Hotel Zee',
+    lists: [
+      { id: IN.info, name: 'Informatie voor de recruiter', closed: false },
+      { id: IN.kok, name: 'Nieuwe Sollicitant | Kok', closed: false },
+      { id: IN.bediening, name: 'nieuwe sollicitanten - Bediening', closed: false },
+      { id: IN.afwas, name: 'Nieuwe Sollicitant: Afwas', closed: false },
+      { id: IN.barista, name: 'Nieuwe Sollicitant | Barista', closed: true },
+      { id: IN.contact, name: 'Contactpoging', closed: false },
+      { id: IN.gescreend, name: 'Gescreend', closed: false },
+      { id: IN.afgewezen, name: 'Afgewezen', closed: false },
+    ],
+    labels: [{ id: KOK, name: 'kok ', color: 'green' }, { id: SPOED, name: 'Spoed', color: 'red' }],
+    customFields: [],
+    cards: [
+      c(INTAKE_CARD.inKok, 'kok'),
+      c(INTAKE_CARD.kokMoved, 'contact', [], { idIntake: IN.kok }),
+      c(INTAKE_CARD.bedMislabeled, 'gescreend', [KOK], { idIntake: IN.bediening }),
+      c(INTAKE_CARD.inBedSpoed, 'bediening', [SPOED]),
+      c(INTAKE_CARD.labelOnly, 'contact', [KOK]),
+      c(INTAKE_CARD.none, 'contact'),
+      c(INTAKE_CARD.info, 'info'),
+      c(INTAKE_CARD.barista, 'afgewezen', [], { idIntake: IN.barista }),
+    ],
+  };
+}
+
 export function board() {
   return {
     id: BOARD_ID, name: 'Hotel Zee',

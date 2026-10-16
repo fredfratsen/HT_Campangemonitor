@@ -34,7 +34,7 @@ const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'htcm-snapsh
 
 /** The Trello proxy with a snapshot in dir, as server/app.js sets it up on Render. */
 async function serve(dir) {
-  const docs = fileDocs(dir), router = trelloRouter(() => ({ key: 'k', token: 't' }), createTrelloSnapshot(docs));
+  const docs = fileDocs(dir), router = trelloRouter(() => ({ key: 'k', token: 't' }), { snapshot: createTrelloSnapshot(docs) });
   const server = await new Promise(ok => { const s = express().use('/api/trello', router).listen(0, () => ok(s)); });
   servers.add(server);
   const base = `http://127.0.0.1:${server.address().port}/api/trello`;

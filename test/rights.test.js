@@ -2,7 +2,7 @@
 // data (server/authorize.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rightsOf, can, canViewAs, manageError, overridesFor, ROLES, RIGHT_KEYS } from '../src/lib/permissions.js';
+import { rightsOf, can, canViewAs, manageError, overridesFor, visibleCampaigns, ROLES, RIGHT_KEYS } from '../src/lib/permissions.js';
 import { makeAuthorizer, NO_RIGHT, REMINDED } from '../server/authorize.js';
 import { DEF_RULES } from '../src/lib/constants.js';
 
@@ -165,6 +165,18 @@ test('account manager sees campaigns but changes nothing', () => {
   assert.equal(a('live.mkt', '1', '', 'Anouk'), NO_RIGHT);
   assert.equal(a('rules', 'qRed', 4, 9), NO_RIGHT);
   assert.equal(a('inbox', '1', undefined, { id: 1, to: 'Kim', from: 'Anouk', kind: 'reminder', title: 't' }), NO_RIGHT, 'no reminders');
+});
+
+test('Recruitment Marketeers see their own clients; Dev, Teamlead and Account Manager see all', () => {
+  assert.ok(can(mkt, 'campaigns.own') && !can(mkt, 'campaigns.all'));
+  for (const who of [dev, lead, am]) assert.ok(can(who, 'campaigns.all'), who.role);
+  const cs = [{ id: 'a', client: 'Hotel A' }, { id: 'b', client: 'Hotel B' }, { id: 'c', client: 'Hotel C' }];
+  const mktOf = c => ({ 'Hotel A': 'Danielle', 'Hotel B': 'Mare' })[c.client] || '';
+  const sees = a => visibleCampaigns(cs, { name: a.name, rights: rightsOf(a) }, mktOf).map(c => c.id);
+  assert.deepEqual(sees(mkt), ['a'], 'not another marketeer’s client, nor one without a marketeer');
+  assert.deepEqual(sees({ ...mkt, grants: ['campaigns.all'] }), ['a', 'b', 'c'], 'a marketeer covering for a colleague');
+  for (const who of [dev, lead, am]) assert.deepEqual(sees(who), ['a', 'b', 'c'], who.role);
+  assert.deepEqual(sees({ ...kim, grants: ['feedback.client'] }), ['a', 'b', 'c'], 'without either right nothing changes');
 });
 
 test('questions go out with questions.ask; answers only to a question sent to you', () => {

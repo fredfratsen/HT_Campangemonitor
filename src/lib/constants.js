@@ -35,8 +35,17 @@ export const TR_INACTIVE = [
   ['Hotel Maasoever', ['Receptionist'], 75], ['Pannenkoekenhuis Oma', ['Allround'], 402], ['Lunchcafé Kade', ['Barista'], 133]
 ];
 export const RANK = { gescreend: 1, gesprek: 2, voorgesteld: 3, geplaatst: 4 };
+/**
+ * The function of an intake list, where new candidates of one function come in ("Nieuwe Sollicitant | Kok"; also
+ * with -, – or : and in any case), else null. Clients add these lists themselves for a new function.
+ */
+export function intakeName(name) {
+  const m = /^\s*nieuwe\s+sollicitant(?:en)?\s*[|:\-–—]\s*(.*?)\s*$/i.exec(name || '');
+  return m && m[1] ? m[1] : null;
+}
 /** Maps a Trello list name to a pipeline stage. */
 export function stageOf(name) {
+  if (intakeName(name)) return 'nieuw';
   const n = name.toLowerCase();
   if (n.includes('informatie')) return 'info';
   if (n.includes('afgewezen')) return 'afgewezen';
@@ -64,6 +73,8 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 19, date: '16 okt', tag: 'Verbeterd', title: 'Functies uit kolommen, zonder labels', text: 'Een kandidaat telt mee voor de functie van de kolom waarin hij binnenkwam, zoals ‘Nieuwe Sollicitant | Kok’, ook nadat de kaart naar Contactpoging, Gescreend of Afgewezen is verplaatst. Labels zetten is daarvoor niet meer nodig. Maakt een klant een nieuwe kolom aan, dan staat die functie vanzelf onder Toewijzing. De cijfers uit Trello worden voortaan elke 5 minuten bijgewerkt, ook als je de app open laat staan.' },
+  { id: 18, date: '15 okt', tag: 'Verbeterd', title: 'Recruitment Marketeers zien hun eigen klanten', text: 'In het weekoverzicht, bij Campagnes en bij Feedback klant zie je als Recruitment Marketeer alleen nog de klanten waarvan jij de Recruitment Marketeer bent. Herinneringen gaan dus ook alleen naar de recruiters van jouw klanten. De teamlead wijst klanten toe onder Toewijzing. De teamlead, Account Managers en de developer zien nog steeds alle klanten.' },
   { id: 17, date: '15 okt', tag: 'Verbeterd', title: 'Feedback over de week van nu', text: 'De wekelijkse feedback gaat voortaan over de lopende week, niet meer over de week ervoor. Alle feedback voor alle functies is binnen in dezelfde week: de feedback voor week 42 geef je dus in week 42. Wat je eerder voor week 41 invulde, blijft bewaard. De signalen over instroom (weinig kandidaten, dalende instroom) kijken wel naar de vorige, volledige week, zodat niet elke campagne op maandag op Actie nodig staat.' },
   { id: 16, date: '15 okt', tag: 'Verbeterd', title: 'Meteen cijfers na het inloggen', text: 'Na het inloggen zie je direct de cijfers van de laatste keer dat Trello is geladen, door wie dan ook, in plaats van nullen. Op de achtergrond haalt de app de actuele stand op en werkt de cijfers bij. Onder Databron in het menu zie je van wanneer ze zijn. De pipeline en redenen van afwijzing op een campagne komen daarna.' },
   { id: 15, date: '14 okt', tag: 'Nieuw', title: 'Tijd in de app wordt gemeten', text: 'De app houdt bij hoeveel tijd het team actief in de app werkt, per week en per soort scherm, opgeteld voor iedereen samen. Wie die tijd besteedde, wordt niet bewaard. De teamlead ziet de totalen onder Instellingen › Tijdwinst.' },

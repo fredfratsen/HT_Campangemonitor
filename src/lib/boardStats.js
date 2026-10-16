@@ -1,23 +1,67 @@
 // Trello boards → campaigns. Used by the app (full boards) and the server (the snapshot for the home screens, see
 // server/trelloSnapshot.js), so both count the same way.
 //
-// A campaign is a board ('*': linked as one campaign) or one label on it (a function). Its numbers per week come
-// from the cards by application date (Sollicitatiedatum, else when the card was made); cards in a list with
-// 'Informatie' in the name don't count. Archived cards count in their week, but not on today's call list.
+// A campaign is a board ('*': linked as one campaign) or one function on it. Its numbers per week come from the
+// cards by application date (Sollicitatiedatum, else when the card was made); cards in a list with 'Informatie' in
+// the name don't count. Archived cards count in their week, but not on today's call list.
+//
+// A function is an intake list ("Nieuwe Sollicitant | Kok", see intakeName) or a label. A card counts for the intake
+// list it is in or came in through (idIntake: the server adds it from Trello's history), so it keeps its function
+// after moving on to Contactpoging or Gescreend; the intake list goes before its labels. Only a card without one
+// follows its labels. An intake list and a label with the same name are one function, under the label's id.
 import { CUR, weekOf } from './weeks.js';
-import { RANK, MON_FIELDS, stageOf, cardTs } from './constants.js';
+import { RANK, MON_FIELDS, stageOf, intakeName, cardTs } from './constants.js';
 
 /** How many weeks a campaign shows, up to and including the feedback week. */
 export const LIVE_WEEKS = 12;
 const emptyTr = () => ({ nieuw: 0, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, reasons: {} });
+const norm = s => (s || '').trim().toLowerCase();
+/** The key of a Trello link (a campaign) in boardStats: its label or intake list, or '*' for the whole board. */
+export const linkKey = k => k.labelId || k.listId || '*';
+
+/** of(card): the function keys a card counts for. fns: the functions of the open intake lists, one per name. */
+function functions(bd) {
+  const labelOf = {}, byName = {}, key = {}, fns = [];
+  for (const l of bd.labels || []) if (l.name && !labelOf[norm(l.name)]) labelOf[norm(l.name)] = l.id;
+  for (const l of bd.lists || []) {
+    const name = intakeName(l.name);
+    if (!name) continue;
+    const label = labelOf[norm(name)] || null;
+    key[l.id] = byName[norm(name)] || (byName[norm(name)] = label || l.id);
+    if (!l.closed && !fns.some(f => f.id === key[l.id])) fns.push({ id: key[l.id], name, labelId: label, listId: l.id });
+  }
+  const of = c => { const via = key[c.idList] ? c.idList : c.idIntake; return via ? [key[via] || via] : c.idLabels || []; };
+  return { of, fns };
+}
 
 /**
- * Per campaign key ('*' or a label id): minW, the earliest week with a card; weeks, per week the new candidates,
+ * The functions on a board, for Toewijzing: its open intake lists (also while still empty) and its named labels
+ * that have cards, each with the number of cards (Informatie not counted).
+ */
+export function boardFunctions(bd) {
+  const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
+  const { of, fns } = functions(bd), n = {};
+  for (const c of bd.cards || []) if (stg[c.idList] !== 'info') for (const k of new Set(of(c))) n[k] = (n[k] || 0) + 1;
+  const out = fns.map(f => ({ ...f, cards: n[f.id] || 0 }));
+  for (const l of bd.labels || []) if (l.name && n[l.id] && !out.some(f => f.id === l.id)) out.push({ id: l.id, name: l.name, labelId: l.id, listId: null, cards: n[l.id] });
+  return out;
+}
+
+/** How many candidates (Informatie not counted) have no function: no intake list and no label. Trello test page. */
+export function withoutFunction(bd) {
+  const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
+  const { of } = functions(bd);
+  return (bd.cards || []).filter(c => stg[c.idList] !== 'info' && !of(c).length).length;
+}
+
+/**
+ * Per campaign key ('*', or a function: a label or intake list id): minW, the earliest week with a card; weeks, per week the new candidates,
  * how far they got (gescreend … geplaatst) and why they were rejected; live, the open cards in Nieuw and
  * Contactpoging now. A label without cards has no key.
  */
 export function boardStats(bd) {
   const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
+  const fnsOf = functions(bd).of;
   const cfs = bd.customFields || [], rf = cfs.find(f => /reden\s*afgewezen/i.test(f.name)), sd = cfs.find(f => /sollicitatiedatum/i.test(f.name)), ropt = {};
   ((rf && rf.options) || []).forEach(o => { ropt[o.id] = o.value && o.value.text; });
   const out = {};
@@ -27,7 +71,7 @@ export function boardStats(bd) {
     const it = c.customFieldItems || [], dv = sd && it.find(i => i.idCustomField === sd.id), rv = rf && it.find(i => i.idCustomField === rf.id);
     const w = weekOf(dv && dv.value && dv.value.date ? Date.parse(dv.value.date) : cardTs(c.id)), r = RANK[stage] || 0;
     const reason = rv ? (ropt[rv.idValue] || (rv.value && rv.value.text) || null) : null;
-    for (const key of ['*', ...new Set(c.idLabels || [])]) {
+    for (const key of ['*', ...new Set(fnsOf(c))]) {
       const s = out[key] || (out[key] = { minW: w, weeks: {}, live: { nieuw: 0, contact: 0 } });
       if (w < s.minW) s.minW = w;
       const t = s.weeks[w] || (s.weeks[w] = emptyTr());

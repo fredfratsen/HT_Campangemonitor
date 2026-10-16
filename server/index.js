@@ -16,9 +16,9 @@ const APP_URL = (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || `http
 if (process.env.APP_PASSWORD) console.warn('APP_PASSWORD wordt niet meer gebruikt: iedereen logt in met een eigen account. Je kunt de variabele verwijderen.');
 
 const docs = fileDocs(DATA_DIR);
-const { app, accounts, secrets, audit, housekeeping } = createServer({
+const { app, accounts, secrets, audit, trello, housekeeping } = createServer({
   docs, audit: createAudit(DATA_DIR), secretsKey: loadSecretsKey(DATA_DIR, PROD), secure: PROD,
-  hosting: 'render', publicDir: path.join(ROOT, 'public'), distDir: path.join(ROOT, 'dist'), trelloSnapshot: true,
+  hosting: 'render', publicDir: path.join(ROOT, 'public'), distDir: path.join(ROOT, 'dist'), trelloMemory: true,
 });
 
 /** Prints a link to take ownership when nobody can (first start, or OWNER_RECOVERY=1). */
@@ -53,6 +53,10 @@ const server = app.listen(PORT, err => {
   ownerLinks(process.env.OWNER_RECOVERY === '1');
   // Hourly: housekeeping, and a fresh setup link while nobody has claimed the Dev account yet.
   setInterval(() => { tidy(); ownerLinks(false); }, 36e5).unref();
+  // Every 5 minutes: the Trello boards that changed, so the numbers and the intake memory keep up without anyone in
+  // the app (server/trello.js).
+  trello.refresh();
+  setInterval(() => trello.refresh(), 5 * 6e4).unref();
 });
 const shutdown = () => {
   docs.flushAll();

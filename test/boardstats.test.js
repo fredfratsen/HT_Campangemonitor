@@ -2,9 +2,10 @@
 // show right after login, before the full boards are loaded in the background.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardStats, quickStats, liveCampaign } from '../src/lib/boardStats.js';
+import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, linkKey } from '../src/lib/boardStats.js';
+import { intakeName, stageOf } from '../src/lib/constants.js';
 import { CUR } from '../src/lib/weeks.js';
-import { board, BOARD_ID, KOK, BEDIENING } from './trello-fixture.js';
+import { board, intakeBoard, BOARD_ID, KOK, BEDIENING, IN, INTAKE_CARD } from './trello-fixture.js';
 
 const tr = (nieuw, o = {}) => ({ nieuw, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, reasons: {}, ...o });
 
@@ -41,6 +42,72 @@ test('a campaign from the snapshot shows the same weeks and numbers as one from 
   assert.equal(full.quick, undefined);
   assert.equal(full.weeks[1].tr.gesprek, 1);
   assert.equal(quick.weeks[1].tr.gesprek, 0);
+});
+
+test('an intake list "Nieuwe Sollicitant | <functie>" names a function, in the ways clients write it', () => {
+  const cases = [
+    ['Nieuwe Sollicitant | Kok', 'Kok'],
+    ['nieuwe sollicitanten - Bediening', 'Bediening'],
+    ['Nieuwe Sollicitant: Afwas ', 'Afwas'],
+    ['Nieuwe sollicitant – Sous-chef', 'Sous-chef'],
+    ['  NIEUWE SOLLICITANT|Gastvrouw', 'Gastvrouw'],
+    ['Nieuwe Sollicitant', null],
+    ['Nieuwe Sollicitant | ', null],
+    ['Nieuw', null],
+    ['Contactpoging', null],
+    ['Kok – nieuwe sollicitant', null],
+  ];
+  for (const [name, want] of cases) assert.equal(intakeName(name), want, name);
+  assert.equal(stageOf('Nieuwe Sollicitant | Gastvrouw gesprekken'), 'nieuw', 'an intake list is always Nieuw, whatever the function is called');
+});
+
+test('a candidate counts for the intake list it came in through, also after moving on, and the list goes before a label', () => {
+  const s = boardStats(intakeBoard());
+  assert.deepEqual(Object.keys(s).sort(), ['*', KOK, IN.bediening, IN.barista].sort(), 'no key for Spoed: the intake list decides');
+  assert.deepEqual(s['*'].weeks[CUR], tr(7, { gescreend: 1 }), 'every card once, Informatie not');
+  assert.deepEqual(s['*'].live, { nieuw: 2, contact: 3 });
+  // Kok: the label and the list "Nieuwe Sollicitant | Kok" are one function, under the label: inKok, kokMoved, labelOnly.
+  assert.deepEqual(s[KOK].weeks[CUR], tr(3));
+  assert.deepEqual(s[KOK].live, { nieuw: 1, contact: 2 });
+  // Bediening: bedMislabeled (labelled Kok, came in through Bediening) and inBedSpoed.
+  assert.deepEqual(s[IN.bediening].weeks[CUR], tr(2, { gescreend: 1 }));
+  assert.deepEqual(s[IN.bediening].live, { nieuw: 1, contact: 0 });
+  assert.deepEqual(s[IN.barista].weeks[CUR], tr(1), 'an archived intake list still counts for the cards that came in through it');
+});
+
+test('the functions of a board: open intake lists (also empty) and labels with cards, one per name', () => {
+  const fns = boardFunctions(intakeBoard()).sort((a, b) => a.name.localeCompare(b.name));
+  assert.deepEqual(fns, [
+    { id: IN.afwas, name: 'Afwas', labelId: null, listId: IN.afwas, cards: 0 },
+    { id: IN.bediening, name: 'Bediening', labelId: null, listId: IN.bediening, cards: 2 },
+    { id: KOK, name: 'Kok', labelId: KOK, listId: IN.kok, cards: 3 },
+  ]);
+  const old = boardFunctions(board()).sort((a, b) => a.name.localeCompare(b.name));
+  assert.deepEqual(old, [
+    { id: BEDIENING, name: 'Bediening', labelId: BEDIENING, listId: null, cards: 2 },
+    { id: KOK, name: 'Kok', labelId: KOK, listId: null, cards: 3 },
+  ], 'a board with only labels: as before, Informatie not counted');
+});
+
+test('a new intake list with the name of an archived one continues its function', () => {
+  const bd = intakeBoard(), NEW = '2200000000000000000000b4', card = INTAKE_CARD.inKok.replace(/.$/, 'f');
+  bd.lists.push({ id: NEW, name: 'Nieuwe Sollicitant - Barista', closed: false });
+  bd.cards.push({ id: card, idList: NEW, idLabels: [], closed: false, customFieldItems: [] });
+  assert.deepEqual(boardStats(bd)[IN.barista].weeks[CUR], tr(2), 'the old card and the one in the new list');
+  assert.equal(boardStats(bd)[NEW], undefined);
+  assert.deepEqual(boardFunctions(bd).find(f => f.name === 'Barista'), { id: IN.barista, name: 'Barista', labelId: null, listId: NEW, cards: 2 });
+});
+
+test('a campaign linked to an intake list, a label or the whole board gets those numbers', () => {
+  const s = boardStats(intakeBoard()), camp = k => liveCampaign({ id: 't', boardId: BOARD_ID, boardName: 'Hotel Zee', vac: 'x', rec: 'Kim', ...k }, s[linkKey(k)], {}, []);
+  assert.equal(camp({ labelId: null, listId: IN.bediening }).weeks.at(-1).leads, 2);
+  assert.equal(camp({ labelId: KOK }).weeks.at(-1).leads, 3);
+  assert.equal(camp({ labelId: null }).weeks.at(-1).leads, 7);
+});
+
+test('candidates without a function: no intake list and no label, Informatie not counted', () => {
+  assert.equal(withoutFunction(intakeBoard()), 1, 'only the card "none"');
+  assert.equal(withoutFunction(board()), 0);
 });
 
 test('a function without cards yet is a campaign of one empty week', () => {

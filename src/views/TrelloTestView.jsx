@@ -1,9 +1,10 @@
 // Trello-koppeling testen. Replaces the design's separate "Trello-koppeling test" page: the API key and token
 // live on the server (Instellingen › Integraties), so this page checks the connection and whether a board follows
-// the conventions the monitor relies on (list names, labels, custom fields).
+// the conventions the monitor relies on (list names, functions, custom fields).
 import React, { useEffect, useState } from 'react';
 import Button from '../components/Button.jsx';
-import { stageOf } from '../lib/constants.js';
+import { stageOf, intakeName } from '../lib/constants.js';
+import { boardFunctions, withoutFunction } from '../lib/boardStats.js';
 import { agoTxt } from '../lib/helpers.js';
 
 const STAGES = {
@@ -63,12 +64,13 @@ export default function TrelloTestView({ v, tget }) {
     const bd = board.data, stg = {};
     bd.lists.forEach(l => { stg[l.id] = stageOf(l.name); });
     const open = bd.cards.filter(c => !c.closed), counted = bd.cards.filter(c => stg[c.idList] !== 'info');
-    const lists = bd.lists.map(l => ({ name: l.name, stage: stg[l.id], n: open.filter(c => c.idList === l.id).length }));
+    const lists = bd.lists.filter(l => !l.closed).map(l => ({ name: l.name, stage: stg[l.id], fn: intakeName(l.name), n: open.filter(c => c.idList === l.id).length }));
     const has = s => lists.some(l => l.stage === s);
     const cfs = bd.customFields || [];
     const rf = cfs.find(f => /reden\s*afgewezen/i.test(f.name)), sd = cfs.find(f => /sollicitatiedatum/i.test(f.name));
-    const labels = bd.labels.map(l => ({ name: l.name || '(zonder naam)', color: l.color, n: counted.filter(c => c.idLabels.includes(l.id)).length })).filter(l => l.n);
-    an = { lists, has, rf, sd, labels, total: counted.length };
+    const fns = boardFunctions(bd).map(f => ({ ...f, from: f.listId && f.labelId ? 'kolom en label' : f.listId ? 'kolom' : 'label' }));
+    const nCol = fns.filter(f => f.listId).length;
+    an = { lists, has, rf, sd, fns, nCol, nLab: fns.length - nCol, loose: withoutFunction(bd), total: counted.length };
   }
 
   return (
@@ -76,7 +78,7 @@ export default function TrelloTestView({ v, tget }) {
       <header>
         <div style={{ fontSize: '12px', fontWeight: 500, letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Koppelingen</div>
         <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: 600, fontSize: '40px', lineHeight: 1.1, letterSpacing: '-.02em' }}>Trello-koppeling testen</h1>
-        <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '640px', textWrap: 'pretty' }}>Controleer of de server met Trello kan praten en of een bord de lijsten, labels en velden gebruikt waar de monitor op rekent.</div>
+        <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '640px', textWrap: 'pretty' }}>Controleer of de server met Trello kan praten en of een bord de lijsten, functies en velden gebruikt waar de monitor op rekent.</div>
       </header>
 
       <section style={card}>
@@ -106,24 +108,25 @@ export default function TrelloTestView({ v, tget }) {
           {board && board.error ? <div style={row}><span style={dot('#D32F2F')} />{board.error}</div> : null}
           {an ? <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <Check ok={an.has('nieuw')}>Lijst “Nieuw”</Check>
+              <Check ok={an.has('nieuw')}>Lijst “Nieuw” of “Nieuwe Sollicitant | functie”</Check>
               <Check ok={an.has('contact')} warn>Lijst “Contactpoging”</Check>
               <Check ok={!!an.sd} warn sub={an.sd ? 'week van sollicitatie' : 'ontbreekt: de aanmaakdatum van de kaart wordt gebruikt'}>Veld “Sollicitatiedatum”</Check>
               <Check ok={!!an.rf} warn sub={an.rf ? `${(an.rf.options || []).length} redenen` : 'ontbreekt: geen afwijsredenen in de monitor'}>Veld “Reden afgewezen”</Check>
-              <Check ok={an.labels.length > 0} warn sub={an.labels.length ? `${an.labels.length} labels, elk een functie met een eigen campagne` : 'geen labels: het hele bord wordt één campagne'}>Labels</Check>
+              <Check ok={an.fns.length > 0} warn sub={an.fns.length ? `${[an.nCol && `${an.nCol} uit kolommen “Nieuwe Sollicitant | …”`, an.nLab && `${an.nLab} uit labels`].filter(Boolean).join(', ')}; elk een eigen campagne` : 'geen kolommen “Nieuwe Sollicitant | …” en geen labels: het hele bord wordt één campagne'}>Functies</Check>
+              {an.fns.length ? <Check ok={!an.loose} warn sub={an.loose ? 'niet binnengekomen via een kolom “Nieuwe Sollicitant | …” en zonder label: ze tellen alleen mee voor de klant als geheel' : 'elke kandidaat hoort bij een functie'}>{an.loose ? `${an.loose} ${an.loose === 1 ? 'kandidaat' : 'kandidaten'} zonder functie` : 'Kandidaten zonder functie'}</Check> : null}
             </div>
             <div>
               <div style={{ ...eyebrow, marginBottom: '6px' }}>Lijsten · {an.total} kandidaten</div>
-              {an.lists.map((l, i) => { const S = STAGES[l.stage]; return (
+              {an.lists.map((l, i) => { const S = l.fn ? ['Binnenkomst', `functie ${l.fn}; telt mee in “Vandaag te bellen”`, '#1B1B63'] : STAGES[l.stage]; return (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 40px', gap: '12px', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #F5F2ED', fontSize: '14px' }}>
                   <span style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#5C5C5A' }}><span style={dot(S[2])} /><span style={{ color: S[2], fontWeight: 600 }}>{S[0]}</span> <span>· {S[1]}</span></span>
                   <span style={{ textAlign: 'right', fontWeight: 600 }}>{l.n}</span>
                 </div>); })}
             </div>
-            {an.labels.length ? <div>
-                <div style={{ ...eyebrow, marginBottom: '8px' }}>Labels</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>{an.labels.map((l, i) => <span key={i} style={{ fontSize: '13px', background: '#F5F2ED', borderRadius: '999px', padding: '4px 10px' }}>{l.name} <span style={{ color: '#8C8C8A' }}>{l.n}</span></span>)}</div>
+            {an.fns.length ? <div>
+                <div style={{ ...eyebrow, marginBottom: '8px' }}>Functies</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>{an.fns.map((f, i) => <span key={i} title={`Uit ${f.from}`} style={{ fontSize: '13px', background: '#F5F2ED', borderRadius: '999px', padding: '4px 10px' }}>{f.name} <span style={{ color: '#8C8C8A' }}>{f.cards} · {f.from}</span></span>)}</div>
               </div> : null}
           </> : null}
         </section> : null}

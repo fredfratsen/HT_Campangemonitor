@@ -5,7 +5,8 @@
 // (owner > admin > member) decides who may manage whom.
 
 export const RIGHTS = [
-  { key: 'campaigns.all', group: 'werk', label: 'Alle campagnes bekijken', desc: 'Weekoverzicht, Campagnes, Historie & analyse en de Health-regels. Zonder dit recht zie je alleen je eigen campagnes.' },
+  { key: 'campaigns.all', group: 'werk', label: 'Alle campagnes bekijken', desc: 'Weekoverzicht, Campagnes, Historie & analyse en de Health-regels, voor alle klanten. Zonder dit recht zie je alleen je eigen campagnes of klanten.' },
+  { key: 'campaigns.own', group: 'werk', label: 'Eigen klanten bekijken', desc: 'Weekoverzicht, Campagnes en Feedback klant, alleen voor de klanten waar jij de Recruitment Marketeer bent. Met Alle campagnes bekijken zie je alle klanten.' },
   { key: 'feedback.own', group: 'werk', label: 'Eigen recruiterfeedback invullen', desc: 'De wekelijkse feedback voor campagnes waar jij de recruiter bent, plus Live campagnes.' },
   { key: 'feedback.all', group: 'werk', label: 'Recruiterfeedback van anderen invullen', desc: 'Feedback invullen of corrigeren voor campagnes van andere recruiters.' },
   { key: 'feedback.client', group: 'werk', label: 'Klantfeedback vastleggen', desc: 'De terugkoppeling van de klant per week.' },
@@ -31,14 +32,14 @@ export const RIGHT_GROUPS = { werk: 'Werk', beheer: 'Beheer', eigenaar: 'Eigenaa
 
 export const LEVELS = { owner: { label: 'Eigenaar', rank: 3 }, admin: { label: 'Beheerder', rank: 2 }, member: { label: 'Lid', rank: 1 } };
 
-const WORK = ['campaigns.all', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send', 'questions.ask', 'blacklist.view'];
+const WORK = ['campaigns.all', 'campaigns.own', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send', 'questions.ask', 'blacklist.view'];
 const ADMIN = ['rules.edit', 'trello.link', 'assign', 'ideas.manage', 'members.manage', 'blacklist.manage', 'timesaved'];
 
 export const ROLES = {
   dev: { label: 'Dev', level: 'owner', rights: RIGHT_KEYS, desc: 'Alles, inclusief integraties, auditlog en privacy-tools.' },
   teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello, regels, de blacklist en tijdwinst.' },
-  marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send'], desc: 'Campagnes, monitorstatus, klantfeedback, campagnewijzigingen en herinneringen.' },
-  accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet alles wat een Recruitment Marketeer ziet, maar wijzigt niets. Kan vragen stellen over campagnes.' },
+  marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.own', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'reminders.send'], desc: 'Campagnes, monitorstatus, klantfeedback, campagnewijzigingen en herinneringen, voor de eigen klanten.' },
+  accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet de campagnes van alle klanten, maar wijzigt niets. Kan vragen stellen over campagnes.' },
   recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own', 'blacklist.view'], desc: 'Eigen campagnes, wekelijkse feedback, Live campagnes en de blacklist raadplegen.' },
 };
 export const ROLE_KEYS = Object.keys(ROLES);
@@ -55,6 +56,16 @@ export function rightsOf(a) {
   return s;
 }
 export const can = (a, right) => rightsOf(a).has(right);
+
+/**
+ * The campaigns `me` ({ name, rights: Set }) sees in Weekoverzicht, Campagnes and Feedback klant: with
+ * "campaigns.own" but not "campaigns.all" only those of the clients `me` is the Recruitment Marketeer of (by
+ * `mktOf(c)`), else all of them.
+ */
+export function visibleCampaigns(campaigns, me, mktOf) {
+  if (me.rights.has('campaigns.all') || !me.rights.has('campaigns.own')) return campaigns;
+  return campaigns.filter(c => mktOf(c) === me.name);
+}
 
 /**
  * "Bekijk als": whose view each role may open. Recruiters and Recruitment Marketeers can open each other's,

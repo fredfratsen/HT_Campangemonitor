@@ -3,14 +3,14 @@
 import React from 'react';
 import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, isoDate, mondayOf } from './lib/weeks.js';
 import {
-  RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS, stageOf,
+  RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
 } from './lib/constants.js';
-import { boardStats, liveCampaign } from './lib/boardStats.js';
+import { boardStats, boardFunctions, liveCampaign, linkKey } from './lib/boardStats.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
-import { ROLES, LEVELS, RIGHT_KEYS, canViewAs } from './lib/permissions.js';
+import { ROLES, LEVELS, RIGHT_KEYS, canViewAs, visibleCampaigns } from './lib/permissions.js';
 import { api } from './lib/api.js';
 import { ActivityMeter, groupOf, MAX_SEND_SEC } from './lib/activity.js';
 
@@ -36,6 +36,8 @@ import DevView from './views/DevView.jsx';
 const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as';
 // Below this width the sidebar is a slide-in menu (keep in sync with the media query in styles/app.css).
 const PHONE_MQ = '(max-width: 900px)';
+// How often the open app loads the Trello boards that changed (as the server does, see server/trello.js).
+const REFRESH_MS = 5 * 60000;
 // Without a server (the built files opened as a static site) there are no accounts: everything is allowed.
 const LOCAL_ACCOUNT = { id: 'local', name: 'Lokaal', role: 'dev', recName: null, level: 'owner', rights: RIGHT_KEYS, grants: [], revokes: [] };
 const prepCampaigns = cs => rollForward(cs.map(c => RENAME[c.rec] ? { ...c, rec: RENAME[c.rec] } : c).map(ensureReasons));
@@ -129,6 +131,7 @@ export default class App extends React.Component {
       if (this.state.view === 'checkin') this.enterCheckin();
       if (this.state.view === 'klant') this.enterKlant();
       if (this.state.source === 'trello') this.startLive();
+      this._trTimer = setInterval(() => this.refreshLive(), REFRESH_MS);
     });
   }
 
@@ -165,7 +168,7 @@ export default class App extends React.Component {
     this.meterTick();
   }
 
-  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); this.stopMeter(); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); this.stopMeter(); if (this.sync) this.sync.stop(); }
 
   /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
   navChanged() {
@@ -233,34 +236,59 @@ export default class App extends React.Component {
   }
   async startLive() {
     if (!this.state.config.trello) { this.setState({ sync: { state: 'nocred' } }); return; }
-    this._bd = this._bd || {}; this._st = this._st || {};
+    this._bd = this._bd || {}; this._st = this._st || {}; this._seen = this._seen || {};
     const run = (this._run || 0) + 1; this._run = run;
     this.setState({ sync: { state: 'loading', done: 0, total: 0 } });
     try {
       const boards = await this.tget('/members/me/boards');
       if (this._run !== run) return;
-      const lim = Date.now() - 30 * 864e5, linked = new Set(this.state.live.links.map(l => l.boardId));
-      const todo = boards.filter(b => linked.has(b.id) || new Date(b.dateLastActivity).getTime() >= lim).sort((a, b) => linked.has(b.id) - linked.has(a.id));
+      const todo = this.liveTodo(boards);
       this.setState({ boardList: boards, sync: { state: 'loading', done: 0, total: todo.length } });
       await this.loadBoards(todo, run);
       if (this._run !== run) return;
       this.setState({ boardData: { ...this._bd }, sync: { state: 'ok', at: new Date() } }, () => this.rebuildLive());
     } catch (e) { this.setState({ sync: { state: 'error', msg: e.message } }); }
   }
-  async loadBoards(list, run) {
+  /** The boards the app loads: the linked ones and the ones active in the last 30 days, linked first. */
+  liveTodo(boards) {
+    const lim = Date.now() - 30 * 864e5, linked = new Set(this.state.live.links.map(l => l.boardId));
+    return boards.filter(b => linked.has(b.id) || new Date(b.dateLastActivity).getTime() >= lim).sort((a, b) => linked.has(b.id) - linked.has(a.id));
+  }
+  /** Loads boards (from the list of boards). quiet: in the background, without "Trello laden…". */
+  async loadBoards(list, run, quiet = false) {
     let i = 0, n = 0; const total = list.length;
     const worker = async () => {
       while (i < list.length) {
         if (this._run !== run) return;
         const b = list[i++];
-        try { const bd = await this.tget(`/boards/${b.id}`); this._bd[b.id] = bd; this._st[b.id] = boardStats(bd); }
-        catch (e) { this._bd[b.id] = { error: e.message }; }
+        try { const bd = await this.tget(`/boards/${b.id}`); this._bd[b.id] = bd; this._st[b.id] = boardStats(bd); this._seen[b.id] = { activity: b.dateLastActivity, at: Date.now() }; }
+        catch (e) { if (!quiet || !this._bd[b.id] || this._bd[b.id].error) this._bd[b.id] = { error: e.message }; }
         n++;
-        if (n % 6 === 0 || n === total) this.setState({ boardData: { ...this._bd }, sync: { state: 'loading', done: n, total } }, () => this.rebuildLive());
+        if (n % 6 === 0 || n === total) this.setState({ boardData: { ...this._bd }, ...(quiet ? {} : { sync: { state: 'loading', done: n, total } }) }, () => this.rebuildLive());
         await new Promise(r => setTimeout(r, 180));
       }
     };
     await Promise.all([worker(), worker()]);
+  }
+  /**
+   * Every 5 minutes while the app is open and visible: the boards Trello reports changed since the app loaded them,
+   * or loaded over an hour ago. The server answers unchanged boards from memory (server/trello.js). After an error
+   * it tries the whole load again.
+   */
+  async refreshLive() {
+    const st = this.state, s = st.sync || {};
+    if (document.hidden || st.source !== 'trello' || !st.config.trello || s.state === 'loading' || s.state === 'nocred') return;
+    if (s.state === 'error' || !st.boardList) { this.startLive(); return; }
+    const run = this._run;
+    try {
+      const boards = await this.tget('/members/me/boards'), hour = Date.now() - 36e5;
+      if (this._run !== run) return;
+      const todo = this.liveTodo(boards).filter(b => { const x = this._seen[b.id]; return !x || x.activity !== b.dateLastActivity || x.at < hour; });
+      this.setState({ boardList: boards });
+      if (todo.length) await this.loadBoards(todo, run, true);
+      if (this._run !== run) return;
+      this.setState({ boardData: { ...this._bd }, sync: { state: 'ok', at: new Date() } }, () => this.rebuildLive());
+    } catch (e) { /* keeps the numbers it has; the next round tries again */ }
   }
   async loadInactive() {
     if (!this.state.boardList || !this._bd) return;
@@ -278,7 +306,7 @@ export default class App extends React.Component {
   liveCampaigns(L = this.state.live) {
     const full = this._st || {}, quick = this._quick || {};
     return L.links.filter(k => !(L.inactive || {})[k.boardId]).map(k => {
-      const key = k.labelId || '*', f = L.fb[k.id] || {}, acts = L.actions[k.id] || [];
+      const key = linkKey(k), f = L.fb[k.id] || {}, acts = L.actions[k.id] || [];
       if (full[k.boardId]) return liveCampaign(k, full[k.boardId][key], f, acts);
       if (quick[k.boardId]) return liveCampaign(k, quick[k.boardId].stats[key], f, acts, true);
       return null;
@@ -337,9 +365,9 @@ export default class App extends React.Component {
   }
 
   // ── Toewijzing ───────────────────────────────────────────────────────
-  // Every Trello board is a client and every label on it a function with its own campaign (its own recruiter and
-  // client feedback). The recruiter and Recruitment Marketeer are chosen per client and cover all its functions.
-  // New boards and new labels show up here by themselves; tick several clients to assign them at once.
+  // Every Trello board is a client and every function on it (an intake list "Nieuwe Sollicitant | Kok" or a label, see
+  // lib/boardStats.js) has its own campaign (its own recruiter and client feedback). The recruiter and Recruitment Marketeer are chosen per client and cover all its functions.
+  // New boards and new functions show up here by themselves; tick several clients to assign them at once.
   /** Recruiter names (as used in campaigns) and marketeer names, from the team's accounts. */
   recs() {
     const m = this.state.members.filter(x => x.recName && x.status !== 'deactivated').map(x => x.recName);
@@ -350,18 +378,15 @@ export default class App extends React.Component {
     return m.length ? m : [...new Set(Object.values(this.state.mktDemo || {}))];
   }
   mktOf(c) { const M = this.mkts(); return this.state.source === 'trello' ? ((this.state.live.mkt || {})[c.boardId] || '') : (this.state.mktDemo[c.client] ?? (M[Math.floor(rnd(c.client) * M.length)] || '')); }
-  /** The functions on a loaded Trello board: its named labels that have cards. null while the board is loading. */
-  boardLabels(bd) {
-    if (!bd || !bd.cards) return null;
-    const stg = {}; bd.lists.forEach(l => { stg[l.id] = stageOf(l.name); });
-    const cards = bd.cards.filter(c => stg[c.idList] !== 'info');
-    return bd.labels.filter(l => l.name).map(l => ({ id: l.id, name: l.name, cards: cards.filter(c => c.idLabels.includes(l.id)).length })).filter(l => l.cards);
-  }
+  /** The campaigns of cs in Weekoverzicht, Campagnes and Feedback klant: a Recruitment Marketeer only sees their own clients. */
+  visible(cs, me = this.me()) { return visibleCampaigns(cs, me, c => this.mktOf(c)); }
+  /** The functions on a loaded Trello board (lib/boardStats.js). null while the board is loading. */
+  boardFns(bd) { return bd && bd.cards ? boardFunctions(bd) : null; }
   /**
-   * The clients in Toewijzing, each with its functions (fns): a campaign ('linked'), a label that has no campaign yet
-   * ('pending': it gets one with the client's recruiter) or a label set to Geen functie ('ignored'). rec is a
+   * The clients in Toewijzing, each with its functions (fns): a campaign ('linked'), a function that has no campaign
+   * yet ('pending': it gets one with the client's recruiter) or one set to Geen functie ('ignored'). rec is a
    * recruiter, '' (none yet), '__multi' (older links with different recruiters) or '__inactive'. whole: one campaign
-   * for the whole board (a board without labels, or linked that way earlier), with split: the labels it could be
+   * for the whole board (a board without functions, or linked that way earlier), with split: the functions it could be
    * split into. Quiet: not linked and no activity in 30 days, only shown on request.
    */
   assignItems() {
@@ -372,11 +397,11 @@ export default class App extends React.Component {
       L.links.forEach(k => { (by[k.boardId] = by[k.boardId] || []).push(k); });
       return st.boardList.map(b => {
         const links = by[b.id] || [], recs = [...new Set(links.map(k => k.rec))], ts = new Date(b.dateLastActivity).getTime(), linked = links.length > 0;
-        const labels = this.boardLabels(st.boardData[b.id]), whole = links.some(k => !k.labelId), cardsOf = id => ((labels || []).find(l => l.id === id) || {}).cards;
-        const own = links.filter(k => k.labelId).map(k => ({ key: k.id, name: k.vac, kind: 'linked', link: k, cards: cardsOf(k.labelId) }));
-        const free = (labels || []).filter(l => !links.some(k => k.labelId === l.id))
-          .map(l => ({ key: b.id + '|' + l.id, name: l.name, labelId: l.id, cards: l.cards, kind: L.ignored[b.id + '|' + l.id] ? 'ignored' : 'pending' }));
-        return { key: b.id, board: b, name: b.name, ts, last: agoTxt(b.dateLastActivity), linked, recs, ign: !!L.ignored[b.id], quiet: !linked && ts < lim, loaded: !!labels,
+        const fns = this.boardFns(st.boardData[b.id]), whole = links.some(k => linkKey(k) === '*'), cardsOf = id => ((fns || []).find(f => f.id === id) || {}).cards;
+        const own = links.filter(k => linkKey(k) !== '*').map(k => ({ key: k.id, name: k.vac, kind: 'linked', link: k, cards: cardsOf(linkKey(k)) }));
+        const free = (fns || []).filter(f => !links.some(k => linkKey(k) === f.id))
+          .map(f => ({ key: b.id + '|' + f.id, name: f.name, fnId: f.id, labelId: f.labelId, cards: f.cards, kind: L.ignored[b.id + '|' + f.id] ? 'ignored' : 'pending' }));
+        return { key: b.id, board: b, name: b.name, ts, last: agoTxt(b.dateLastActivity), linked, recs, ign: !!L.ignored[b.id], quiet: !linked && ts < lim, loaded: !!fns,
           whole, fns: whole ? own : [...own, ...free], split: whole ? free.filter(f => f.kind === 'pending') : [], rec: recOf(recs, ina[b.id]), mkt: mk[b.id] || '' };
       });
     }
@@ -469,7 +494,7 @@ export default class App extends React.Component {
   /**
    * Gives clients (from assignItems) a recruiter and/or marketeer; '' leaves that one as it is. A recruiter covers all
    * functions: each one without a campaign gets one. Returns the clients that are still loading from Trello: until
-   * their labels are in, they can't be split into functions, so they keep their recruiter for now.
+   * their functions are in, they can't be split into functions, so they keep their recruiter for now.
    */
   assign(list, { rec = '', mkt = '' }) {
     if (rec === '__multi') rec = '';
@@ -501,10 +526,13 @@ export default class App extends React.Component {
   }
   waitText(wait) { return wait.length ? `${names(wait.map(x => x.name))} ${wait.length === 1 ? 'wordt' : 'worden'} nog geladen uit Trello; probeer het zo opnieuw` : ''; }
   waitFlash(wait) { if (wait.length) this.flash(this.waitText(wait)); }
-  /** Trello links (campaigns) for functions fns of client x, or one for the whole board when it has no functions. */
+  /**
+   * Trello links (campaigns) for functions fns of client x, or one for the whole board when it has no functions. A
+   * function with a label is linked by its label, one that is only an intake list by that list (see linkKey).
+   */
   newLinks(x, fns, rec) {
     const b = x.board;
-    if (fns.length) return fns.map(f => ({ id: `t-${b.id}-${f.labelId}`, boardId: b.id, boardName: b.name, labelId: f.labelId, labelName: f.name, vac: f.name, rec }));
+    if (fns.length) return fns.map(f => ({ id: `t-${b.id}-${f.fnId}`, boardId: b.id, boardName: b.name, labelId: f.labelId, ...(f.labelId ? {} : { listId: f.fnId }), labelName: f.name, vac: f.name, rec }));
     return x.linked ? [] : [{ id: 't-' + b.id + '-all', boardId: b.id, boardName: b.name, labelId: null, labelName: 'Hele bord', vac: 'Alle functies', rec }];
   }
   /** Demo campaigns for functions fns of client x, or one for all functions when it has none. */
@@ -521,16 +549,16 @@ export default class App extends React.Component {
     else this.setState(s => ({ campaigns: [...s.campaigns, ...this.newCampaigns(x, fns, rec)] }));
     this.flash(`${x.name}: ${names(fns.map(f => f.name))} toegevoegd · ${rec}`);
   }
-  /** Stops the campaign of one function; its label counts as Geen functie from then on (Herstel adds it again). */
+  /** Stops the campaign of one function; it counts as Geen functie from then on (Herstel adds it again). */
   stopFunction(x, f) {
     if (!window.confirm(`De campagne ${x.name} – ${f.name} stoppen? Eerdere feedback blijft bewaard, maar de campagne verdwijnt uit de schermen.`)) return;
     if (this.state.source === 'trello') {
       const k = f.link;
-      this.setState(s => ({ live: { ...s.live, links: s.live.links.filter(l => l.id !== k.id), ignored: { ...s.live.ignored, [`${k.boardId}|${k.labelId}`]: true } } }), () => this.rebuildLive());
+      this.setState(s => ({ live: { ...s.live, links: s.live.links.filter(l => l.id !== k.id), ignored: { ...s.live.ignored, [`${k.boardId}|${linkKey(k)}`]: true } } }), () => this.rebuildLive());
     } else this.setState(s => ({ campaigns: s.campaigns.map(c => c.id === f.campaign.id ? { ...c, ended: true } : c), trIgnored: { ...s.trIgnored, [`${x.name}|${f.name}`]: true } }));
     this.flash(`${x.name} – ${f.name} gestopt`);
   }
-  /** "Geen functie": a label that isn't a function (for example "Spoed") gets no campaign. */
+  /** "Geen functie": a label or intake list that isn't a function (for example the label "Spoed") gets no campaign. */
   ignoreFunction(x, f, on) {
     const key = f.key, upd = m => { const o = { ...m }; if (on) o[key] = true; else delete o[key]; return o; };
     if (this.state.source === 'trello') this.setState(s => ({ live: { ...s.live, ignored: upd(s.live.ignored) } }));
@@ -541,7 +569,7 @@ export default class App extends React.Component {
   splitBoard(x) {
     if (!window.confirm(`${x.name} splitsen in ${x.split.length} campagnes (${names(x.split.map(f => f.name))})? De campagne ‘Alle functies’ stopt; eerdere feedback daarop blijft bewaard, maar is niet meer te zien.`)) return;
     const rec = x.rec;
-    this.setState(s => ({ live: { ...s.live, links: [...s.live.links.filter(k => !(k.boardId === x.key && !k.labelId)), ...this.newLinks(x, x.split, rec)] } }), () => this.rebuildLive());
+    this.setState(s => ({ live: { ...s.live, links: [...s.live.links.filter(k => !(k.boardId === x.key && linkKey(k) === '*')), ...this.newLinks(x, x.split, rec)] } }), () => this.rebuildLive());
     this.flash(`${x.name} gesplitst in ${x.split.length} campagnes · ${rec}`);
   }
   /** The button in the bar for ticked clients: the chosen recruiter and/or marketeer for all of them. */
@@ -694,17 +722,17 @@ export default class App extends React.Component {
   /** Name written into what you save (feedback, notifications, ideas). */
   author() { return this.state.account.name; }
   homeView(me = this.me()) {
-    if (me.rights.has('campaigns.all')) return 'week';
+    if (me.rights.has('campaigns.all') || me.rights.has('campaigns.own')) return 'week';
     if (me.rec && me.rights.has('feedback.own')) return 'live';
     if (me.rights.has('feedback.client')) return 'klant';
     if (this.viewOk('blacklist', me)) return 'blacklist';
     return 'settings';
   }
   viewOk(view, me = this.me()) {
-    const r = k => me.rights.has(k), rec = !!me.rec && r('feedback.own');
-    return ({ week: r('campaigns.all'), campaigns: r('campaigns.all'), history: HISTORY_ENABLED && r('campaigns.all'), rules: r('campaigns.all'),
+    const r = k => me.rights.has(k), rec = !!me.rec && r('feedback.own'), ov = r('campaigns.all') || r('campaigns.own');
+    return ({ week: ov, campaigns: ov, history: HISTORY_ENABLED && ov, rules: ov,
       klant: r('feedback.client'), 'trello-test': r('trello.link') || r('integrations'), toewijzing: r('assign'),
-      live: rec, checkin: rec || r('feedback.all'), mine: rec, detail: r('campaigns.all') || rec,
+      live: rec, checkin: rec || r('feedback.all'), mine: rec, detail: ov || rec,
       blacklist: r('blacklist.view') || r('blacklist.manage'), settings: true,
       dev: this.state.account.rights.includes('dev') })[view] || false; // your own right, also in Bekijk als
   }
@@ -754,7 +782,7 @@ export default class App extends React.Component {
 
   // ── Feedback klant ───────────────────────────────────────────────────
   klantQueue() {
-    return this.state.campaigns.filter(c => !c.ended)
+    return this.visible(this.state.campaigns.filter(c => !c.ended))
       .sort((a, b) => (a.weeks[a.weeks.length - 1].klant ? 1 : 0) - (b.weeks[b.weeks.length - 1].klant ? 1 : 0));
   }
   enterKlant(id) {
@@ -877,7 +905,7 @@ export default class App extends React.Component {
     if (this.state.campaigns.some(c => c.quick)) { this.flash('Trello wordt nog geladen; probeer het zo opnieuw'); return; }
     const period = +this.state.hist.period, first = CUR - period + 1;
     const rows = [['klant', 'vacature', 'recruiter', 'week', 'week_start', 'nieuwe_kandidaten', 'kwaliteit', 'feedback_recruitment', 'feedback_klant', 'actie_notitie', 'bijsturing_nodig', 'monitorstatus_gezet', 'update_recruiter', 'trello_voorgesteld', 'trello_gesprek', 'trello_geplaatst']];
-    this.state.campaigns.forEach(c => c.weeks.forEach(w => rows.push([c.client, c.vac, c.rec, wl(w.w), isoDate(mondayOf(w.w)), w.leads, w.q ?? '', w.rec, w.klant, w.note, w.needsAction ? 'ja' : 'nee', MONITOR[w.mon] ? MONITOR[w.mon].label : '', w.upd || '', w.tr.voorgesteld, w.tr.gesprek, w.tr.geplaatst])));
+    this.visible(this.state.campaigns).forEach(c => c.weeks.forEach(w => rows.push([c.client, c.vac, c.rec, wl(w.w), isoDate(mondayOf(w.w)), w.leads, w.q ?? '', w.rec, w.klant, w.note, w.needsAction ? 'ja' : 'nee', MONITOR[w.mon] ? MONITOR[w.mon].label : '', w.upd || '', w.tr.voorgesteld, w.tr.gesprek, w.tr.geplaatst])));
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = `campagnefeedback-week-${wl(first)}-${wl(CUR)}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -925,14 +953,15 @@ export default class App extends React.Component {
   // ── Everything the views render ──────────────────────────────────────
   renderVals() {
     const st = this.state, R = st.rules, me = this.me(), acc = st.account, can = r => me.rights.has(r), recMode = !!me.rec && can('feedback.own');
-    const active = st.campaigns.filter(c => !c.ended);
-    const D = active.map(c => this.deco(c));
+    const active = st.campaigns.filter(c => !c.ended), shown = this.visible(active, me);
+    const ownOnly = can('campaigns.own') && !can('campaigns.all'), overview = can('campaigns.all') || can('campaigns.own');
+    const D = shown.map(c => this.deco(c));
     const cnt = {}; MONITOR_KEYS.forEach(k => { cnt[k] = D.filter(d => d.ms === k).length; });
     const missingD = D.filter(d => d.missing), ri = this.remindInfo(missingD);
     const done = D.length - missingD.length;
     const setF = p => this.setState(s => ({ f: { ...s.f, ...p } }));
 
-    const klantOpen = active.filter(c => !c.weeks[c.weeks.length - 1].klant).length;
+    const klantOpen = shown.filter(c => !c.weeks[c.weeks.length - 1].klant).length;
     const myOpen = active.filter(c => c.rec === me.rec && c.weeks[c.weeks.length - 1].q == null).length;
     // Menu: one section per kind of work, each item only when you have the right for it.
     const navActive = st.view === 'detail' ? st.back : st.view;
@@ -940,11 +969,11 @@ export default class App extends React.Component {
     const navSections = [
       recMode && { title: 'Recruiter', items: [['live', 'Live campagnes'], ['checkin', 'Wekelijkse feedback recruiter', myOpen], ['mine', 'Mijn campagnes']] },
       { title: 'Campagnemonitor', items: [
-        ...(can('campaigns.all') ? [['week', 'Weekoverzicht'], ['campaigns', 'Campagnes']] : []),
+        ...(overview ? [['week', 'Weekoverzicht'], ['campaigns', 'Campagnes']] : []),
         ...(can('feedback.client') ? [['klant', 'Feedback klant']] : []),
         ...(can('assign') ? [['toewijzing', 'Toewijzing', this.assignData().open]] : []),
-        ...(HISTORY_ENABLED && can('campaigns.all') ? [['history', 'Historie & analyse']] : []),
-        ...(can('campaigns.all') ? [['rules', 'Health-regels']] : [])] },
+        ...(HISTORY_ENABLED && overview ? [['history', 'Historie & analyse']] : []),
+        ...(overview ? [['rules', 'Health-regels']] : [])] },
       this.viewOk('blacklist', me) && { title: 'Kandidaten', items: [['blacklist', 'Blacklist', can('blacklist.manage') && st.blSum ? st.blSum.pending : 0]] },
       this.viewOk('dev', me) && { title: 'Dev', items: [['dev', 'Bugs & ideeën', this.unsortedIdeas()]] },
       { title: '', items: [['settings', 'Instellingen']] }
@@ -959,7 +988,8 @@ export default class App extends React.Component {
       missingList: missShown.map(d => ({ client: d.client, vac: d.vac, rec: d.rec, fill: () => this.open(d.id) })),
       hasMoreMissing: missingD.length > 3, missAll: !!st.missAll, moreMissingLabel: st.missAll ? 'Minder tonen' : `Alle ${missingD.length} campagnes`,
       toggleMissing: () => this.setState(s => ({ missAll: !s.missAll })),
-      klantDone: active.length - klantOpen
+      klantDone: shown.length - klantOpen,
+      scope: ownOnly ? ' van jouw klanten' : ''
     };
     const byPrio = (a, b) => (a.cur.q ?? 5.5) - (b.cur.q ?? 5.5);
     const bySeverity = (a, b) => b.lvl - a.lvl || byPrio(a, b);
@@ -1090,7 +1120,7 @@ export default class App extends React.Component {
     // history
     const period = +st.hist.period;
     const hw = Array.from({ length: period }, (_, i) => CUR - period + 1 + i);
-    const hc = st.campaigns.filter(c => (st.hist.status === 'all' || (st.hist.status === 'ended' ? c.ended : !c.ended)) && (st.hist.rec === 'all' || c.rec === st.hist.rec));
+    const hc = this.visible(st.campaigns, me).filter(c => (st.hist.status === 'all' || (st.hist.status === 'ended' ? c.ended : !c.ended)) && (st.hist.rec === 'all' || c.rec === st.hist.rec));
     const histRows = hc.map(c => {
       const inP = c.weeks.filter(w => hw.includes(w.w));
       const qv = inP.filter(w => w.q != null).map(w => w.q);
@@ -1169,7 +1199,9 @@ export default class App extends React.Component {
       sourceTabs: !acc.rights.includes('dev') ? [] : [['demo', 'Demo-data'], ['trello', 'Trello live']].map(([k, label]) => ({ label, bg: st.source === k ? '#FFFFFF' : 'transparent', fg: st.source === k ? '#1D1D1B' : '#5C5C5A', sh: st.source === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => this.setSource(k) })),
       syncText: this.syncInfo().text, syncDot: this.syncInfo().dot,
       reloadTrello: () => { if (st.source === 'trello') this.startLive(); },
-      liveEmpty: st.source === 'trello' && active.length === 0, emptyHint: can('assign') ? 'Wijs eerst de actieve Trello-borden toe aan een recruiter.' : 'De teamlead wijst de Trello-borden toe aan recruiters. Daarna verschijnen ze hier.', goAssign: () => this.go('toewijzing'),
+      liveEmpty: (st.source === 'trello' || ownOnly) && shown.length === 0, goAssign: () => this.go('toewijzing'),
+      emptyTitle: ownOnly ? 'Nog geen klanten voor jou' : 'Nog geen campagnes gekoppeld',
+      emptyHint: ownOnly ? 'Er zijn nog geen klanten aan jou toegewezen. De teamlead doet dat onder Toewijzing.' : can('assign') ? 'Wijs eerst de actieve Trello-borden toe aan een recruiter.' : 'De teamlead wijst de Trello-borden toe aan recruiters. Daarna verschijnen ze hier.',
       canAssign: can('assign'), canRemind: can('reminders.send'), canActions: can('campaign.changes'),
       canTrelloTest: this.viewOk('trello-test', me), goTrelloTest: () => this.go('trello-test'),
       canIntegrations: acc.rights.includes('integrations'), goIntegrations: () => { this.setState({ settingsTab: 'integrations' }); this.go('settings'); },

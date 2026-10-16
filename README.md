@@ -23,7 +23,8 @@ Everyone logs in with a personal account. What you see and can do depends on you
 - **Mijn campagnes**: your own campaigns with this week's candidates, quality, feedback and signals (no status,
   recruiter or average-quality columns). Sorted by most new candidates; you can also sort by fewest or by client.
 
-**Campaign overview** (right: *Alle campagnes bekijken*; Recruitment Marketeers, Account Managers, Teamlead, Dev)
+**Campaign overview** (right: *Alle campagnes bekijken*; Account Managers, Teamlead, Dev. Recruitment Marketeers
+have *Eigen klanten bekijken* instead, see the last point)
 
 - **Weekoverzicht**: the **Monitorstatus** of this week's campaigns (see [Monitor status](#monitor-status-and-health-rules)),
   grouped per status. Each campaign opens on click, or in a new browser tab with the icon (or Cmd/Ctrl-click).
@@ -41,6 +42,11 @@ Everyone logs in with a personal account. What you see and can do depends on you
 - **Feedback klant**: record the client's feedback, separately from the recruiter's.
 - **Historie & analyse**: totals, averages and changes over past weeks.
 - **Health-regels**: the rules that put a campaign on *Actie nodig*.
+- **Own clients** (right: *Eigen klanten bekijken*): the same screens, but Weekoverzicht, Campagnes and Feedback klant
+  (and so the reminders) only show the clients you are the Recruitment Marketeer of in Toewijzing. A client without
+  a Recruitment Marketeer shows up for no marketeer. Add *Alle campagnes bekijken* to show all clients again, for
+  example while covering for a colleague. Like a recruiter's own campaigns, this is a filter in the app, not a
+  server check.
 
 **Candidates** (right: *Blacklist raadplegen*; recruiters, Teamlead, Dev)
 
@@ -56,10 +62,12 @@ Everyone logs in with a personal account. What you see and can do depends on you
 
 **Management** (Teamlead and Dev by default)
 
-- **Toewijzing**: every Trello board is a client and every label on it a function, each with its own campaign (and
-  its own recruiter and client feedback). Assign a recruiter and a Recruitment Marketeer per client; they cover all
-  its functions. New boards and labels show up here by themselves. Tick several clients to assign them at once, mark
-  a client inactive, set a board that isn't a client to *Geen klant* or a label that isn't a function to *Geen functie*.
+- **Toewijzing**: every Trello board is a client and every function on it (an intake list *Nieuwe Sollicitant | Kok*
+  or a label, see [Trello conventions](#trello-conventions)) has its own campaign (and its own recruiter and client
+  feedback). Assign a recruiter and a Recruitment Marketeer per client; they cover all its functions. New boards and
+  functions show up here by themselves, a new intake list even while it is still empty. Tick several clients to
+  assign them at once, mark a client inactive, set a board that isn't a client to *Geen klant* or a label or list that
+  isn't a function to *Geen functie*.
 - **Trello-koppeling testen**: check the Trello setup against the conventions below.
 - Editing the health rules.
 - Setting the status of bugs and ideas (*Nieuw*, *Opgepakt*, *Opgelost*, *Doen we niet*) in the *Bug of idee
@@ -120,8 +128,8 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 |---|---|---|
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset, the Bugs & ideeën board) |
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, the status of bugs and ideas, managing the blacklist, Tijdwinst |
-| **Recruitment Marketeer** | Lid (member) | Campaign overview, monitor status and updates for the recruiter, client feedback, logging campaign changes, reminders |
-| **Account Manager** | Lid (member) | Campaign overview (sees what a Recruitment Marketeer sees) and asking questions about campaigns; changes nothing |
+| **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, client feedback, logging campaign changes, reminders |
+| **Account Manager** | Lid (member) | Campaign overview of all clients and asking questions about campaigns; changes nothing |
 | **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
 
 The rules for managing people:
@@ -194,8 +202,12 @@ variable afterwards.
   enforces them.
 - **Data minimisation for candidates.** The server decides which Trello fields are fetched, not the browser. Only
   lists, labels, and per card its list, labels and the two custom fields the monitor uses (*Sollicitatiedatum*,
-  *Reden afgewezen*) come through. Candidate names, descriptions and other custom fields are never fetched.
-  The server only stores counts from it (the [Trello snapshot](#trello-snapshot)), never cards or rejection reasons.
+  *Reden afgewezen*) come through. Descriptions and other custom fields are never fetched. To know which intake list
+  a card came in through, the server also reads each board's history; Trello always sends the card's title (the
+  candidate's name) with it. The server keeps only the card and list ids of each move and drops the rest right away,
+  so names are never stored or sent to the browser (`server/trello.js`). The privacy notice says so.
+  The server only stores counts (the [Trello snapshot](#trello-snapshot)) and, per card, the id of its intake list
+  (the [intake memory](#functions-from-intake-lists)), never cards, names or rejection reasons.
 - **The blacklist is the exception**: the only place the app stores candidates' personal data, typed in by the
   team. It is its own document (`DATA_DIR/blacklist.json`), only reachable through `/api/blacklist` with a
   blacklist right, and never part of `/api/state`, so people without the right never receive it. Notifications
@@ -230,6 +242,7 @@ variable afterwards.
   | Blacklist entries | 6, 12 or 24 months, chosen per entry (can be extended) |
   | Blacklist proposals nobody decided on | 30 days |
   | Trello snapshot (counts per campaign) | Until the next load of that board; boards gone from Trello are removed |
+  | Trello intake memory (card id → intake list id) | While the card is on the board; boards gone from Trello are removed |
 
 - **Privacy notice** at `/privacy`, linked from the login page. It is a draft: have it checked and fill in the
   contact person in `server/pages.js`.
@@ -271,7 +284,9 @@ NODE_ENV=production SECRETS_KEY=something-long-and-random npm start   # http://l
 ### Fake Trello
 
 To try the Trello side without a Trello account, `scripts/fake-trello.js` stands in for the Trello API: six demo
-clients with a few functions each and candidates over the last weeks. Each board takes 2 seconds to load
+clients with a few functions each and candidates over the last weeks: some with their functions as labels, some as
+intake lists (*Nieuwe Sollicitant | …*, with a history that has made-up candidate names, as Trello's has real ones),
+one with both. Each board takes 2 seconds to load
 (`FAKE_TRELLO_DELAY`, in ms), so you can see the app show the [Trello snapshot](#trello-snapshot) first and update
 it after. Every minute the first function of each client gets one more new candidate (up to 4, then back), so the
 numbers move between logins. It only works with `FAKE_TRELLO=1`, fills in Trello keys when none are set, and says
@@ -293,7 +308,7 @@ are in.
 | `npm run build` | Builds the frontend into `dist/` |
 | `npm start` | Starts the server, which serves `dist/` and the API |
 | `npm run preview` | Build, then start |
-| `npm test` | Rights, monitor status, crypto, the blacklist, time in the app, counting Trello boards and the Trello snapshot, and an end-to-end test of login, invites, the blacklist, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
+| `npm test` | Rights, monitor status, crypto, the blacklist, time in the app, counting Trello boards, functions from intake lists, the intake memory, the 5-minute refresh and the Trello snapshot, and an end-to-end test of login, invites, the blacklist, reset, lockout, recovery and simultaneous saves, run against both the Render/local server and the Netlify function |
 
 ## Configuration
 
@@ -401,8 +416,9 @@ Then open <http://localhost:8888/setup>; the link appears in that terminal.
 - The blacklist is in `DATA_DIR/blacklist.json`, apart from the shared data (see [Privacy](#privacy-gdpr)).
 - Time in the app (Tijdwinst) is in `DATA_DIR/timing.json`.
 - The last Trello numbers for the home screens are in `DATA_DIR/trello-snapshot.json` (see
-  [Trello snapshot](#trello-snapshot)).
-- For each JSON file except the Trello snapshot, a dated copy is kept for each of the last 14 days as a safety net.
+  [Trello snapshot](#trello-snapshot)), and the intake list every card came in through in
+  `DATA_DIR/trello-intake.json` (see [Functions from intake lists](#functions-from-intake-lists)).
+- For each JSON file except those two, a dated copy is kept for each of the last 14 days as a safety net.
 - The app sends only what changed (per campaign, per rule, ...), so two people saving at the same moment don't
   overwrite each other. Other people's changes appear within about 15 seconds, or right away when you switch back
   to the tab.
@@ -417,12 +433,51 @@ The monitor reads every board the Trello account can see. Each board is one clie
 
 - **Lists** are recognised by name: `Nieuw`, `Contactpoging`, `Gescreend`, `Gesprek`, `Voorstel…`, `Aangenomen`,
   `Afgewezen`. Lists with `Informatie` in the name are ignored.
-- **Labels** are job roles (vacancies). A board without labels can be linked as a whole.
+- **Functions** (job roles, vacancies) are intake lists or labels:
+  - An **intake list** is where new candidates of one function come in: `Nieuwe Sollicitant | Kok` (also with `-`,
+    `–` or `:`, and in any case). It counts as *Nieuw*. Clients add these themselves for a new function; see
+    [Functions from intake lists](#functions-from-intake-lists).
+  - A **label** is a function too, for cards that didn't come in through an intake list.
+  - A board without either can be linked as a whole.
 - **Custom fields** (optional): `Sollicitatiedatum` (date; otherwise the card's creation date is used) and
   `Reden afgewezen` (dropdown). Other custom fields are dropped by the server.
 
-The server only proxies a few read-only Trello endpoints, with fixed fields, and it caches responses for 30
-seconds. That way, when several people open the app at once, they share a single Trello call.
+The server only proxies a few read-only Trello endpoints, with fixed fields. *Trello-koppeling testen* shows per
+board which functions come from intake lists and which from labels, and warns about candidates without a function.
+
+### Functions from intake lists
+
+A candidate keeps the function of the intake list they came in through, also after moving on to *Contactpoging*,
+*Gescreend* or *Afgewezen*, without anyone putting a label on the card:
+
+- The server reads each board's history (`server/trello.js`) and remembers per card which intake list it came in
+  through, in `DATA_DIR/trello-intake.json` (`server/trelloIntake.js`): only card and list ids. The first time it
+  reads the 12 weeks the monitor shows; after that only what is new, starting 5 minutes before the newest move it
+  read, so a move Trello shows late is still picked up. Reading a move twice changes nothing.
+- The app gets each card with `idIntake` and counts it for that function (`src/lib/boardStats.js`). The intake list
+  goes before the card's labels; only a card without one follows its labels. Moved between two intake lists, the
+  last one counts.
+- An intake list and a label with the same name are one function, under the label (so a campaign linked to the label
+  earlier keeps its feedback). A new intake list with the name of an archived one continues its function.
+- When the history can't be read, the board still loads with what the server remembers, and catches up next time.
+- Older than the 12 weeks: a card that had already moved on and has no label counts only for the client as a whole.
+
+### Every 5 minutes
+
+The server loads the boards that changed every 5 minutes, also when nobody has the app open, and the open app does
+the same while its tab is visible:
+
+- One call for the list of boards, which has each board's last activity. Only boards whose activity changed since
+  their last load are loaded again (and only their new history), plus every board once an hour, in case Trello
+  doesn't count a change as activity. Like the app, the server loads linked boards and boards active in the last 30
+  days.
+- The server keeps the last load of every board in memory (not on disk), with the activity the list of boards gave
+  *before* that load. While the list says the same, the app gets the board from memory without a Trello call. A
+  change during a load makes the next list say something newer, so a board is never skipped, at worst loaded once
+  more than needed. The numbers are always counted from the whole board, never added up, so nobody counts twice.
+- The list of boards and `/members/me` are shared for 30 seconds, so several people opening the app at once share
+  one Trello call.
+- Only on Render and locally (`trello.refresh()` in `server/index.js`). On Netlify the app loads the boards itself.
 
 ### Trello snapshot
 
@@ -436,8 +491,8 @@ did it, in `DATA_DIR/trello-snapshot.json`:
   09:14*). Until a campaign's board is in, its page shows *Laden uit Trello…* for the pipeline.
 - Only counts per campaign go in: new candidates per week (the 12 weeks a campaign shows) and today's call list
   (open cards in *Nieuw* and *Contactpoging*). No cards, no pipeline, no rejection reasons.
-- The server fills it from every board it loads from Trello (`server/trelloSnapshot.js`); the app never writes to
-  it. Boards Trello no longer lists are removed, and a new Trello key starts it over. It has no daily copies: every
+- The server fills it from every board it loads from Trello (`server/trelloSnapshot.js`), also in its round every
+  5 minutes (see [Every 5 minutes](#every-5-minutes)); the app never writes to it. Boards Trello no longer lists are removed, and a new Trello key starts it over. It has no daily copies: every
   load rebuilds it.
 - The server and the app count the same way (`src/lib/boardStats.js`), so the snapshot matches the live numbers. The
   server counts in Dutch weeks (`TZ`, see [Configuration](#configuration)).

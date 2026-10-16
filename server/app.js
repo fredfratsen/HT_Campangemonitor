@@ -13,6 +13,7 @@ import { createTiming } from './timing.js';
 import { createMailer } from './mail.js';
 import { trelloRouter } from './trello.js';
 import { createTrelloSnapshot } from './trelloSnapshot.js';
+import { createTrelloIntake } from './trelloIntake.js';
 import { apiRouter } from './api.js';
 
 export const SECURITY_HEADERS = {
@@ -34,9 +35,11 @@ export const SECURITY_HEADERS = {
  * @param o.deferMail   send mails only at mailer.commit(), after the data was saved (Netlify; see mail.js)
  * @param o.publicDir   serve logo, favicon and fonts (a long-running server; Netlify serves them as static files)
  * @param o.distDir     serve the built app
- * @param o.trelloSnapshot  keep the home-screen numbers of every Trello board loaded (trelloSnapshot.js; a long-running server)
+ * @param o.trelloMemory  a long-running server: keep the home-screen numbers of every Trello board loaded
+ *                     (trelloSnapshot.js), the intake list every card came in through (trelloIntake.js) and the boards
+ *                     themselves in memory; trello.refresh() then keeps them up to date (see trello.js)
  */
-export function createServer({ docs, audit, secretsKey, secure, hosting = 'render', pollMs = 15000, deferMail = false, publicDir = null, distDir = null, trelloSnapshot = false }) {
+export function createServer({ docs, audit, secretsKey, secure, hosting = 'render', pollMs = 15000, deferMail = false, publicDir = null, distDir = null, trelloMemory = false }) {
   // Created in this order on purpose: the team data first (see blobDocs).
   const store = createStore(docs);
   const secrets = createSecrets(docs, secretsKey);
@@ -46,7 +49,8 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   const privacy = createPrivacy({ accounts, store, audit, blacklist });
   const auth = createAuth({ accounts, audit, secure, hosting });
   const mailer = createMailer({ secrets, audit, deferred: deferMail });
-  const trello = trelloRouter(() => secrets.get('trello'), trelloSnapshot ? createTrelloSnapshot(docs) : null);
+  const linked = () => new Set(Object.values(store.docs['live.links'] || {}).map(k => k.boardId));
+  const trello = trelloRouter(() => secrets.get('trello'), trelloMemory ? { snapshot: createTrelloSnapshot(docs), intake: createTrelloIntake(docs), linked } : {});
 
   const app = express();
   app.set('trust proxy', 1); // Render and Netlify sit behind a proxy
@@ -98,5 +102,5 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
     for (const e of blacklist.prune()) audit.log('blacklist.expired', { details: blacklist.auditDetails(e, { status: e.status }) });
   }
 
-  return { app, store, accounts, secrets, audit, privacy, blacklist, mailer, housekeeping };
+  return { app, store, accounts, secrets, audit, privacy, blacklist, mailer, trello, housekeeping };
 }

@@ -11,7 +11,7 @@ export default function CampaignsView({ v }) {
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Week {wk.n} · {wk.range}</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>{campTitle}</h1>
         </div>
-        <div style={{ fontSize: '13px', color: '#5C5C5A' }}>{listCount} van {sum.active} campagnes</div>
+        <div style={{ fontSize: '13px', color: '#5C5C5A' }}>{listCount} van {sum.active} campagnes{sum.scope}</div>
       </header>
       <div className="m-filters" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={f.q ?? ''} onChange={setSearch} placeholder="Zoek klant of vacature" style={{ flex: '1 1 220px', minWidth: '180px', height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 14px', fontSize: '14px', background: '#FFFFFF' }} />
