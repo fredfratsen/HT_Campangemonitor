@@ -1,5 +1,6 @@
-// E-mail from the app, through the mail server set under Instellingen › Integraties (see secrets.js). For now one
-// kind: every new bug or idea goes to the address the Dev set under Dev › Bugs & ideeën.
+// E-mail from the app, through the mail server set under Instellingen › Integraties (see secrets.js). For now only
+// about bugs and ideas: every new one goes to the address the Dev set under Dev › Bugs & ideeën, and its reporter
+// hears when it becomes Opgepakt, Opgelost or Doen we niet (see api.js).
 //
 // On a long-running server a mail goes out right away, in the background. In a Netlify Function nothing runs after
 // the response, and a request can be rerun on fresh data (see netlify.js), so there mails are collected per attempt

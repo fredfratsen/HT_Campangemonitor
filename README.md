@@ -15,6 +15,8 @@ Everyone logs in with a personal account. What you see and can do depends on you
 **Recruiter work** (right: *Eigen recruiterfeedback invullen*, plus a recruiter name on the account)
 
 - **Live campagnes**: today's call work per client, with new candidates and contact attempts pulled from Trello.
+  One row per client (Trello board) with its Recruitment Marketeer and how much feedback is still open; a client
+  with several functions folds open to one row per function. Open feedback links straight to the check-in.
 - **Wekelijkse feedback recruiter**: the weekly check-in per campaign, headed with the week it is about (for
   example *Feedback week 39*). It covers new candidates, a quality score (1–10), written feedback, an optional
   action, and a **Bijsturing nodig** (needs adjusting) flag. That flag puts the campaign on *Actie nodig* even when
@@ -86,6 +88,12 @@ have *Eigen klanten bekijken* instead, see the last point)
   set the **address that gets a mail about every new report** (empty: no mail), send a test mail, and see whether
   the last mail went out. The link in the mail (`/#ideeen`) opens the board. Mail goes through the mail server under
   Integraties.
+- **Mail to the reporter**: when the status of a report becomes *Opgepakt*, *Opgelost* or *Doen we niet* (here or
+  in the panel), whoever sent it gets a mail at the address they log in with, with the new status, who set it and
+  their own text. Not for *Nieuw*, a +1 or a column, not when you change your own report, not to a deactivated
+  account, and not while no mail server is set. The reporter is found by name, so after a rename older reports
+  get no mail. The same `/#ideeen` link opens *Bug of idee melden* for anyone without the Dev right, and that panel
+  only promises a mail when a mail server is set.
 
 **Everyone**: **Meldingen** (in-app notifications), **Wat is er nieuw** (changelog), **Bug of idee melden**
 (report a bug or idea; it goes to the developer, others can give it a +1), the **Databron** switch between demo
@@ -182,7 +190,7 @@ variable afterwards.
 ### Integrations (API keys)
 
 **Instellingen › Integraties** (Dev only) holds the API keys for connected services: Trello, and the mail server
-(**E-mail (SMTP)**) that sends new bugs and ideas to the developer.
+(**E-mail (SMTP)**) that sends new bugs and ideas to the developer, and status changes to whoever reported them.
 
 - Keys are tested before saving and stored encrypted (AES-256-GCM, key from `SECRETS_KEY`) in
   `DATA_DIR/secrets.json`. For the mail server the test logs in without sending anything.
@@ -219,7 +227,8 @@ variable afterwards.
   every blacklist change, every mail the app sends (recipient and kind, not the text), and refused changes.
   Individual feedback edits are not logged.
 - **Mail about bugs and ideas** carries the reporter's name and text to the address the Dev set, through the mail
-  server under Integraties. The privacy notice says so. Anonymising an account later can't reach mails already sent.
+  server under Integraties, and a status change on a report goes to the reporter's own address. The privacy notice
+  says so. Anonymising an account later can't reach mails already sent.
 - **Time in the app** is stored as weekly totals for the whole team, without names.
 - **Right of access.** Everyone can download their own data (Instellingen › Mijn account). The Dev can export
   anyone's data (Instellingen › Privacy). For a candidate on the blacklist, *Gegevens downloaden* on the entry;
@@ -537,7 +546,7 @@ server/
   audit.js        audit log (DATA_DIR/audit/*.jsonl)
   privacy.js      data export and anonymisation
   blacklist.js    the candidate blacklist (DATA_DIR/blacklist.json): checks, search, terms, expiry
-  mail.js         mail through the SMTP server under Integraties (new bugs and ideas to the developer)
+  mail.js         mail through the SMTP server under Integraties (new bugs and ideas to the developer, status changes to the reporter)
   crypto.js       scrypt, TOTP, AES-GCM helpers
   pages.js        server-rendered pages (login, 2FA, invite, reset, privacy)
   jsonfile.js     document storage: files with daily backups, or Netlify Blobs with conditional writes

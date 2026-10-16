@@ -49,6 +49,8 @@ export function page({ title, body, wide = false }) {
 <meta name="robots" content="noindex, nofollow">
 <title>${esc(title)} · Campagnemonitor</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Campagnemonitor">
 <style>${CSS}</style>
 </head>
 <body>
@@ -159,7 +161,7 @@ export const privacyPage = ({ back = '/', hosting = 'render' } = {}) => page({ t
     <li>Je wachtwoord, alleen als onomkeerbare hash. Bij tweestapsverificatie een versleutelde sleutel en gehashte herstelcodes.</li>
     <li>Je sessies: wanneer je inlogde en welke browser je gebruikte, zodat je kunt zien waar je bent ingelogd en daar kunt uitloggen.</li>
     <li>Wat je in de app vastlegt, met je naam erbij: feedback, klantfeedback, toewijzingen, meldingen en ideeën.</li>
-    <li>Een bug of idee dat je meldt, gaat met je naam ook per e-mail naar de ontwikkelaar van de app.</li>
+    <li>Een bug of idee dat je meldt, gaat met je naam ook per e-mail naar de ontwikkelaar van de app. Wordt hij opgepakt, opgelost of besluiten we hem niet te doen, dan krijg je daarover een mail op je eigen e-mailadres.</li>
     <li>Een auditlog van beveiligingsgebeurtenissen (inloggen, rechten, sleutels, privacy-acties), met het IP-adres bij inlogpogingen.</li>
     <li>Hoeveel tijd het team actief in de app werkt, per week en per soort scherm, opgeteld voor iedereen samen. Wie die tijd besteedde, wordt niet bewaard.</li>
   </ul>

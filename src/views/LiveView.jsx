@@ -1,5 +1,28 @@
 import React from 'react';
 
+const COLS = 'minmax(180px,1.4fr) 110px 96px 120px 64px 120px minmax(80px,1fr)';
+const ROW = { display: 'grid', gridTemplateColumns: COLS, gap: '16px', alignItems: 'center', cursor: 'pointer', fontSize: '14px' };
+const NUM = { textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px' };
+
+/** The numbers, feedback and bar of a client row or a function row. Open feedback leads to Wekelijkse feedback recruiter. */
+function Cells({ r }) {
+  return (
+    <>
+      <div data-label="Nieuw bellen" style={{ ...NUM, color: r.nFg }}>{r.nieuw}</div>
+      <div data-label="Contactpogingen" style={{ ...NUM, color: r.cFg }}>{r.contact}</div>
+      <div data-label="Totaal" style={NUM}>{r.total}</div>
+      <div data-label="Feedback" style={{ fontSize: '13px' }}>
+        {r.fbOpen ? <button onClick={r.fill} title="Feedback invullen" style={{ border: '0', background: 'none', padding: '0', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#B45309', textAlign: 'left' }}>{r.fbText} →</button>
+          : <span style={{ color: '#1A7A4A' }}>{r.fbText}</span>}
+      </div>
+      <div style={{ display: 'flex', height: '10px', borderRadius: '999px', overflow: 'hidden', background: '#F5F2ED' }}>
+        <div style={{ width: r.nPct, background: '#1B1B63' }} />
+        <div style={{ width: r.cPct, background: '#FB8915' }} />
+      </div>
+    </>
+  );
+}
+
 export default function LiveView({ v }) {
   const { goCheckin, live, syncDot, syncText, wk } = v;
   return (
@@ -50,29 +73,37 @@ export default function LiveView({ v }) {
           </div>)}
       </div>
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-        <div className="m-table" style={{ minWidth: '560px' }}>
-          <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,1.4fr) 96px 120px 64px minmax(0,1fr)', gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>
+        <div className="m-table" style={{ minWidth: '860px' }}>
+          <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: COLS, gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>
             <div>Klant · vacature</div>
+            <div>Marketeer</div>
             <div style={{ textAlign: 'right' }}>Nieuw bellen</div>
             <div style={{ textAlign: 'right' }}>Contactpogingen</div>
             <div style={{ textAlign: 'right' }}>Totaal</div>
+            <div>Feedback</div>
             <div />
           </div>
-          {live.rows.map((r, i) => <div key={i} className="hov-row live-row" onClick={r.open} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px,1.4fr) 96px 120px 64px minmax(0,1fr)', gap: '16px', padding: '12px 20px', borderBottom: '1px solid #F5F2ED', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
-              <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
-                <span style={{ minWidth: '0' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontWeight: '600' }}>{r.client}{r.hasBadge ? <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', background: r.bBg, color: r.bFg }}>{r.badge}</span> : null}</span>
-                  <span style={{ display: 'block', fontSize: '12px', color: '#5C5C5A' }}>{r.vac}</span>
-                </span>
+          {/* One row per client; a client with several functions folds open to one row per function. */}
+          {live.rows.map((r, i) => <div key={i} style={{ borderBottom: '1px solid #F5F2ED' }}>
+              <div className="hov-row live-row" onClick={r.open} aria-expanded={r.multi ? r.expanded : undefined} style={{ ...ROW, padding: '12px 20px' }}>
+                <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
+                  <span style={{ minWidth: '0' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontWeight: '600' }}>{r.client}{r.hasBadge ? <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', background: r.bBg, color: r.bFg }}>{r.badge}</span> : null}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: r.multi ? '#1B1B63' : '#5C5C5A', fontWeight: r.multi ? '500' : '400' }}>{r.vac}{r.multi ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', transform: r.expanded ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg> : null}</span>
+                  </span>
+                </div>
+                <div data-label="Marketeer" style={{ color: '#3C3C3A' }}>{r.mkt}</div>
+                <Cells r={r} />
               </div>
-              <div data-label="Nieuw bellen" style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px', color: r.nFg }}>{r.nieuw}</div>
-              <div data-label="Contactpogingen" style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px', color: r.cFg }}>{r.contact}</div>
-              <div data-label="Totaal" style={{ textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px' }}>{r.total}</div>
-              <div style={{ display: 'flex', height: '10px', borderRadius: '999px', overflow: 'hidden', background: '#F5F2ED' }}>
-                <div style={{ width: r.nPct, background: '#1B1B63' }} />
-                <div style={{ width: r.cPct, background: '#FB8915' }} />
-              </div>
+              {r.fns.map((f, j) => <div key={j} className="hov-row live-row live-fn" onClick={f.open} style={{ ...ROW, padding: '9px 20px', background: '#FAF8F5', borderTop: '1px solid #F5F2ED' }}>
+                  <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '19px', fontSize: '13px' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', flex: 'none', background: f.dot }} />
+                    <span style={{ fontWeight: '500' }}>{f.vac}</span>
+                  </div>
+                  <div />
+                  <Cells r={f} />
+                </div>)}
             </div>)}
         </div>
       </div>

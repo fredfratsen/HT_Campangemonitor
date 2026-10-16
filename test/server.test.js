@@ -227,6 +227,59 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     } finally { await smtp.close(); }
   });
 
+  test('whoever reported a bug or idea gets a mail when its status becomes Opgepakt, Opgelost or Doen we niet', async () => {
+    const smtp = fakeSmtp(), port = await smtp.listen();
+    const until = async (ok, what) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 50)); assert.ok(ok(), what); };
+    const quiet = async what => { const n = smtp.mails.length; await new Promise(r => setTimeout(r, 300)); assert.equal(smtp.mails.length, n, what); };
+    const ideas = async () => (await S.dev.get('/api/state')).data.docs.ideas;
+    const setStatus = async (who, id, status) => {
+      const idea = (await ideas())[id];
+      assert.deepEqual((await who.api('POST', '/api/state/patch', { patches: [{ doc: 'ideas', set: { [id]: { ...idea, status } } }] })).data.rejected, []);
+    };
+    try {
+      await S.dev.api('PUT', '/api/admin/idea-mail', { to: null });
+      await S.dev.api('DELETE', '/api/admin/integrations/smtp');
+      assert.equal((await S.rec.get('/api/config')).data.mail, false, 'without a mail server the panel promises no mail');
+      await setStatus(S.dev, 'm1', 'opgepakt');
+      await quiet('no mail server, so no mail (and no failed one in the audit log)');
+      await setStatus(S.dev, 'm1', 'nieuw');
+
+      const creds = { host: '127.0.0.1', port: String(port), user: 'monitor', pass: 'goed-geheim', from: 'monitor@example.com' };
+      assert.equal((await S.dev.api('PUT', '/api/admin/integrations/smtp', { values: creds })).status, 200);
+      assert.equal((await S.rec.get('/api/config')).data.mail, true);
+
+      await setStatus(S.dev, 'm1', 'opgepakt');
+      await until(() => smtp.mails.length === 1, 'the reporter hears it was picked up');
+      const m = smtp.mails[0];
+      assert.deepEqual(m.to, ['tessa@example.com'], 'at the address the reporter logs in with, whatever the Dev address is');
+      assert.match(m.data, /Subject: Je bug: Opgepakt – Het weekoverzicht laadt niet na inloggen/);
+      assert.match(m.data, /Hoi Test Recruiter,/);
+      assert.match(m.data, /Tsjerk heeft je bug in de Campagnemonitor op Opgepakt gezet\./);
+      assert.match(m.data, /Het weekoverzicht laadt niet\r\nna inloggen/);
+      assert.match(m.data, new RegExp(`${BASE}/#ideeen`));
+
+      await setStatus(S.dev, 'm1', 'nieuw');
+      await quiet('back to Nieuw is no news');
+      await setStatus(S.dev, 'm1', 'niet');
+      await until(() => smtp.mails.length === 2, 'the reporter hears it won\'t be done');
+      assert.match(smtp.mails[1].data, /Subject: Je bug: Doen we niet/);
+      assert.match(smtp.mails[1].data, /Stel ze gerust aan Tsjerk\./);
+
+      // A +1 or a column on the Dev's board is no status change.
+      const m1 = (await ideas()).m1;
+      await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'ideas', set: { m1: { ...m1, voters: [], prio: 'p1' } } }] });
+      await quiet('nothing for a +1 or a column');
+
+      // Your own report: nothing to tell yourself.
+      await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'ideas', set: { m2: { id: 'm2', type: 'idee', text: 'Eigen idee', status: 'nieuw', voters: [] } } }] });
+      await setStatus(S.dev, 'm2', 'opgelost');
+      await quiet('no mail to yourself');
+
+      const last = (await S.dev.get('/api/admin/idea-mail')).data.last;
+      assert.deepEqual([last.ok, last.kind, last.to], [true, 'status', 'tessa@example.com']);
+    } finally { await smtp.close(); }
+  });
+
   test('cross-site requests are refused', async () => {
     const r = await S.dev.req('POST', '/api/state/patch', { patches: [] }, { json: true, origin: 'https://evil.example' });
     assert.equal(r.status, 403);

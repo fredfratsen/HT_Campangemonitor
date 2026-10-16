@@ -77,7 +77,7 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   app.post('/logout', auth.logout);
   app.get('/privacy', auth.privacy);
   if (publicDir) {
-    for (const p of ['/favicon.svg', '/logo.png']) app.get(p, (req, res) => res.sendFile(path.join(publicDir, p)));
+    for (const p of ['/favicon.svg', '/logo.png', '/apple-touch-icon.png']) app.get(p, (req, res) => res.sendFile(path.join(publicDir, p)));
     app.use('/fonts', express.static(path.join(publicDir, 'fonts'), { maxAge: '365d', immutable: true }));
   }
 

@@ -1,10 +1,16 @@
 // A minimal SMTP server for the tests: no TLS, accepts any login except the password 'fout', and keeps the mails
-// it gets as { to: [addresses], data } with the headers unfolded and the quoted-printable body decoded (as bytes).
+// it gets as { to: [addresses], data } with the headers unfolded and decoded, and the quoted-printable body decoded
+// (as bytes).
 import net from 'node:net';
+
+const qp = s => s.replace(/=([0-9A-F]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+// A subject with characters outside ASCII comes as encoded words (=?UTF-8?Q?...?=); the space between two of them
+// doesn't count.
+const words = head => head.replace(/\?=\s+=\?/g, '?==?').replace(/=\?UTF-8\?Q\?([^?]*)\?=/gi, (m, q) => Buffer.from(qp(q.replace(/_/g, ' ')), 'latin1').toString('utf8'));
 
 function readable(s) {
   const i = s.indexOf('\r\n\r\n'), head = s.slice(0, i), body = s.slice(i);
-  return head.replace(/\r\n(?=[ \t])/g, '') + body.replace(/=\r\n/g, '').replace(/=([0-9A-F]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+  return words(head.replace(/\r\n(?=[ \t])/g, '')) + qp(body.replace(/=\r\n/g, ''));
 }
 
 export function fakeSmtp() {

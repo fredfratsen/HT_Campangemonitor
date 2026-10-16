@@ -7,6 +7,7 @@ import {
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
 } from './lib/constants.js';
 import { boardStats, boardFunctions, liveCampaign, linkKey } from './lib/boardStats.js';
+import { groupByClient } from './lib/clientGroups.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
@@ -64,7 +65,7 @@ export default class App extends React.Component {
       ci: { rec: 'all' }, form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
       act: { type: 'Advertentie', text: '', w: CUR }, ask: { to: '', text: '' }, reply: null, upd: null, missAll: false,
-      toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {} }, mktDemo: null, seen: null, panel: null,
+      toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {} }, liveExp: {}, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
       blSum: null
@@ -121,8 +122,9 @@ export default class App extends React.Component {
       assignLog, inbox: sh.inbox, ideas: sh.ideas, seen: sh.seen, meta: { ...meta, seeded: true },
       ...(source === 'trello' ? { demoCampaigns: campaigns, campaigns: this.liveCampaigns(sh.live) } : { campaigns })
     }, () => {
-      const me = this.me(), home = this.homeView(me), ideas = this._ideasLink && account.rights.includes('dev');
-      this.setState({ view: ideas ? 'dev' : home, back: home, ci: { rec: me.rec || 'all' } }, () => this.openPending());
+      // The link in the mails about bugs and ideas (/#ideeen) opens the board for the Dev, the panel for everyone else.
+      const me = this.me(), home = this.homeView(me), dev = account.rights.includes('dev');
+      this.setState({ view: this._ideasLink && dev ? 'dev' : home, back: home, ci: { rec: me.rec || 'all' }, ...(this._ideasLink && !dev ? { panel: 'idea' } : {}) }, () => this.openPending());
       this.sync.begin();
       this.touchLogin(account.id);
       this.loadBlSummary();
@@ -632,7 +634,7 @@ export default class App extends React.Component {
       },
       news: { hasNew: st.newsSeen < NEWS[0].id, items: NEWS.map(n => ({ ...n, tagBg: n.tag === 'Nieuw' ? '#FFF8E0' : '#E7E7F0', tagFg: n.tag === 'Nieuw' ? '#B45309' : '#1B1B63' })) },
       idea: {
-        text: I.text, placeholder: IDEA_TYPES[I.type][3], page: VIEW_NAMES[st.view] || st.view, empty: shown.length === 0,
+        text: I.text, placeholder: IDEA_TYPES[I.type][3], page: VIEW_NAMES[st.view] || st.view, empty: shown.length === 0, mailsBack: !!(st.config && st.config.mail),
         types: Object.entries(IDEA_TYPES).map(([k, v]) => ({ label: v[0], ...pill(I.type === k), onClick: () => this.setState(s => ({ idea: { ...s.idea, type: k } })) })),
         filters: [['all', 'Alles'], ['open', 'Open'], ['bug', 'Bugs'], ['idee', 'Ideeën'], ['verbetering', 'Verbeteringen']].map(([k, l]) => ({ label: l,
           n: k === 'all' ? st.ideas.length : k === 'open' ? st.ideas.filter(x => x.status === 'nieuw' || x.status === 'opgepakt').length : st.ideas.filter(x => x.type === k).length,
@@ -1317,19 +1319,31 @@ export default class App extends React.Component {
     ];
     const nN = mineNew.filter(e => !e.from).length, nO = mineNew.filter(e => e.from).length;
     const chTitle = [nN ? `${nN} ${nN === 1 ? 'nieuw bedrijf' : 'nieuwe bedrijven'}` : '', nO ? `${nO} overgenomen` : '', gone.length ? `${gone.length} overgedragen` : ''].filter(Boolean).join(' · ');
-    const rows = mine.map(c => {
-      const cur = c.weeks[c.weeks.length - 1], ev = recent[c.client], mineEv = ev && ev.to === me.rec;
+    // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
+    const groups = groupByClient(mine.map(c => {
+      const cur = c.weeks[c.weeks.length - 1];
       const nieuw = c.live ? c.live.nieuw : Math.floor(rnd(c.id + 'today') * (cur.leads / 4 + 1.5)) + Math.round(rnd(c.id + 'bl') * 1.4);
       const contact = c.live ? c.live.contact : Math.round(rnd(c.id + 'cp') * 3) + Math.round(cur.leads / 4);
-      return { client: c.client, vac: c.vac, dot: MONITOR[monitor(c, health(c, R)).s].fg, open: () => this.open(c.id), nieuw, contact, total: nieuw + contact,
-        hasBadge: !!mineEv, badge: mineEv ? (ev.from ? `Overgenomen van ${ev.from}` : 'Nieuw') : '', bBg: mineEv && ev.from ? '#E7E7F0' : '#FFF8E0', bFg: mineEv && ev.from ? '#1B1B63' : '#B45309',
-        nFg: nieuw ? '#1B1B63' : '#C0BDB9', cFg: contact ? '#B45309' : '#C0BDB9' };
+      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, total: nieuw + contact, open: cur.q == null, rank: MONITOR[monitor(c, health(c, R)).s].rank };
+    }));
+    const mx = Math.max(...groups.map(g => g.total), 1), exp = this.state.liveExp;
+    const dotOf = rank => MONITOR[MONITOR_KEYS.find(k => MONITOR[k].rank === rank)].fg;
+    // Feedback: open ones link to Wekelijkse feedback recruiter, on the first open function.
+    const cells = (x, n, openN, openId) => ({
+      dot: dotOf(x.rank), nieuw: x.nieuw, contact: x.contact, total: x.total, nPct: (x.nieuw / mx * 100) + '%', cPct: (x.contact / mx * 100) + '%',
+      nFg: x.nieuw ? '#1B1B63' : '#C0BDB9', cFg: x.contact ? '#B45309' : '#C0BDB9',
+      fbText: !openN ? '✓ Ingevuld' : openN === n ? 'Open' : `${openN} van ${n} open`, fbOpen: openN > 0,
+      fill: e => { e.stopPropagation(); this.startCheckin(openId); }
     });
-    const mx = Math.max(...rows.map(r => r.total), 1);
-    rows.forEach(r => { r.nPct = (r.nieuw / mx * 100) + '%'; r.cPct = (r.contact / mx * 100) + '%'; });
-    rows.sort((a, b) => b.total - a.total);
+    const rows = groups.map(g => {
+      const ev = recent[g.client], mineEv = ev && ev.to === me.rec, multi = g.fns.length > 1, on = multi && !!exp[g.key];
+      return { ...cells(g, g.fns.length, g.open, g.firstOpen), client: g.client, vac: multi ? `${g.fns.length} functies` : g.fns[0].vac, mkt: g.fns[0].mkt || '—',
+        multi, expanded: on, open: multi ? () => this.setState(s => ({ liveExp: { ...s.liveExp, [g.key]: !on } })) : () => this.open(g.fns[0].id),
+        fns: on ? g.fns.map(f => ({ ...cells(f, 1, f.open ? 1 : 0, f.id), vac: f.vac, open: () => this.open(f.id) })) : [],
+        hasBadge: !!mineEv, badge: mineEv ? (ev.from ? `Overgenomen van ${ev.from}` : 'Nieuw') : '', bBg: mineEv && ev.from ? '#E7E7F0' : '#FFF8E0', bFg: mineEv && ev.from ? '#1B1B63' : '#B45309' };
+    });
     const open = mine.filter(c => c.weeks[c.weeks.length - 1].q == null).length;
-    const sum = k => rows.reduce((s, r) => s + r[k], 0);
+    const sum = k => groups.reduce((s, g) => s + g[k], 0);
     return {
       sinceText: (() => { const d = new Date(since); const today = new Date().toDateString() === d.toDateString(); return `Sinds je vorige login (${today ? 'vandaag' : d.getDate() + ' ' + MON[d.getMonth()]} ${hhmm(since)}) · minstens 24 uur zichtbaar`; })(),
       markSeen: () => { if (me.isPreview) { this.flash('Dat kan niet in Bekijk als'); return; } this.setState(s => ({ seen: { ...s.seen, [me.id]: { ...(s.seen[me.id] || {}), dismissed: Date.now() } } })); },

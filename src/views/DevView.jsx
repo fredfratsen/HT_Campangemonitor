@@ -1,7 +1,7 @@
 // Dev › Bugs & ideeën: everything people sent with ‘Bug of idee melden’, on a board for the developer only (the dev
 // right). Each report goes into a column of IDEA_PRIO by dragging it or with the dropdown on the card (phones).
 // Colleagues keep seeing the reports in the panel, without these groups. Here you also choose where a mail about
-// each new one goes (server/mail.js).
+// each new one goes (server/mail.js); the reporter's own mail about a new status goes to their login address.
 import React, { useEffect, useState } from 'react';
 import Button from '../components/Button.jsx';
 import { api, fmtDateTime } from '../lib/api.js';
@@ -10,7 +10,7 @@ import { Section, Badge, Notice, Err, useAction, input, select, row, linkBtn, da
 
 const OPEN = new Set(['nieuw', 'opgepakt']);
 const FILTERS = [['open', 'Open', x => OPEN.has(x.status)], ['done', 'Afgehandeld', x => !OPEN.has(x.status)], ['all', 'Alles', () => true]];
-const KIND = { bug: 'een bug', idee: 'een idee', verbetering: 'een verbetering', test: 'de testmail' };
+const KIND = { bug: 'een bug', idee: 'een idee', verbetering: 'een verbetering', test: 'de testmail', status: 'een nieuwe status' };
 const small = { ...select, width: '100%', height: '30px', fontSize: '12px', padding: '0 6px' };
 
 function MailSettings({ d }) {
@@ -27,7 +27,7 @@ function MailSettings({ d }) {
   const test = async () => { if (await a.run(() => api('POST', '/api/admin/idea-mail/test'), `Testmail verstuurd naar ${cfg.to}`)) load(); };
   const last = cfg && cfg.last;
   return (
-    <Section title="E-mail bij nieuwe meldingen" sub="Elke nieuwe bug, elk idee en elke verbetering komt hieronder binnen, en gaat ook per mail naar dit adres. Laat het leeg om niet te mailen."
+    <Section title="E-mail bij nieuwe meldingen" sub="Elke nieuwe bug, elk idee en elke verbetering komt hieronder binnen, en gaat ook per mail naar dit adres. Laat het leeg om niet te mailen. Wie iets meldt, krijgt zelf een mail als de status op Opgepakt, Opgelost of Doen we niet komt."
       right={cfg ? cfg.to && cfg.smtp ? <Badge tone="green">Aan</Badge> : <Badge tone="gold">Uit</Badge> : null}>
       {d.isLocal ? <Notice>In de lokale demo zonder server gaat er geen mail uit.</Notice> : null}
       {cfg && !cfg.smtp ? <Notice tone="warn">Er is nog geen mailserver ingesteld, dus er gaat nog geen mail uit.{d.canIntegrations ? <> <button onClick={d.goIntegrations} style={{ ...linkBtn, textDecoration: 'underline' }}>Mailserver instellen</button></> : null}</Notice> : null}

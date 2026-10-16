@@ -34,6 +34,11 @@ const RAW = [
   ['c22', 'Grill De Wilgen', 'Grillkok', 'Tsjerk', 36, [5, 7, 6, 8], [6, 5, 6, 6]],
   ['c23', 'Brasserie Markt', 'Bediening', 'Kim', 34, [12, 11, 13, 12, 14, 13], [8, 8, 7, 8, 8, N]],
   ['c24', 'Landgoed Het Veld', 'Chef de partie', 'Juul', 30, [6, 7, 8, 6, 7, 6, 8, 7, 6, 7], [8, 8, 7, 8, 8, 8, 7, 8, 8, 8]],
+  // More functions at the same client (same recruiter): one row per client in Live campagnes
+  ['c25', 'Restaurant Oost', 'Kok', 'Robin', 35, [6, 7, 5, 8, 7], [7, 7, 6, 7, N]],
+  ['c26', 'Restaurant Oost', 'Afwasser', 'Robin', 37, [4, 5, 6], [6, 7, 7]],
+  ['c27', 'Hotel Zeezicht', 'Receptionist', 'Juul', 36, [5, 4, 6, 5], [7, 8, 7, N]],
+  ['c28', 'Brasserie Markt', 'Kok', 'Kim', 35, [6, 5, 7, 6, 8], [7, 7, 8, 7, 7]],
   ['e1', 'Hotel Wijnberg', 'Chef de partie', 'Tsjerk', 28, [8, 9, 7, 8, 6, 7], [7, 8, 7, 8, 8, 8], true],
   ['e2', 'Café Het Plein', 'Shiftleader', 'Juul', 29, [4, 3, 3, 2, 2], [5, 4, 4, 3, 3], true],
   ['e3', 'Restaurant Oost', 'Keukenhulp', 'Kim', 30, [10, 12, 11, 9, 10, 9], [6, 7, 7, 8, 7, 8], true],
