@@ -3,8 +3,8 @@ import Button from '../components/Button.jsx';
 import useCenterCurrent from '../lib/useCenterCurrent.js';
 
 export default function CheckinView({ v }) {
-  const { decLeads, fc, form, goMine, hasForm, incLeads, needsBg, needsKnob, queue, queueComplete, queueDone, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
-  const listRef = useCenterCurrent(form.id);
+  const { decLeads, fc, form, goMine, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
+  const listRef = useCenterCurrent(form.id + '|' + form.w);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header>
@@ -23,23 +23,28 @@ export default function CheckinView({ v }) {
             <div style={{ height: '6px', borderRadius: '999px', background: '#F5F2ED', overflow: 'hidden' }}>
               <div style={{ height: '100%', width: queuePct, background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)' }} />
             </div>
+            {hasLate ? <div style={{ fontSize: '13px', fontWeight: '600', color: '#B45309' }}>{lateText}</div> : null}
           </div>
           <div className="q-list" ref={listRef}>
-            {queue.map((qi, i) => <button key={i} onClick={qi.onClick} aria-current={qi.sel ? 'true' : undefined} style={{ width: '100%', border: '0', borderBottom: '1px solid #F5F2ED', background: qi.bg, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left' }}>
+            {queue.map((qi, i) => <React.Fragment key={i}>
+              {qi.head ? <div className="q-head" style={{ padding: '10px 18px 6px', fontSize: '11px', fontWeight: '600', letterSpacing: '.06em', textTransform: 'uppercase', color: '#5C5C5A', background: '#FDFBF8', borderBottom: '1px solid #F5F2ED' }}>{qi.head}</div> : null}
+              <button onClick={qi.onClick} aria-current={qi.sel ? 'true' : undefined} style={{ width: '100%', border: '0', borderBottom: '1px solid #F5F2ED', background: qi.bg, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left' }}>
                 <span style={{ width: '22px', height: '22px', flex: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', background: qi.markBg, color: qi.markFg, border: qi.markBorder }}>{qi.mark}</span>
                 <span style={{ minWidth: '0', flex: '1' }}>
                   <span style={{ display: 'block', fontSize: '14px', fontWeight: '600' }}>{qi.client}</span>
-                  <span style={{ display: 'block', fontSize: '12px', color: '#5C5C5A' }}>{qi.vac}</span>
+                  <span style={{ display: 'block', fontSize: '12px', color: qi.vacFg }}>{qi.vac}</span>
                 </span>
                 <span style={{ fontSize: '13px', fontWeight: '600', color: qi.qFg }}>{qi.qText}</span>
-              </button>)}
+              </button>
+            </React.Fragment>)}
           </div>
         </div>
         <div style={{ flex: '3 1 480px', minWidth: '0' }}>
           {hasForm ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', boxShadow: '0 2px 8px rgba(29,29,27,.09)' }}>
               <div className="f-pad" style={{ padding: '24px 28px', borderBottom: '1px solid #E4E1DE' }}>
-                <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', lineHeight: '1.3' }}>Week {wk.n} – {fc.client} – {fc.vac}</div>
-                <div style={{ marginTop: '6px', fontSize: '13px', color: '#5C5C5A', textWrap: 'pretty' }}>Vorige week: {fc.prevLine}</div>
+                <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', lineHeight: '1.3' }}>Week {fc.wl} – {fc.client} – {fc.vac}</div>
+                {fc.late ? <div style={{ marginTop: '10px', background: '#FEF3C7', color: '#B45309', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', textWrap: 'pretty' }}>{fc.lateText}</div> : null}
+                <div style={{ marginTop: '6px', fontSize: '13px', color: '#5C5C5A', textWrap: 'pretty' }}>{fc.prevLabel}: {fc.prevLine}</div>
                 {fc.hasUpd ? <div style={{ marginTop: '12px', background: '#FFF8E0', borderRadius: '8px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     <span style={{ fontSize: '12px', fontWeight: '600', color: '#B45309' }}>{fc.upd.meta}</span>
                     <span style={{ fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{fc.upd.text}</span>
@@ -47,7 +52,7 @@ export default function CheckinView({ v }) {
               </div>
               <div className="f-pad" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '14px', fontWeight: '600' }}>Nieuwe kandidaten deze week</label>
+                  <label style={{ fontSize: '14px', fontWeight: '600' }}>{fc.leadsLabel}</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E4E1DE', borderRadius: '8px', overflow: 'hidden' }}>
                       <button onClick={decLeads} style={{ width: '44px', height: '44px', border: '0', background: '#F5F2ED', fontSize: '18px', cursor: 'pointer' }}>−</button>
@@ -57,7 +62,7 @@ export default function CheckinView({ v }) {
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '500', padding: '5px 10px', borderRadius: '6px', background: fc.trBg, color: fc.trFg }}>{fc.trText}</span>
                   </div>
                   {fc.hasRej ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#5C5C5A', marginRight: '4px' }}>Afgewezen deze week · uit Trello</span>
+                      <span style={{ fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#5C5C5A', marginRight: '4px' }}>{fc.rejLabel}</span>
                       {fc.rej.map((rs, i) => <span key={i} style={{ fontSize: '12px', padding: '3px 9px', borderRadius: '999px', background: '#FDECEA', color: '#3C3C3A', display: 'inline-flex', gap: '5px' }}>{rs.t} <strong>{rs.n}</strong></span>)}
                     </div> : null}
                 </div>

@@ -21,7 +21,9 @@ Everyone logs in with a personal account. What you see and can do depends on you
   example *Feedback week 39*). It covers new candidates, a quality score (1–10), written feedback, an optional
   action, and a **Bijsturing nodig** (needs adjusting) flag. That flag puts the campaign on *Actie nodig* even when
   its scores are fine, for example when a new question needs to be added. The latest update from the Recruitment
-  Marketeer on that campaign is shown above the form.
+  Marketeer on that campaign is shown above the form. Feedback missed last week can still be filled in: those
+  campaigns are listed first under *Nog open van week …*, with the Sunday it expires. They also count in the menu
+  badge and on Live campagnes. After that Sunday the feedback on that week has expired and can no longer be given.
 - **Mijn campagnes**: your own campaigns with this week's candidates, quality, feedback and signals (no status,
   recruiter or average-quality columns). Sorted by most new candidates; you can also sort by fewest or by client.
 
@@ -152,7 +154,7 @@ The rules for managing people:
 
 **The server checks every change.** The app hides what you can't use, but `server/authorize.js` checks each
 saved change against the rights of whoever is logged in. For example, a recruiter can only fill in feedback on
-campaigns where they are the recruiter. Refused changes are not stored; the app reloads the server's version and
+campaigns where they are the recruiter, and only on this week or last week (older weeks have expired). Refused changes are not stored; the app reloads the server's version and
 shows a message. Author names (`recBy`, `klantBy`, `monBy`, `updBy`, `by`, `from`) are always filled in by the
 server, so nobody can save under someone else's name. Answering a question needs no right, but only the person it was sent to can
 answer, and only to whoever asked it.
@@ -436,7 +438,8 @@ Then open <http://localhost:8888/setup>; the link appears in that terminal.
   to the tab.
 - Each browser remembers the chosen **Databron**, which news you've read, and the Dev's *Bekijk als* choice.
 - The feedback week moves on automatically: each round is about the current week, and all feedback for a week is
-  due by the end of that same week.
+  due by the end of that same week. Missed feedback can still be given in the week after; then it expires
+  (`fbOpenWeek` in `src/lib/weeks.js`).
 - `data/` is in `.gitignore`. Never commit it, because it holds the team's real data and accounts.
 
 ## Trello conventions

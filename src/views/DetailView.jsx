@@ -106,9 +106,10 @@ export default function DetailView({ v }) {
                     {s.monTag ? <span style={{ fontSize: '12px', fontWeight: '600', padding: '3px 8px', borderRadius: '6px', background: s.monBg, color: s.monFg }}>{s.monTag}</span> : null}
                   </div>
                   {s.missing ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', fontSize: '14px', color: '#B45309' }}>
-                      <span>Recruiter heeft voor deze week nog geen feedback ingevuld.</span>
+                      <span>{s.missText}</span>
                       {s.canFill ? <button onClick={s.fill} style={{ border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', color: '#1D1D1B' }}>Nu invullen</button> : null}
                     </div> : null}
+                  {s.expired ? <div style={{ fontSize: '14px', color: '#8C8C8A' }}>Geen feedback ingevuld · vervallen</div> : null}
                   {s.hasFb ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '12px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#5C5C5A' }}><span style={{ width: '7px', height: '7px', borderRadius: '2px', background: '#1B1B63' }} />Recruitment</span>

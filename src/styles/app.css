@@ -201,6 +201,7 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .q-card{flex:1 1 100% !important;max-width:none !important}
   .q-list{position:relative;display:flex;max-height:none !important;overflow-x:auto;overflow-y:hidden !important;scroll-snap-type:x proximity;scrollbar-width:none}
   .q-list::-webkit-scrollbar{display:none}
+  .q-head{display:none}
   .q-list > button{flex:0 0 auto;width:auto !important;min-width:200px;max-width:260px;scroll-snap-align:start;border-bottom:0 !important;border-right:1px solid #F5F2ED !important}
   .f-pad{padding:18px 16px !important}
   .f-foot{padding:14px 16px !important}

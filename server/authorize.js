@@ -4,9 +4,11 @@
 // from) are always set to the person who is logged in, so nobody can save under someone else's name.
 import { rightsOf } from '../src/lib/permissions.js';
 import { DEF_RULES, RENAME, REMIND_GAP_MS } from '../src/lib/constants.js';
+import { feedbackWeek, fbOpenWeek, wl } from '../src/lib/weeks.js';
 
 export const NO_RIGHT = 'Je hebt geen rechten voor deze wijziging.';
 export const REMINDED = 'Deze recruiter kreeg de afgelopen 48 uur al een herinnering.';
+export const expired = w => `De feedback voor week ${wl(w)} is vervallen.`;
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isEmpty = v => v == null || (Array.isArray(v) ? !v.length : typeof v === 'object' && !Object.keys(v).length);
@@ -20,20 +22,25 @@ const emptyWeek = w => w && w.q == null && !w.rec && !w.klant && !w.note && !w.n
 // When a reminder was sent: stamped by the server; older ones only have the client's id (Date.now() + name).
 const sentAt = n => n.ts ?? (parseFloat(String(n.id)) || 0);
 
-export function makeAuthorizer(actor, docs) {
+export function makeAuthorizer(actor, docs, now = Date.now()) {
   const R = rightsOf(actor), has = r => R.has(r), any = (...rs) => rs.some(has);
   const mine = new Set([actor.name, actor.recName].filter(Boolean));
   const need = ok => ok ? '' : NO_RIGHT;
   const canRec = campaignRec => has('feedback.all') || (has('feedback.own') && !!actor.recName && campaignRec === actor.recName);
+  const cur = feedbackWeek(now);
 
-  /** Checks the changes between two feedback weeks. Returns '' or a reason. */
-  function weekChange(bw, aw, campaignRec, { allowLeadsDrop = false } = {}) {
+  /**
+   * Checks the changes between two feedback weeks (week number w). Returns '' or a reason. Recruiter feedback on a
+   * week older than last week has expired (lib/weeks.js fbOpenWeek); a tab left open over the weekend can't add it.
+   */
+  function weekChange(bw, aw, campaignRec, w, { allowLeadsDrop = false } = {}) {
     for (const f of keysOf(bw, aw)) {
       if (same(bw && bw[f], aw && aw[f])) continue;
       if (REC_FIELDS.has(f)) {
         // In Trello mode a manual candidate count disappears by itself once Trello counts the same number.
         if (f === 'leads' && allowLeadsDrop && aw && aw[f] === undefined) continue;
         if (!canRec(campaignRec)) return NO_RIGHT;
+        if (w < cur && !fbOpenWeek(w, cur) && !has('dev')) return expired(w);
       } else if (KLANT_FIELDS.has(f)) { if (!has('feedback.client')) return NO_RIGHT; }
       else if (MON_FIELDS.has(f)) { if (!has('campaigns.monitor')) return NO_RIGHT; }
       else if (f === 'tr') continue; // demo pipeline numbers, derived data
@@ -74,7 +81,7 @@ export function makeAuthorizer(actor, docs) {
         if (same(bw, aw)) continue;
         if (!aw) { if (!has('dev')) return NO_RIGHT; continue; }
         if (!bw) { if (!emptyWeek(aw) && !has('dev')) return NO_RIGHT; continue; } // a new week rolls in: anyone
-        const err = weekChange(bw, aw, before.rec);
+        const err = weekChange(bw, aw, before.rec, aw.w ?? bw.w);
         if (err) return err;
         const sw = stampWeek(bw, aw);
         if (sw !== aw) { stamped = stamped || aws.slice(); stamped[i] = sw; }
@@ -102,7 +109,7 @@ export function makeAuthorizer(actor, docs) {
       for (const w of keysOf(before, after)) {
         const bw = (before || {})[w], aw = (after || {})[w];
         if (same(bw, aw)) continue;
-        const err = weekChange(bw || {}, aw || {}, campaignRec, { allowLeadsDrop: true });
+        const err = weekChange(bw || {}, aw || {}, campaignRec, +w, { allowLeadsDrop: true });
         if (err) return err;
         const sw = stampWeek(bw, aw);
         if (sw !== aw) { stamped = stamped || { ...after }; stamped[w] = sw; }

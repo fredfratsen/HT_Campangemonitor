@@ -39,7 +39,7 @@ export default function LiveView({ v }) {
           <span style={{ flex: '1', minWidth: '0' }}>
             <strong>{live.openText}</strong>
             {' '}
-            <span style={{ color: '#3C3C3A', whiteSpace: 'nowrap' }}>voor week {wk.n}</span>
+            <span style={{ color: '#3C3C3A' }}>{live.openSub}</span>
           </span>
           <span style={{ fontWeight: '600', color: '#1B1B63', whiteSpace: 'nowrap' }}>Feedback invullen →</span>
         </button> : null}

@@ -30,6 +30,10 @@ export const CUR = feedbackWeek();
 // First week recruiters give feedback on: week 42 (12–18 October 2026), the first round held in its own week.
 // Earlier weeks still show their Trello numbers and any feedback given, but never count as missing feedback.
 export const FB_START = weekOf(new Date(2026, 9, 12).getTime());
+// Missed feedback can still be given in the week after (catching up); from the Monday after that it has expired.
+export const fbOpenWeek = (w, cur = CUR) => w === cur || w === cur - 1;
+/** The last day to give feedback on week w: the Sunday that ends the week after. */
+export const fbLastDay = w => new Date(2025, 11, 29 + w * 7 + 6);
 
 /** "21–27 sep" or "28 sep – 4 okt" */
 export function range(w) {

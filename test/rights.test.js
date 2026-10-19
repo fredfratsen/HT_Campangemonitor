@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { rightsOf, can, canViewAs, manageError, overridesFor, visibleCampaigns, ROLES, RIGHT_KEYS } from '../src/lib/permissions.js';
 import { makeAuthorizer, NO_RIGHT, REMINDED } from '../server/authorize.js';
 import { DEF_RULES } from '../src/lib/constants.js';
+import { feedbackWeek, wl } from '../src/lib/weeks.js';
 
 const dev = { id: 'r-tsjerk', name: 'Tsjerk', role: 'dev', recName: 'Tsjerk' };
 const dev2 = { id: 'u-dev2', name: 'Dev Twee', role: 'dev' };
@@ -61,7 +62,9 @@ test('Bekijk als: recruiters and marketeers see each other, a recruiter never a 
 });
 
 const week = (w, o = {}) =>({ w, leads: 5, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: 5 }, ...o });
-const camp = (id, rec, weeks = [week(38, { q: 7, rec: 'ok' }), week(39)]) => ({ id, client: 'Klant ' + id, vac: 'Kok', rec, start: 38, ended: false, actions: [], weeks });
+// This week and last week: recruiter feedback on older weeks has expired.
+const W = feedbackWeek();
+const camp = (id, rec, weeks = [week(W - 1, { q: 7, rec: 'ok' }), week(W)]) => ({ id, client: 'Klant ' + id, vac: 'Kok', rec, start: W - 1, ended: false, actions: [], weeks });
 
 test('campaign feedback: own campaigns only, author stamped', () => {
   const docs = {};
@@ -77,11 +80,27 @@ test('campaign feedback: own campaigns only, author stamped', () => {
   assert.equal(makeAuthorizer(mkt, docs)('campaigns', 'c2', other, klant), '');
 });
 
+test('recruiter feedback on an expired week is refused; catching up on last week is fine', () => {
+  const docs = { 'live.links': { 't-1-all': { id: 't-1-all', boardId: '1', rec: 'Kim' } } };
+  const c = camp('c1', 'Kim', [week(W - 2), week(W - 1), week(W)]), gone = `De feedback voor week ${wl(W - 2)} is vervallen.`;
+  const fill = i => ({ ...c, weeks: c.weeks.map((w, j) => j === i ? { ...w, q: 6, rec: 'x' } : w) });
+  const a = makeAuthorizer(kim, docs);
+  assert.equal(a('campaigns', 'c1', c, fill(2)), '', 'this week');
+  assert.equal(a('campaigns', 'c1', c, fill(1)), '', 'last week');
+  assert.equal(a('campaigns', 'c1', c, fill(0)), gone, 'two weeks ago');
+  assert.equal(makeAuthorizer(lead, docs)('campaigns', 'c1', c, fill(0)), gone, 'not even with feedback.all');
+  assert.equal(makeAuthorizer(dev, docs)('campaigns', 'c1', c, fill(0)), '', 'the Dev can');
+  assert.equal(makeAuthorizer(mkt, docs)('campaigns', 'c1', c, { ...c, weeks: [{ ...c.weeks[0], klant: 'x' }, ...c.weeks.slice(1)] }), '', 'client feedback is not the recruiter\'s');
+  assert.equal(a('live.fb', 't-1-all', {}, { [W - 1]: { q: 6 } }), '', 'Trello mode: last week');
+  assert.equal(a('live.fb', 't-1-all', {}, { [W - 2]: { q: 6 } }), gone, 'Trello mode: two weeks ago');
+  assert.equal(a('live.fb', 't-1-all', { [W - 2]: { q: 6, leads: 4 } }, { [W - 2]: { q: 6 } }), '', 'a manual count still drops out by itself');
+});
+
 test('campaign changes the app makes by itself are allowed for anyone', () => {
   const a = makeAuthorizer(kim, {});
   const c = camp('c2', 'Robin');
-  assert.equal(a('campaigns', 'c2', c, { ...c, weeks: [...c.weeks, week(40)] }), '', 'a new empty week rolls in');
-  assert.equal(a('campaigns', 'c2', c, { ...c, weeks: [...c.weeks, week(40, { q: 9 })] }), NO_RIGHT, 'but not a filled one');
+  assert.equal(a('campaigns', 'c2', c, { ...c, weeks: [...c.weeks, week(W + 1)] }), '', 'a new empty week rolls in');
+  assert.equal(a('campaigns', 'c2', c, { ...c, weeks: [...c.weeks, week(W + 1, { q: 9 })] }), NO_RIGHT, 'but not a filled one');
   assert.equal(a('campaigns', 'c2', { ...c, rec: 'Sanne' }, { ...c, rec: 'Robin' }), '', 'old demo names are renamed');
   assert.equal(a('campaigns', 'c2', c, { ...c, rec: 'Kim' }), NO_RIGHT, 'reassigning needs "assign"');
   assert.equal(a('campaigns', 'c9', undefined, camp('c9', 'Kim')), NO_RIGHT, 'creating needs assign');
@@ -93,7 +112,7 @@ test('trello feedback (live.fb) follows the linked recruiter', () => {
   const docs = { 'live.links': { 't-1-all': { id: 't-1-all', boardId: '1', rec: 'Kim' }, 't-2-all': { id: 't-2-all', boardId: '2', rec: 'Robin' } } };
   const a = makeAuthorizer(kim, docs);
   assert.equal(a('live.fb', 't-3-all', undefined, {}), '', 'empty entry for a new campaign');
-  assert.equal(a('live.fb', 't-1-all', {}, { 39: { q: 6, rec: 'x', recBy: 'Kim' } }), '');
+  assert.equal(a('live.fb', 't-1-all', {}, { [W]: { q: 6, rec: 'x', recBy: 'Kim' } }), '');
   assert.equal(a('live.fb', 't-2-all', {}, { 39: { q: 6 } }), NO_RIGHT);
   assert.equal(a('live.fb', 't-2-all', { 39: { q: 6, leads: 4 } }, { 39: { q: 6 } }), '', 'manual count dropping out is allowed');
   assert.equal(a('live.actions', 't-1-all', undefined, []), '');
