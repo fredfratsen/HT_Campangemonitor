@@ -1216,7 +1216,7 @@ export default class App extends React.Component {
       rule(2, 'manualOn', 'Recruiter heeft ‘Bijsturing nodig’ aangevinkt', null, '', 'manual'),
       rule(1, 'qOrangeOn', 'Kwaliteit is', 'qOrange', 'of lager', 'qOrange'),
       rule(1, 'dropOn', 'Instroom vorige week lag', 'dropPct', '% of meer onder het gemiddelde van de 3 weken ervoor', 'drop'),
-      rule(1, 'missingOn', 'Er is nog geen feedback ingevuld voor deze week', null, '', 'missing')
+      rule(1, 'missingOn', 'Vanaf donderdag nog geen feedback voor deze week, of meteen als ook vorige week ontbreekt', null, '', 'missing')
     ];
 
     const tv = e => e.target.value;

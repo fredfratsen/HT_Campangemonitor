@@ -54,3 +54,19 @@ test('the inflow signals look at last week, not at the week that is still fillin
   assert.deepEqual(keys([week(41, { leads: 0 })]), [], 'a campaign that started this week has no last week yet');
   assert.equal(health(camp([week(39), week(40, { leads: 2 }), week(41)]), DEF_RULES).reasons[0].t, 'Maar 2 kandidaten vorige week');
 });
+
+test('missing feedback for this week is a signal from Thursday, or right away when last week is missing too', () => {
+  // Week 43 runs from Monday 19 to Sunday 25 October 2026.
+  const mon19 = new Date(2026, 9, 19, 9).getTime(), wed21 = new Date(2026, 9, 21, 23, 59).getTime(), thu22 = new Date(2026, 9, 22).getTime();
+  const missing = (ws, now) => health(camp(ws), DEF_RULES, now).reasons.filter(r => r.k === 'missing').map(r => r.t);
+  const lastDone = [week(41), week(42), week(43, { q: null })], lastOpen = [week(41), week(42, { q: null }), week(43, { q: null })];
+  assert.deepEqual(missing(lastDone, mon19), [], 'last week is in, so Monday is quiet');
+  assert.deepEqual(missing(lastDone, wed21), [], 'still quiet on Wednesday evening');
+  assert.deepEqual(missing(lastDone, thu22), ['Feedback ontbreekt'], 'from Thursday it counts');
+  assert.deepEqual(missing(lastOpen, mon19), ['Feedback ontbreekt, ook vorige week'], 'last week missing: up on Monday already');
+  assert.deepEqual(missing([week(41), week(42, { q: null }), week(43)], mon19), [], 'filled in this week clears it');
+  assert.deepEqual(missing([week(40), week(41, { q: null }), week(42, { q: null })], new Date(2026, 9, 12, 9).getTime()), [], 'weeks before the start of the monitor never count');
+  assert.deepEqual(missing([week(43, { q: null })], mon19), [], 'a campaign that started this week waits for Thursday');
+  assert.deepEqual(missing([week(43, { q: null })], thu22), ['Feedback ontbreekt']);
+  assert.equal(monitor(camp(lastDone), health(camp(lastDone), DEF_RULES, mon19)).s, 'goed', 'so on Monday it is Alles goed check, not Actie nodig');
+});

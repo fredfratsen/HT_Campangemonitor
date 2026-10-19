@@ -1,4 +1,5 @@
 // Small formatting helpers and the campaign health rules.
+import { FB_START, mondayOf } from './weeks.js';
 
 export const qc = q => q == null ? '#8C8C8A' : q >= 7 ? '#1A7A4A' : q >= 5 ? '#B45309' : '#D32F2F';
 export const qb = q => q == null ? '#F5F2ED' : q >= 7 ? '#E6F4ED' : q >= 5 ? '#FEF3C7' : '#FDECEA';
@@ -17,7 +18,7 @@ export function rnd(s) { let h = 2166136261; for (const ch of s) { h ^= ch.charC
  * Health level (0 goed, 1 monitoren, 2 actie nodig) and the rules that fired. The inflow rules look at last week
  * (the week before the campaign's last one), because the current week is still filling up.
  */
-export function health(c, R) {
+export function health(c, R, now = Date.now()) {
   const ws = c.weeks, cur = ws[ws.length - 1], last = ws.length >= 2 ? ws[ws.length - 2] : null, reasons = [];
   const qs = ws.filter(w => w.q != null).map(w => w.q);
   const lastQ = qs.length ? qs[qs.length - 1] : null;
@@ -36,7 +37,12 @@ export function health(c, R) {
     const prior = ws.slice(-5, -2), avg = prior.reduce((s, w) => s + w.leads, 0) / prior.length;
     if (last.leads <= avg * (1 - R.dropPct / 100)) add(1, `Instroom vorige week −${Math.round((1 - last.leads / avg) * 100)}%`, 'drop');
   }
-  if (R.missingOn && cur.q == null) add(1, 'Feedback ontbreekt', 'missing');
+  if (R.missingOn && cur.q == null) {
+    // The recruiter has until Thursday for this week's feedback, unless last week's is missing too.
+    const due = mondayOf(cur.w); due.setDate(due.getDate() + 3);
+    if (last && last.w >= FB_START && last.q == null) add(1, 'Feedback ontbreekt, ook vorige week', 'missing');
+    else if (now >= due.getTime()) add(1, 'Feedback ontbreekt', 'missing');
+  }
   return { lvl, reasons };
 }
 
