@@ -1149,15 +1149,16 @@ export default class App extends React.Component {
     // On Pauze or stopped: no monitor status and no feedback, only resuming (or activating, with Toewijzing).
     const halt = selC.halt, off = selC.ended || !!halt, canHalt = !selC.ended && selC.id !== 'none' && this.canHalt(selC, me);
     const canMon = can('campaigns.monitor') && !off && selC.id !== 'none';
-    const haltBtn = (label, onClick, primary = false) => ({ label, onClick, primary });
+    // variant: of components/Button.jsx; Stopzetten is red.
+    const haltBtn = (label, onClick, variant = 'ghost') => ({ label, onClick, variant });
     const d = {
       ...dd, mkt: this.mktOf(selC) || 'nog niet toegewezen',
-      haltActs: canHalt && !halt ? [haltBtn('Pauzeren', () => this.askHalt(selC, 'pauze')), haltBtn('Stopzetten', () => this.askHalt(selC, 'stop'))] : [],
+      haltActs: canHalt && !halt ? [haltBtn('Pauzeren', () => this.askHalt(selC, 'pauze')), haltBtn('Stopzetten', () => this.askHalt(selC, 'stop'), 'danger')] : [],
       halt: !halt ? { has: false } : {
         has: true, title: HALT[halt.kind].label, line: haltLine(halt),
         text: `Staat niet in het weekoverzicht en vraagt geen wekelijkse feedback. De recruiter ziet hem tot alle kandidaten gebeld zijn.${halt.kind === 'stop' && !can('assign') ? ' Alleen de teamlead kan hem weer activeren.' : ''}`,
-        acts: halt.kind === 'pauze' ? (canHalt ? [haltBtn('Hervatten', () => this.setHalt(selC, null), true), haltBtn('Stopzetten', () => this.askHalt(selC, 'stop'))] : [])
-          : can('assign') ? [haltBtn('Opnieuw activeren', () => this.setHalt(selC, null), true)] : []
+        acts: halt.kind === 'pauze' ? (canHalt ? [haltBtn('Hervatten', () => this.setHalt(selC, null), 'accent'), haltBtn('Stopzetten', () => this.askHalt(selC, 'stop'), 'danger')] : [])
+          : can('assign') ? [haltBtn('Opnieuw activeren', () => this.setHalt(selC, null), 'accent')] : []
       },
       kpis: [
         { label: 'Campagne loopt', value: n, unit: `van ${n > 6 ? 12 : 6} weken${n > 6 ? ' · verlengd' : ''}` },

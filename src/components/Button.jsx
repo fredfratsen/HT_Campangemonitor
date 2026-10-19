@@ -11,7 +11,8 @@ const VARIANTS = {
   primary: { background: GRAD, color: '#fff', border: 'none' },
   accent: { background: '#1B1B63', color: '#fff', border: 'none' },
   outline: { background: 'transparent', color: '#1B1B63', border: '1.5px solid #1B1B63' },
-  ghost: { background: 'transparent', color: '#1D1D1B', border: '1.5px solid #E4E1DE' }
+  ghost: { background: 'transparent', color: '#1D1D1B', border: '1.5px solid #E4E1DE' },
+  danger: { background: 'transparent', color: '#D32F2F', border: '1.5px solid #D32F2F' }
 };
 
 export default function Button({ children = 'Button', variant = 'primary', size = 'md', onClick, disabled = false, type = 'button' }) {

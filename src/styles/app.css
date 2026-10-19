@@ -108,8 +108,11 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .m-kpis{grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:10px !important}
   .m-kpis > *{padding:14px !important;min-width:0}
   .m-kpis-lead > :first-child{grid-column:1 / -1}
-  .m-cta > button,.detail-acts{flex:1 1 100%;justify-content:center}
+  .detail-acts,.halt-acts{flex:1 1 100%;justify-content:center}
   .detail-acts > button{flex:1 1 auto;justify-content:center}
+  /* Pauzeren and Stopzetten: their own row under the other actions, side by side */
+  .halt-acts{margin-left:0 !important}
+  .halt-acts > button{flex:1 1 0;justify-content:center}
 
   /* Filter bars: search full width, status pills scroll sideways, dropdowns two per row */
   .m-filters > input{flex:1 1 100% !important}

@@ -7,24 +7,25 @@ export default function DetailView({ v }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <button onClick={goBack} style={{ alignSelf: 'flex-start', border: '0', background: 'none', padding: '0', fontSize: '13px', fontWeight: '500', color: '#5C5C5A', cursor: 'pointer' }}>← {backLabel}</button>
-        <div className="m-cta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ minWidth: '0' }}>
-            <div style={{ fontSize: '15px', color: '#5C5C5A' }}>{d.client}</div>
-            <h1 style={{ margin: '2px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '36px', lineHeight: '1.15', letterSpacing: '-.02em' }}>{d.vac}</h1>
-            <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', padding: '5px 10px', borderRadius: '6px', background: d.sBg, color: d.sFg }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.sFg }} />{d.statusLabel}</span>
-              {d.monText ? <span style={{ fontSize: '13px', fontWeight: '500', color: d.sFg, marginRight: '4px' }}>{d.monText}</span> : null}
-              {d.reasons.map((r, i) => <span key={i} style={{ fontSize: '12px', fontWeight: '500', padding: '4px 8px', borderRadius: '6px', background: '#F5F2ED', color: '#3C3C3A' }}>{r.t}</span>)}
-              <span style={{ fontSize: '13px', color: '#8C8C8A', marginLeft: '6px' }}>Recruiter {d.rec} · Marketeer {d.mkt} · gestart week {d.startLabel}</span>
-            </div>
+        <div style={{ minWidth: '0' }}>
+          <div style={{ fontSize: '15px', color: '#5C5C5A' }}>{d.client}</div>
+          <h1 style={{ margin: '2px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '36px', lineHeight: '1.15', letterSpacing: '-.02em' }}>{d.vac}</h1>
+          <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', padding: '5px 10px', borderRadius: '6px', background: d.sBg, color: d.sFg }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.sFg }} />{d.statusLabel}</span>
+            {d.monText ? <span style={{ fontSize: '13px', fontWeight: '500', color: d.sFg, marginRight: '4px' }}>{d.monText}</span> : null}
+            {d.reasons.map((r, i) => <span key={i} style={{ fontSize: '12px', fontWeight: '500', padding: '4px 8px', borderRadius: '6px', background: '#F5F2ED', color: '#3C3C3A' }}>{r.t}</span>)}
+            <span style={{ fontSize: '13px', color: '#8C8C8A', marginLeft: '6px' }}>Recruiter {d.rec} · Marketeer {d.mkt} · gestart week {d.startLabel}</span>
           </div>
-          {d.hasFill || d.canMon ? <div className="detail-acts" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {d.monActs.map((a, i) => <Button key={i} variant={a.primary ? 'outline' : 'ghost'} onClick={a.onClick}>{a.label}</Button>)}
-              {d.hasFill ? <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button> : null}
-            </div> : null}
         </div>
-        {d.haltActs.length ? <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px' }}>
-            {d.haltActs.map((a, i) => <button key={i} onClick={a.onClick} className="link-btn">{a.label}</button>)}
+        {/* One row: the work on this campaign on the left, Pauzeren and Stopzetten on the right. */}
+        {d.hasFill || d.canMon || d.haltActs.length ? <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px 16px', flexWrap: 'wrap' }}>
+            {d.hasFill || d.canMon ? <div className="detail-acts" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {d.monActs.map((a, i) => <Button key={i} variant={a.primary ? 'outline' : 'ghost'} onClick={a.onClick}>{a.label}</Button>)}
+                {d.hasFill ? <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button> : null}
+              </div> : null}
+            {d.haltActs.length ? <div className="halt-acts" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginLeft: 'auto' }}>
+                {d.haltActs.map((a, i) => <Button key={i} variant={a.variant} onClick={a.onClick}>{a.label}</Button>)}
+              </div> : null}
           </div> : null}
       </div>
       {d.halt.has ? <div style={{ background: '#EEEAE5', borderRadius: '12px', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 16px', flexWrap: 'wrap' }}>
@@ -33,7 +34,7 @@ export default function DetailView({ v }) {
             <span style={{ fontSize: '13px', lineHeight: '1.5', color: '#5C5C5A', textWrap: 'pretty' }}>{d.halt.text}</span>
           </div>
           {d.halt.acts.length ? <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {d.halt.acts.map((a, i) => <Button key={i} variant={a.primary ? 'accent' : 'ghost'} size="sm" onClick={a.onClick}>{a.label}</Button>)}
+              {d.halt.acts.map((a, i) => <Button key={i} variant={a.variant} size="sm" onClick={a.onClick}>{a.label}</Button>)}
             </div> : null}
         </div> : null}
       {!d.canMon && d.upd.has ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
