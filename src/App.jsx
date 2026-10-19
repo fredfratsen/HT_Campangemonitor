@@ -77,8 +77,16 @@ export default class App extends React.Component {
     this._hashOpen = this.hashId();
     // The link in the mail about a new bug or idea; read now, as the address bar is reset once the app is loaded.
     this._ideasLink = window.location.hash === '#ideeen';
-    this._hash =() => { this._hashOpen = this.hashId(); this.openPending(); };
+    // A link typed or pasted into the address bar. Back and forward between the app's own steps is handled by popstate.
+    this._hash = () => { if (window.history.state && window.history.state.nav) return; this._nav = null; this._hashOpen = this.hashId(); this.openPending(); };
     window.addEventListener('hashchange', this._hash);
+    // The browser's Back and Forward buttons move between the app's screens (see syncHistory).
+    this._pop = e => { if (e.state && e.state.nav) this.restoreNav(e.state.nav); };
+    window.addEventListener('popstate', this._pop);
+    window.history.scrollRestoration = 'manual';
+    this._y = window.scrollY;
+    this._scroll = () => { this._y = window.scrollY; clearTimeout(this._yT); this._yT = setTimeout(() => this.stampY(), 250); };
+    window.addEventListener('scroll', this._scroll, { passive: true });
     this._k = e => {
       if (e.key === 'Escape' && this.state.navOpen) { this.setState({ navOpen: false }); return; }
       if (this.state.view === 'klant' && this.state.kform && (e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); this.saveKlant(); return; }
@@ -124,6 +132,7 @@ export default class App extends React.Component {
     }, () => {
       // The link in the mails about bugs and ideas (/#ideeen) opens the board for the Dev, the panel for everyone else.
       const me = this.me(), home = this.homeView(me), dev = account.rights.includes('dev');
+      this._navOn = true; // from the first real screen on, screen switches are steps in the browser history
       this.setState({ view: this._ideasLink && dev ? 'dev' : home, back: home, ci: { rec: me.rec || 'all' }, ...(this._ideasLink && !dev ? { panel: 'idea' } : {}) }, () => this.openPending());
       this.sync.begin();
       this.touchLogin(account.id);
@@ -163,14 +172,14 @@ export default class App extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (prevState.navOpen !== this.state.navOpen) this.navChanged();
     if (!this.state.loaded) return;
-    if (!this.viewOk(this.state.view)) { this.setState({ view: this.homeView() }); return; }
+    if (!this.viewOk(this.state.view)) { this._navReplace = true; this.setState({ view: this.homeView() }); return; }
     this.syncLive();
     this.sync.changed();
-    this.syncHash();
+    this.syncHistory();
     this.meterTick();
   }
 
-  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); this.stopMeter(); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('popstate', this._pop); window.removeEventListener('scroll', this._scroll); clearTimeout(this._yT); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); this.stopMeter(); if (this.sync) this.sync.stop(); }
 
   /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
   navChanged() {
@@ -756,11 +765,43 @@ export default class App extends React.Component {
     this._hashOpen = null;
     this.open(id);
   }
-  /** The address bar follows the open campaign, so a reload or a copied link opens it again. */
-  syncHash() {
-    const st = this.state, want = st.view === 'detail' ? '#campagne=' + encodeURIComponent(st.sel) : '';
-    if (this._hashOpen || window.location.hash === want) return;
-    window.history.replaceState(null, '', want || window.location.pathname + window.location.search);
+  /**
+   * Every screen switch is a step in the browser history, so the browser's Back button returns to the previous screen
+   * instead of leaving the app. The address bar follows the open campaign, so a reload or a copied link opens it again.
+   * A step remembers its screen, the screen of the step before it (from) and how far down you were (y).
+   */
+  syncHistory() {
+    if (!this._navOn || this._hashOpen) return;
+    const st = this.state, n = this._nav, sel = st.view === 'detail' ? st.sel : null;
+    if (n && n.view === st.view && n.sel === sel) return;
+    const push = !!n && !this._navReplace;
+    this._navReplace = false;
+    if (push) this.stampY();
+    this.writeNav({ view: st.view, sel, back: st.back, from: push ? n.view : n ? n.from : null }, push, sel ? '#campagne=' + encodeURIComponent(sel) : window.location.pathname + window.location.search);
+  }
+  writeNav(nav, push, url) {
+    this._nav = nav;
+    // Safari refuses history writes when there are too many in a short time; the next one catches up.
+    try { window.history[push ? 'pushState' : 'replaceState']({ nav }, '', url); } catch (e) { /* see above */ }
+  }
+  /** Stores the scroll position in the current step, for when you come back to it. */
+  stampY() { clearTimeout(this._yT); if (this._nav) this.writeNav({ ...this._nav, y: this._y }, false); }
+  /** Back or Forward in the browser: that step's screen again, as far down as you left it. */
+  restoreNav(nav) {
+    clearTimeout(this._yT);
+    this._nav = nav;
+    this._hashOpen = null;
+    const ok = this.viewOk(nav.view), view = ok ? nav.view : this.homeView();
+    if (!ok) this._navReplace = true; // for example a screen you no longer see after "Bekijk als"
+    this.setState(s => ({ view, sel: nav.sel || s.sel, back: nav.back || s.back, navOpen: false,
+      ...(view === 'detail' ? { act: { ...s.act, text: '', w: CUR }, ask: { to: '', text: '' }, upd: null } : {}) }), () => window.scrollTo(0, nav.y || 0));
+    if (view === 'checkin') this.enterCheckin();
+    if (view === 'klant') this.enterKlant();
+  }
+  /** "← Weekoverzicht" in a campaign: when that's the screen of the step before, it is the browser's Back, so the history stays the same either way. */
+  navBack() {
+    const to = this.state.back || 'campaigns';
+    if (this._nav && this._nav.from === to) window.history.back(); else this.go(to);
   }
   setViewAs(id) {
     lsSet(VIEW_AS_KEY, id || null);
@@ -1221,7 +1262,7 @@ export default class App extends React.Component {
       sum, groups, list, listCount: list.length, listEmpty: list.length === 0, statusTabs, recOptions, f: st.f,
       isWeek: st.view === 'week', isCampaigns: st.view === 'campaigns' || st.view === 'mine', isCheckin: st.view === 'checkin', isDetail: st.view === 'detail', isHistory: st.view === 'history', isRules: st.view === 'rules',
       goCampaigns: () => { setF({ status: 'all' }); this.go('campaigns'); }, goWeek: () => this.go('week'),
-      goBack: () => this.go(st.back || 'campaigns'), backLabel: { settings: 'Instellingen', toewijzing: 'Toewijzing', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', mine: 'Mijn campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: `Feedback week ${wl(CUR)}`, rules: 'Health-regels' }[st.back] || 'Campagnes',
+      goBack: () => this.navBack(), backLabel: { settings: 'Instellingen', toewijzing: 'Toewijzing', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', mine: 'Mijn campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: `Feedback week ${wl(CUR)}`, rules: 'Health-regels' }[st.back] || 'Campagnes',
       // Reminders: only to recruiters who didn't get one in the last 48 hours.
       remind: () => {
         const byRec = {}, now = Date.now();
