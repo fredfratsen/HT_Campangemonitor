@@ -13,7 +13,7 @@ export const EVENTS = {
   'account.email': 'E-mailadres gewijzigd', 'session.revoke_all': 'Overal uitgelogd',
   'integration.updated': 'API-sleutels gewijzigd', 'integration.removed': 'API-sleutels verwijderd',
   'privacy.export': 'Gegevens gedownload', 'privacy.settings': 'Bewaartermijn gewijzigd',
-  'data.rules': 'Health-regels gewijzigd', 'data.assign': 'Toewijzing gewijzigd', 'data.trello_link': 'Trello-koppeling gewijzigd', 'data.campaign_removed': 'Campagne verwijderd', 'data.denied': 'Wijziging geweigerd: geen rechten',
+  'data.rules': 'Health-regels gewijzigd', 'data.assign': 'Toewijzing gewijzigd', 'data.trello_link': 'Trello-koppeling gewijzigd', 'data.campaign_removed': 'Campagne verwijderd', 'data.campaign_halt': 'Campagne gepauzeerd, gestopt of hervat', 'data.denied': 'Wijziging geweigerd: geen rechten',
   'dev.view_as': 'Bekijk als', 'setup.link_issued': 'Setuplink gemaakt', 'owner.recovery': 'Eigenaarsherstel gestart',
   'blacklist.added': 'Op de blacklist gezet', 'blacklist.proposed': 'Voorgedragen voor de blacklist', 'blacklist.approved': 'Voordracht blacklist bevestigd',
   'blacklist.rejected': 'Voordracht blacklist afgewezen', 'blacklist.withdrawn': 'Voordracht blacklist ingetrokken', 'blacklist.updated': 'Blacklist-vermelding gewijzigd',

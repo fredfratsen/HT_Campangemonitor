@@ -74,7 +74,15 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     const rules = applied.filter(a => a.doc === 'rules');
     if (rules.length) audit.log('data.rules', { actor, details: Object.fromEntries(rules.map(a => [a.key, { van: a.before ?? null, naar: a.after ?? null }])) });
     const boardName = id => (Object.values(store.docs['live.links'] || {}).find(l => l.boardId === id) || {}).boardName || id;
+    // Pauzeren, Hervatten, Stopzetten and activating a stopped campaign again (halt, see authorize.js).
+    const HALT_TEXT = { pauze: 'gepauzeerd', stop: 'gestopt' };
+    const haltOf = x => (x && x.halt) || null;
     for (const a of applied) {
+      if ((a.doc === 'live.links' || a.doc === 'campaigns') && a.before && a.after && JSON.stringify(haltOf(a.before)) !== JSON.stringify(haltOf(a.after))) {
+        const h = haltOf(a.after), was = haltOf(a.before);
+        audit.log('data.campaign_halt', { actor, details: { campagne: a.doc === 'live.links' ? `${a.after.boardName} – ${a.after.vac}` : `${a.after.client} – ${a.after.vac}`,
+          actie: h ? HALT_TEXT[h.kind] : was.kind === 'stop' ? 'weer actief' : 'hervat' } });
+      }
       if (a.doc === 'assignLog' && a.before === undefined && a.after) audit.log('data.assign', { actor, details: { klant: a.after.client, van: a.after.from || null, naar: a.after.to } });
       else if (a.doc === 'live.inactive') audit.log('data.assign', { actor, details: { klant: boardName(a.key), naar: a.after ? 'Niet actief' : 'weer actief' } });
       else if (a.doc === 'live.mkt' || a.doc === 'mktDemo') audit.log('data.assign', { actor, details: { klant: a.doc === 'live.mkt' ? boardName(a.key) : a.key, marketeer: a.after || null } });

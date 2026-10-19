@@ -39,6 +39,13 @@ test('expired weeks, weeks before the start, Niet actief and ended campaigns nev
   assert.deepEqual(checkinQueue([camp('g', null, null, { inactive: true }), camp('h', null, null, { ended: true })], 'Kim', { cur: W }), []);
 });
 
+test('a paused or stopped campaign asks no feedback', () => {
+  const p = camp('p', null, null, { halt: { kind: 'pauze', by: 'Danielle', w: W } }), s = camp('s', null, null, { halt: { kind: 'stop', by: 'Danielle', w: W } });
+  assert.deepEqual(openWeeks(p, W), []);
+  assert.deepEqual(openWeeks(s, W), []);
+  assert.deepEqual(checkinQueue([p, s], 'Kim', { cur: W }), []);
+});
+
 test('feedback caught up in this visit stays in the queue, so it can still be corrected', () => {
   const cs = [camp('a', 8, null), camp('b', null, null)];
   const q = checkinQueue(cs, 'Kim', { cur: W, keep: ['a|' + (W - 1)] });

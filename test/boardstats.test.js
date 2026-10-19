@@ -124,6 +124,16 @@ test('a board on Niet actief keeps its campaigns, without a recruiter', () => {
   assert.deepEqual(liveCampaigns(L, {}, {}), [], 'a board that is not loaded yet shows no campaign');
 });
 
+test('a paused or stopped link keeps its campaign, with who did it and when', () => {
+  const halt = { kind: 'pauze', by: 'Danielle', w: CUR };
+  const link = { id: `t-${BOARD_ID}-all`, boardId: BOARD_ID, boardName: 'Hotel Zee', labelId: null, vac: 'Alle functies', rec: 'Kim' };
+  const full = { [BOARD_ID]: boardStats(board()) }, L = { links: [{ ...link, halt }], fb: {}, actions: {}, inactive: {} };
+  const [c] = liveCampaigns(L, full, {});
+  assert.deepEqual(c.halt, halt);
+  assert.equal(c.rec, 'Kim', 'the recruiter still calls its candidates');
+  assert.equal(liveCampaigns({ ...L, links: [link] }, full, {})[0].halt, undefined);
+});
+
 test('a function without cards yet is a campaign of one empty week', () => {
   const link = { id: 't-x', boardId: BOARD_ID, boardName: 'Hotel Zee', labelId: 'cccccccccccccccccccccccc', vac: 'Afwas', rec: 'Kim' };
   const c = liveCampaign(link, undefined, {}, []);

@@ -245,6 +245,55 @@ test('a recruiter gets at most one reminder per 48 hours', () => {
   assert.equal(a('inbox', 'n5', undefined, rem('n5', 'Tsjerk')).value.to, 'Tsjerk');
 });
 
+test('pausing and stopping campaigns: Recruitment Marketeers and teamleads, not recruiters or account managers', () => {
+  for (const who of [mkt, lead, dev]) assert.ok(can(who, 'campaigns.pause'), who.role);
+  for (const who of [kim, am]) assert.ok(!can(who, 'campaigns.pause'), who.role);
+});
+
+test('Trello: a marketeer pauses, resumes and stops campaigns of their own clients; only Toewijzing brings a stopped one back', () => {
+  const link = { id: 't-b1-kok', boardId: 'b1', boardName: 'Hotel A', labelId: 'l1', vac: 'Kok', rec: 'Kim' };
+  const other = { ...link, id: 't-b2-kok', boardId: 'b2', boardName: 'Hotel B' };
+  const docs = { 'live.mkt': { b1: 'Danielle', b2: 'Mare' } }, M = makeAuthorizer(mkt, docs);
+  const halt = (k, kind, by = 'Iemand') => ({ ...k, halt: { kind, by, w: W } });
+  assert.equal(M('live.links', link.id, link, halt(link, 'pauze')).value.halt.by, 'Danielle', 'author stamped');
+  assert.equal(M('live.links', link.id, halt(link, 'pauze', 'Danielle'), link), '', 'resuming');
+  assert.equal(M('live.links', link.id, halt(link, 'pauze', 'Danielle'), halt(link, 'stop')).value.halt.kind, 'stop', 'stopping a paused one');
+  assert.equal(M('live.links', link.id, link, halt(link, 'stop')).value.halt.by, 'Danielle');
+  assert.equal(M('live.links', link.id, halt(link, 'stop', 'Danielle'), link), NO_RIGHT, 'a stopped campaign stays stopped');
+  assert.equal(M('live.links', link.id, halt(link, 'stop', 'Danielle'), halt(link, 'pauze')), NO_RIGHT);
+  assert.equal(M('live.links', link.id, link, { ...link, halt: { kind: 'weg', w: W } }), NO_RIGHT, 'only Pauze and Gestopt');
+  assert.equal(M('live.links', other.id, other, halt(other, 'pauze')), NO_RIGHT, 'not another marketeer’s client');
+  assert.equal(M('live.links', link.id, link, { ...link, rec: 'Juul' }), NO_RIGHT, 'nothing else about the link');
+  assert.equal(M('live.links', link.id, link, { ...halt(link, 'pauze'), rec: 'Juul' }), NO_RIGHT, 'not even along with a pause');
+  assert.equal(M('live.links', link.id, link, undefined), NO_RIGHT, 'no unlinking');
+  assert.equal(makeAuthorizer({ ...mkt, grants: ['campaigns.all'] }, docs)('live.links', other.id, other, halt(other, 'pauze')).value.halt.by, 'Danielle', 'covering for a colleague');
+  assert.equal(makeAuthorizer({ ...mkt, revokes: ['campaigns.pause'] }, docs)('live.links', link.id, link, halt(link, 'pauze')), NO_RIGHT);
+  for (const who of [kim, am]) assert.equal(makeAuthorizer(who, docs)('live.links', link.id, link, halt(link, 'pauze')), NO_RIGHT, who.role);
+  const L = makeAuthorizer(lead, docs);
+  assert.equal(L('live.links', link.id, halt(link, 'stop', 'Danielle'), link), '', 'the teamlead activates it again');
+  assert.equal(L('live.links', other.id, other, halt(other, 'stop')).value.halt.by, 'Robbin', 'and stops any campaign, stamped');
+  assert.equal(L('live.links', link.id, link, { ...link, rec: 'Juul' }), '', 'other link changes as before');
+  const stopped = halt(link, 'stop', 'Danielle');
+  assert.equal(L('live.links', link.id, stopped, { ...stopped, rec: 'Juul' }), '', 'a new recruiter leaves who stopped it');
+  assert.equal(makeAuthorizer({ ...mkt, grants: ['trello.link'] }, docs)('live.links', link.id, stopped, { ...stopped, rec: 'Juul' }), '', 'also for Trello-koppeling alone');
+});
+
+test('demo campaigns: the same rules, on the campaign itself', () => {
+  const c = { ...camp('c1', 'Kim'), client: 'Hotel A' }, b = { ...c, id: 'c2', client: 'Hotel B' }, z = { ...c, id: 'c3', client: 'Hotel Z' };
+  const docs = { mktDemo: { 'Hotel A': 'Danielle', 'Hotel B': 'Mare' } }, M = makeAuthorizer(mkt, docs);
+  const halt = (x, kind) => ({ ...x, halt: { kind, by: 'Iemand', w: W } });
+  assert.equal(M('campaigns', 'c1', c, halt(c, 'pauze')).value.halt.by, 'Danielle');
+  assert.equal(M('campaigns', 'c1', halt(c, 'pauze'), c), '', 'resuming');
+  assert.equal(M('campaigns', 'c1', halt(c, 'stop'), c), NO_RIGHT, 'a stopped campaign stays stopped');
+  assert.equal(M('campaigns', 'c2', b, halt(b, 'pauze')), NO_RIGHT, 'not another marketeer’s client');
+  assert.equal(M('campaigns', 'c3', z, halt(z, 'pauze')).value.halt.by, 'Danielle', 'the app picks a marketeer at random for a demo client without one');
+  const both = M('campaigns', 'c1', c, { ...halt(c, 'pauze'), weeks: [c.weeks[0], { ...c.weeks[1], klant: 'Stopt even', klantBy: 'Iemand' }] });
+  assert.equal(both.value.halt.by, 'Danielle', 'stamped along with client feedback');
+  assert.equal(both.value.weeks[1].klantBy, 'Danielle');
+  assert.equal(makeAuthorizer(kim, docs)('campaigns', 'c1', c, halt(c, 'pauze')), NO_RIGHT);
+  assert.equal(makeAuthorizer(lead, docs)('campaigns', 'c1', halt(c, 'stop'), c), '', 'the teamlead activates it again');
+});
+
 test('every role in ROLES has only known rights', () => {
   for (const r of Object.values(ROLES)) for (const k of r.rights) assert.ok(RIGHT_KEYS.includes(k), k);
 });

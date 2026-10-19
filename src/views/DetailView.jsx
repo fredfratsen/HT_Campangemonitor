@@ -23,7 +23,19 @@ export default function DetailView({ v }) {
               {d.hasFill ? <Button variant="primary" onClick={d.fill}>{d.fillLabel}</Button> : null}
             </div> : null}
         </div>
+        {d.haltActs.length ? <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px' }}>
+            {d.haltActs.map((a, i) => <button key={i} onClick={a.onClick} className="link-btn">{a.label}</button>)}
+          </div> : null}
       </div>
+      {d.halt.has ? <div style={{ background: '#EEEAE5', borderRadius: '12px', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 16px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '0', flex: '1 1 320px' }}>
+            <span style={{ fontSize: '14px' }}><strong>{d.halt.title}</strong> · {d.halt.line}</span>
+            <span style={{ fontSize: '13px', lineHeight: '1.5', color: '#5C5C5A', textWrap: 'pretty' }}>{d.halt.text}</span>
+          </div>
+          {d.halt.acts.length ? <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {d.halt.acts.map((a, i) => <Button key={i} variant={a.primary ? 'accent' : 'ghost'} size="sm" onClick={a.onClick}>{a.label}</Button>)}
+            </div> : null}
+        </div> : null}
       {!d.canMon && d.upd.has ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <span style={{ fontSize: '12px', fontWeight: '600', color: '#B45309' }}>{d.upd.last.meta}</span>
           <span style={{ fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textWrap: 'pretty' }}>{d.upd.last.text}</span>

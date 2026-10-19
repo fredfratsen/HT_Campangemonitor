@@ -179,6 +179,24 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.deepEqual(audit[0].details['Wekelijkse feedback'], { van: null, naar: 12 });
   });
 
+  test('a Recruitment Marketeer pauses and stops a campaign of their own client; only the Dev or teamlead brings it back', async () => {
+    const inv = await S.dev.api('POST', '/api/admin/members', { name: 'Pauze Marketeer', role: 'marketeer' });
+    const mkt = client();
+    await mkt.form(new URL(inv.data.link).pathname, { email: 'rm2@example.com', password: 'de marketeer met pauze', password2: 'de marketeer met pauze' });
+    assert.equal((await mkt.get('/api/me')).status, 200);
+    const link = { id: 't-b9-kok', boardId: 'b9', boardName: 'Hotel Pauze', labelId: 'l9', vac: 'Kok', rec: 'Tessa' };
+    const set = (who, value) => who.api('POST', '/api/state/patch', { patches: [{ doc: 'live.links', set: { [link.id]: value } }] });
+    await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.links', set: { [link.id]: link } }, { doc: 'live.mkt', set: { b9: 'Pauze Marketeer' } }] });
+    assert.deepEqual((await set(mkt, { ...link, halt: { kind: 'pauze', by: 'Iemand', w: 43 } })).data.rejected, []);
+    assert.equal((await S.dev.get('/api/state')).data.docs['live.links'][link.id].halt.by, 'Pauze Marketeer');
+    assert.deepEqual((await set(mkt, { ...link, halt: { kind: 'stop', w: 43 } })).data.rejected, []);
+    assert.deepEqual((await set(mkt, link)).data.rejected, [{ doc: 'live.links', key: link.id }], 'a stopped campaign stays stopped');
+    assert.deepEqual((await set(S.dev, link)).data.rejected, []);
+    const audit = (await S.dev.get('/api/admin/audit?type=data.campaign_halt')).data.entries;
+    assert.deepEqual(audit.map(e => [e.actorName, e.details.campagne, e.details.actie]), [
+      ['Tsjerk', 'Hotel Pauze – Kok', 'weer actief'], ['Pauze Marketeer', 'Hotel Pauze – Kok', 'gestopt'], ['Pauze Marketeer', 'Hotel Pauze – Kok', 'gepauzeerd']]);
+  });
+
   test('a new bug or idea is mailed to the address the Dev set, through the mail server under Integraties', async () => {
     const smtp = fakeSmtp(), port = await smtp.listen();
     // The long-running server sends in the background; the Netlify function before it answers.

@@ -1,4 +1,5 @@
 import React from 'react';
+import HaltTag from '../components/HaltTag.jsx';
 
 const COLS = 'minmax(180px,1.4fr) 110px 96px 120px 64px 120px minmax(80px,1fr)';
 const ROW = { display: 'grid', gridTemplateColumns: COLS, gap: '16px', alignItems: 'center', cursor: 'pointer', fontSize: '14px' };
@@ -13,7 +14,7 @@ function Cells({ r }) {
       <div data-label="Totaal" style={NUM}>{r.total}</div>
       <div data-label="Feedback" style={{ fontSize: '13px' }}>
         {r.fbOpen ? <button onClick={r.fill} title="Feedback invullen" style={{ border: '0', background: 'none', padding: '0', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#B45309', textAlign: 'left' }}>{r.fbText} →</button>
-          : <span style={{ color: '#1A7A4A' }}>{r.fbText}</span>}
+          : <span style={{ color: r.fbFg }}>{r.fbText}</span>}
       </div>
       <div style={{ display: 'flex', height: '10px', borderRadius: '999px', overflow: 'hidden', background: '#F5F2ED' }}>
         <div style={{ width: r.nPct, background: '#1B1B63' }} />
@@ -90,7 +91,7 @@ export default function LiveView({ v }) {
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
                   <span style={{ minWidth: '0' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontWeight: '600' }}>{r.client}{r.hasBadge ? <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', background: r.bBg, color: r.bFg }}>{r.badge}</span> : null}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: r.multi ? '#1B1B63' : '#5C5C5A', fontWeight: r.multi ? '500' : '400' }}>{r.vac}{r.multi ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', transform: r.expanded ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg> : null}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: r.multi ? '#1B1B63' : '#5C5C5A', fontWeight: r.multi ? '500' : '400' }}>{r.vac}{r.tag ? <HaltTag t={r.tag} /> : null}{r.multi ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', transform: r.expanded ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg> : null}</span>
                   </span>
                 </div>
                 <div data-label="Marketeer" style={{ color: '#3C3C3A' }}>{r.mkt}</div>
@@ -100,6 +101,7 @@ export default function LiveView({ v }) {
                   <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '19px', fontSize: '13px' }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', flex: 'none', background: f.dot }} />
                     <span style={{ fontWeight: '500' }}>{f.vac}</span>
+                    {f.tag ? <HaltTag t={f.tag} /> : null}
                   </div>
                   <div />
                   <Cells r={f} />

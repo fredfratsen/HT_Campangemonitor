@@ -1,4 +1,5 @@
 import React from 'react';
+import HaltTag from '../components/HaltTag.jsx';
 
 // Also "Mijn campagnes" (isMine): a recruiter's own campaigns, without the Status, Recruiter and Gem. kwaliteit columns.
 export default function CampaignsView({ v }) {
@@ -40,7 +41,7 @@ export default function CampaignsView({ v }) {
                 </div>}
               <div style={{ minWidth: '0' }}>
                 <div style={{ fontWeight: '600' }}>{c.client}</div>
-                <div style={{ color: '#5C5C5A', fontSize: '13px' }}>{c.vac}</div>
+                <div style={{ color: '#5C5C5A', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>{c.vac}{isMine && c.haltTag ? <HaltTag t={c.haltTag} /> : null}</div>
               </div>
               {isMine ? null : <div data-label="Recruiter" style={{ color: '#3C3C3A' }}>{c.rec}</div>}
               <div data-label="Instroom" style={{ display: 'flex', alignItems: 'flex-end', gap: '10px' }}>

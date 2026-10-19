@@ -57,6 +57,20 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
     }
     return out;
   }
+  /**
+   * Pauzeren, Hervatten and Stopzetten: the halt of a campaign (or Trello link) goes from b to a ({ kind: 'pauze' |
+   * 'stop', by, w } or none). With campaigns.pause on your own clients (own), or any client with campaigns.all; a
+   * stopped campaign only comes back with assign (Toewijzing). Returns '' or a reason.
+   */
+  function haltChange(b, a, own) {
+    if (a && !['pauze', 'stop'].includes(a.kind)) return NO_RIGHT;
+    if (has('assign')) return '';
+    if (!has('campaigns.pause') || !(own || has('campaigns.all'))) return NO_RIGHT;
+    return need(!(b && b.kind === 'stop'));
+  }
+  /** The value v with whoever is logged in as the one who paused or stopped it, when its halt changed from before. */
+  const stampHalt = (before, v) => v && v.halt && !same(before && before.halt, v.halt) && v.halt.by !== actor.name ? { ...v, halt: { ...v.halt, by: actor.name } } : v;
+  const result = (after, value) => value === after ? '' : { value };
   /** An answer needs no right: it replies to a question that was sent to you, and goes back to who asked it. */
   function isAnswer(a) {
     const q = (docs.inbox || {})[String(a.re)];
@@ -67,10 +81,13 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
     campaigns(key, before, after) {
       if (before === undefined) return need(any('assign', 'trello.link', 'dev')); // a new client from Toewijzing (demo)
       if (after === undefined) return need(has('dev'));
+      // A demo client without a stored marketeer gets one at random in the app, so for the server it is anyone's own.
+      const mktDemo = docs.mktDemo || {}, own = !(before.client in mktDemo) || mktDemo[before.client] === actor.name;
       for (const k of keysOf(before, after)) {
         if (k === 'weeks' || k === 'actions' || same(before[k], after[k])) continue;
         if (k === 'rec' && RENAME[before.rec] === after.rec) continue; // old demo names, renamed by the app on load
-        if (['rec', 'ended', 'inactive'].includes(k)) { if (!has('assign')) return NO_RIGHT; }
+        if (k === 'halt') { const err = haltChange(before.halt, after.halt, own); if (err) return err; }
+        else if (['rec', 'ended', 'inactive'].includes(k)) { if (!has('assign')) return NO_RIGHT; }
         else if (!any('trello.link', 'dev')) return NO_RIGHT;
       }
       if (!same(before.actions, after.actions) && !has('campaign.changes')) return NO_RIGHT;
@@ -86,7 +103,7 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
         const sw = stampWeek(bw, aw);
         if (sw !== aw) { stamped = stamped || aws.slice(); stamped[i] = sw; }
       }
-      return stamped ? { value: { ...after, weeks: stamped } } : '';
+      return result(after, stampHalt(before, stamped ? { ...after, weeks: stamped } : after));
     },
     rules(key, before, after) {
       if (has('rules.edit')) return '';
@@ -97,7 +114,15 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
     // "Geen klant" in Toewijzing; trello.link still counts for whoever had it when this was a page of its own.
     trIgnored: () => need(any('assign', 'trello.link')),
     mktDemo: () => need(has('assign')),
-    'live.links': () => need(any('trello.link', 'assign')),
+    'live.links'(key, before, after) {
+      if (!any('trello.link', 'assign')) {
+        // Without them only the halt of an existing link: Pauzeren, Hervatten, Stopzetten.
+        if (!before || !after || keysOf(before, after).some(k => k !== 'halt' && !same(before[k], after[k]))) return NO_RIGHT;
+        const err = haltChange(before.halt, after.halt, (docs['live.mkt'] || {})[before.boardId] === actor.name);
+        if (err) return err;
+      } else if (after && !same(before && before.halt, after.halt)) { const err = haltChange(before && before.halt, after.halt, true); if (err) return err; }
+      return result(after, stampHalt(before, after));
+    },
     'live.ignored': () => need(any('assign', 'trello.link')),
     'live.inactive': () => need(has('assign')),
     'live.mkt': () => need(has('assign')),

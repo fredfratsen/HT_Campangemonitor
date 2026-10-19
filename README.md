@@ -43,6 +43,15 @@ have *Eigen klanten bekijken* instead, see the last point)
   you set the campaign to *Check* or *In afwachting van klant*, and write an **update for the recruiter**. The
   recruiter sees it on the campaign and in their weekly feedback, and gets a notification under Meldingen. The
   address bar follows the open campaign (`#campagne=<id>`), so a link or a reload opens it again.
+- **Pauzeren and Stopzetten** on a campaign (right: *Campagnes pauzeren en stopzetten*; on your own clients, or all of
+  them with *Alle campagnes bekijken*), after a *Weet je het zeker?* with *Doorgaan* and *Annuleren*. A paused
+  campaign leaves the Weekoverzicht, Feedback klant and the tabs of Campagnes, and shows under *Campagnes › Pauze*,
+  where you resume it. A stopped one leaves all those screens; only *Toewijzing beheren* activates it again, in
+  Toewijzing (where *Stoppen* does the same since this change, instead of setting the function to *Geen functie*).
+  Either way the recruiter keeps the campaign in Live campagnes and Mijn campagnes, tagged, until its call list
+  (new candidates plus contact attempts) is 0, and is asked no weekly feedback for it. The campaign stays linked and
+  keeps its feedback: the link (or demo campaign) gets `halt: { kind: 'pauze' | 'stop', by, w }`, with `by` stamped
+  by the server, and every change goes into the audit log.
 - **Vraag stellen** on a campaign (right: *Vragen stellen over campagnes*): send a question to the campaign's
   Recruitment Marketeer and/or recruiter. They answer it under Meldingen, and the answer comes back there too.
 - **Feedback klant**: record the client's feedback, separately from the recruiter's.
@@ -141,7 +150,7 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 |---|---|---|
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset, the Bugs & ideeën board) |
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, the status of bugs and ideas, managing the blacklist, Tijdwinst |
-| **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, client feedback, logging campaign changes, reminders |
+| **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, pausing and stopping campaigns, client feedback, logging campaign changes, reminders |
 | **Account Manager** | Lid (member) | Campaign overview of all clients and asking questions about campaigns; changes nothing |
 | **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
 

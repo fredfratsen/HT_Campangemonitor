@@ -16,6 +16,13 @@ export const MONITOR = {
   check: { label: 'Check', fg: '#1A7A4A', bg: '#E6F4ED', rank: 0 }
 };
 export const MONITOR_KEYS = ['actie', 'goed', 'klant', 'check'];
+// A campaign put on Pauze for a while, or stopped (halt: { kind, by, w } on the campaign or Trello link). It keeps its
+// feedback. Paused: only under Campagnes › Pauze for the marketeer; stopped: only in Toewijzing, to activate it again.
+// The recruiter keeps either one until all its candidates are called (clientGroups.js recruiterSees).
+export const HALT = {
+  pauze: { label: 'Pauze', done: 'gepauzeerd', fg: '#5C5C5A', bg: '#EEEAE5' },
+  stop: { label: 'Gestopt', done: 'gestopt', fg: '#5C5C5A', bg: '#EEEAE5' }
+};
 // A recruiter gets at most one feedback reminder per 48 hours (checked by the server too).
 export const REMIND_GAP_MS = 48 * 36e5;
 export const DEF_RULES = { qRedOn: true, qRed: 4, declOn: true, declWeeks: 2, minLeadsOn: true, minLeads: 2, manualOn: true, qOrangeOn: true, qOrange: 6, dropOn: true, dropPct: 30, missingOn: true };
@@ -74,6 +81,7 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 26, date: '19 okt', tag: 'Nieuw', title: 'Campagnes pauzeren en stopzetten', text: 'Als Recruitment Marketeer zet je een campagne van je eigen klant zelf op Pauze, of je stopt hem: onder de naam van de campagne staan Pauzeren en Stopzetten. Een gepauzeerde campagne staat niet meer in het weekoverzicht, maar onder Campagnes › Pauze; daar hervat je hem. Een gestopte campagne verdwijnt uit je schermen; alleen de teamlead zet hem weer aan, onder Toewijzing. De recruiter houdt de campagne in Live campagnes tot alle kandidaten gebeld zijn, en geeft er geen wekelijkse feedback meer voor. Stoppen in Toewijzing werkt voortaan net zo, en eerdere feedback blijft bewaard.' },
   { id: 25, date: '19 okt', tag: 'Nieuw', title: 'Gemiste feedback nog een week invullen', text: 'Heb je de feedback van vorige week niet ingevuld, dan kan dat deze week nog. Bij Wekelijkse feedback recruiter staan die campagnes bovenaan, onder Nog open van week …, met de zondag waarop ze vervallen. Ze tellen mee in het getal in het menu, en Live campagnes laat zien hoeveel er nog open staan. Daarna vervalt de feedback over die week: je kunt hem niet meer invullen, en het signaal bij de Recruitment Marketeer verdwijnt.' },
   { id: 24, date: '19 okt', tag: 'Nieuw', title: 'Actie nodig als lijst', text: 'In het weekoverzicht kies je bij Actie nodig tussen Kaarten en Lijst. In de lijst staan de campagnes compact onder elkaar: per regel de klant en vacature, de recruiter, het aantal kandidaten, de kwaliteit en de signalen. Je keuze blijft bewaard in deze browser.' },
   { id: 23, date: '19 okt', tag: 'Verbeterd', title: 'Niet actief: alleen nog de Recruitment Marketeer', text: 'Zet je in Toewijzing de recruiter van een klant op Niet actief, dan verdwijnt de klant niet meer uit de schermen. De campagnes blijven bij de Recruitment Marketeer in het weekoverzicht, bij Campagnes en bij Feedback klant. Er is geen recruiter, dus de signalen uit recruiterfeedback (kwaliteit, Bijsturing gevraagd, Feedback ontbreekt) gelden niet; de signalen over instroom wel. De klant staat bij geen enkele recruiter in de wekelijkse feedback en telt niet mee bij Feedback recruiter.' },

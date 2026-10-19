@@ -1,7 +1,7 @@
 // Live campagnes per client (src/lib/clientGroups.js): the functions of one Trello board in one row, with totals.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupByClient } from '../src/lib/clientGroups.js';
+import { groupByClient, callList, recruiterSees } from '../src/lib/clientGroups.js';
 
 const fn = (id, key, nieuw, contact, o = {}) => ({ id, key, client: key, vac: id, nieuw, contact, total: nieuw + contact, open: false, rank: 0, ...o });
 
@@ -21,4 +21,19 @@ test('a group counts its open feedback, points at the first open function and ta
   const [done] = groupByClient([fn('kok', 'Oost', 1, 0)]);
   assert.equal(done.open, 0);
   assert.equal(done.firstOpen, null);
+});
+
+test('today\'s call list comes from Trello; a demo campaign gets made-up numbers that stay the same', () => {
+  assert.deepEqual(callList({ id: 'k', live: { nieuw: 3, contact: 1 }, weeks: [{ leads: 9 }] }), { nieuw: 3, contact: 1 });
+  const demo = { id: 'd1', weeks: [{ leads: 8 }] };
+  assert.deepEqual(callList(demo), callList({ ...demo }));
+});
+
+test('a recruiter keeps a paused or stopped campaign until all its candidates are called', () => {
+  const c = (halt, nieuw, contact) => ({ id: 'k', live: { nieuw, contact }, weeks: [{ leads: 0 }], ...(halt ? { halt: { kind: halt } } : {}) });
+  assert.equal(recruiterSees(c(null, 0, 0)), true, 'a running campaign always');
+  assert.equal(recruiterSees(c('pauze', 2, 0)), true);
+  assert.equal(recruiterSees(c('stop', 0, 1)), true, 'contact attempts count too');
+  assert.equal(recruiterSees(c('pauze', 0, 0)), false);
+  assert.equal(recruiterSees(c('stop', 0, 0)), false);
 });

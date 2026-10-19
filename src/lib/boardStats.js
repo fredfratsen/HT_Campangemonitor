@@ -114,7 +114,7 @@ export function liveCampaign(k, s, f, acts, quick = false) {
     weeks.push({ w, leads: e.leads ?? tr.nieuw, q: e.q ?? null, rec: e.rec || '', klant: e.klant || '', note: e.note || '', needsAction: !!e.needsAction, at: e.at || '', recBy: e.recBy, klantBy: e.klantBy, ...mon, tr });
   }
   return { id: k.id, boardId: k.boardId, client: k.boardName, vac: k.vac, rec: k.rec, start, ended: false, weeks, actions: acts, trello: true,
-    live: s ? { ...s.live } : { nieuw: 0, contact: 0 }, ...(quick ? { quick: true } : {}) };
+    live: s ? { ...s.live } : { nieuw: 0, contact: 0 }, ...(quick ? { quick: true } : {}), ...(k.halt ? { halt: k.halt } : {}) };
 }
 
 /**
