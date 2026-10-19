@@ -16,28 +16,29 @@ export function rnd(s) { let h = 2166136261; for (const ch of s) { h ^= ch.charC
 
 /**
  * Health level (0 goed, 1 monitoren, 2 actie nodig) and the rules that fired. The inflow rules look at last week
- * (the week before the campaign's last one), because the current week is still filling up.
+ * (the week before the campaign's last one), because the current week is still filling up. A campaign on Niet
+ * actief (c.inactive) has no recruiter, so the rules on recruiter feedback don't apply to it.
  */
 export function health(c, R, now = Date.now()) {
-  const ws = c.weeks, cur = ws[ws.length - 1], last = ws.length >= 2 ? ws[ws.length - 2] : null, reasons = [];
+  const ws = c.weeks, cur = ws[ws.length - 1], last = ws.length >= 2 ? ws[ws.length - 2] : null, reasons = [], fb = !c.inactive;
   const qs = ws.filter(w => w.q != null).map(w => w.q);
-  const lastQ = qs.length ? qs[qs.length - 1] : null;
+  const lastQ = fb && qs.length ? qs[qs.length - 1] : null;
   let lvl = 0;
   const add = (l, t, k) => { reasons.push({ l, t, k }); lvl = Math.max(lvl, l); };
   if (R.qRedOn && lastQ != null && lastQ <= R.qRed) add(2, `Kwaliteit ${lastQ}/10`, 'qRed');
-  if (R.declOn && qs.length > R.declWeeks) {
+  if (fb && R.declOn && qs.length > R.declWeeks) {
     let d = true;
     for (let i = 0; i < R.declWeeks; i++) if (!(qs[qs.length - 1 - i] < qs[qs.length - 2 - i])) d = false;
     if (d) add(2, `${R.declWeeks} weken dalende kwaliteit`, 'decl');
   }
   if (R.minLeadsOn && last && last.leads <= R.minLeads) add(2, `Maar ${last.leads} kandidaten vorige week`, 'minLeads');
-  if (R.manualOn && cur.needsAction) add(2, 'Bijsturing gevraagd', 'manual');
+  if (fb && R.manualOn && cur.needsAction) add(2, 'Bijsturing gevraagd', 'manual');
   if (R.qOrangeOn && lastQ != null && lastQ > (R.qRedOn ? R.qRed : 0) && lastQ <= R.qOrange) add(1, `Kwaliteit ${lastQ}/10`, 'qOrange');
   if (R.dropOn && ws.length >= 4) {
     const prior = ws.slice(-5, -2), avg = prior.reduce((s, w) => s + w.leads, 0) / prior.length;
     if (last.leads <= avg * (1 - R.dropPct / 100)) add(1, `Instroom vorige week −${Math.round((1 - last.leads / avg) * 100)}%`, 'drop');
   }
-  if (R.missingOn && cur.q == null) {
+  if (fb && R.missingOn && cur.q == null) {
     // The recruiter has until Thursday for this week's feedback, unless last week's is missing too.
     const due = mondayOf(cur.w); due.setDate(due.getDate() + 3);
     if (last && last.w >= FB_START && last.q == null) add(1, 'Feedback ontbreekt, ook vorige week', 'missing');

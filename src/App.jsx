@@ -6,7 +6,7 @@ import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
 } from './lib/constants.js';
-import { boardStats, boardFunctions, liveCampaign, linkKey } from './lib/boardStats.js';
+import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient } from './lib/clientGroups.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
@@ -310,19 +310,8 @@ export default class App extends React.Component {
     await this.loadBoards(list, run);
     if (this._run === run) this.setState({ sync: { state: 'ok', at: new Date() } });
   }
-  /**
-   * The campaigns of the Trello links (lib/boardStats.js): from the full board once it's loaded, until then from the
-   * snapshot (marked quick: no pipeline or rejection reasons yet). A board in neither shows no campaign yet.
-   */
-  liveCampaigns(L = this.state.live) {
-    const full = this._st || {}, quick = this._quick || {};
-    return L.links.filter(k => !(L.inactive || {})[k.boardId]).map(k => {
-      const key = linkKey(k), f = L.fb[k.id] || {}, acts = L.actions[k.id] || [];
-      if (full[k.boardId]) return liveCampaign(k, full[k.boardId][key], f, acts);
-      if (quick[k.boardId]) return liveCampaign(k, quick[k.boardId].stats[key], f, acts, true);
-      return null;
-    }).filter(Boolean);
-  }
+  /** The campaigns of the Trello links, from the full boards or the snapshot (lib/boardStats.js). */
+  liveCampaigns(L = this.state.live) { return liveCampaigns(L, this._st || {}, this._quick || {}); }
   rebuildLive() {
     if (this.state.source !== 'trello') return;
     this._skipSync = true;
@@ -382,7 +371,7 @@ export default class App extends React.Component {
   /** Recruiter names (as used in campaigns) and marketeer names, from the team's accounts. */
   recs() {
     const m = this.state.members.filter(x => x.recName && x.status !== 'deactivated').map(x => x.recName);
-    return m.length ? m : [...new Set((this.state.campaigns || []).map(c => c.rec))];
+    return m.length ? m : [...new Set((this.state.campaigns || []).map(c => c.rec).filter(Boolean))];
   }
   mkts() {
     const m = this.state.members.filter(x => x.role === 'marketeer' && x.status !== 'deactivated').map(x => x.name);
@@ -441,8 +430,8 @@ export default class App extends React.Component {
     const all = this.assignItems(), items = all.filter(x => !x.ign), current = items.filter(x => !x.quiet), ignored = all.filter(x => x.ign);
     const vis = st.trShowInactive ? items : current, quiet = items.length - current.length;
     const pendingOf = x => x.fns.filter(f => f.kind === 'pending');
-    // Open: no recruiter or marketeer yet, or a function without a campaign.
-    const isOpen = x => x.rec !== '__inactive' && (!x.rec || !x.mkt || pendingOf(x).length > 0), open = current.filter(isOpen).length;
+    // Open: no recruiter or marketeer yet, or a function without a campaign. Niet actief counts as a recruiter choice.
+    const isOpen = x => !x.rec || !x.mkt || pendingOf(x).length > 0, open = current.filter(isOpen).length;
     const q = A.q.trim().toLowerCase();
     const shown = (A.tab === 'ignored' ? ignored : A.tab === 'all' ? vis : vis.filter(isOpen)).filter(x => !q || x.name.toLowerCase().includes(q))
       .sort((a, b) => (isOpen(b) - isOpen(a)) || (!b.rec - !a.rec) || ((a.rec === '__inactive') - (b.rec === '__inactive')) || (b.ts - a.ts) || a.name.localeCompare(b.name));
@@ -470,22 +459,22 @@ export default class App extends React.Component {
       canPick: pickable.length > 0, allOn, someOn: !allOn && pickable.some(x => sel[x.key]), toggleAll: () => setSel(pickable, !allOn),
       rows: shown.map(x => {
         const ina = x.rec === '__inactive', on = !!sel[x.key], none = [{ v: '', l: 'Geen klant' }], exp = !!A.exp[x.key];
-        const pend = pendingOf(x), linkedFns = x.fns.filter(f => f.kind === 'linked'), oneRec = x.linked && !!x.rec && x.rec !== '__multi' && !ina;
+        const pend = pendingOf(x), linkedFns = x.fns.filter(f => f.kind === 'linked'), oneRec = x.linked && !!x.rec && x.rec !== '__multi';
         const list = fs => fs.map(f => f.name).join(', ');
-        return { key: x.key, name: x.name, last: x.last, op: ina || x.ign ? 0.55 : 1, bg: on ? '#FFF8E0' : 'transparent',
-          funcs: ina ? 'Niet actief · geen opvolging' : x.whole ? 'Alle functies · één campagne' : x.linked ? list(linkedFns)
+        return { key: x.key, name: x.name, last: x.last, op: x.ign ? 0.55 : 1, bg: on ? '#FFF8E0' : 'transparent',
+          funcs: ina ? 'Niet actief · alleen Recruitment Marketeer' : x.whole ? 'Alle functies · één campagne' : x.linked ? list(linkedFns)
             : ['Nog niet gekoppeld', x.loaded ? list(pend) : 'laden…'].filter(Boolean).join(' · '),
-          newText: x.linked && !ina && pend.length ? `Nieuw: ${list(pend)}` : '',
+          newText: x.linked && pend.length ? `Nieuw: ${list(pend)}` : '',
           canExpand: !x.ign && (x.fns.length > 0 || x.split.length > 0), expanded: exp, toggleExp: () => setA({ exp: { ...A.exp, [x.key]: !exp } }),
           note: x.linked ? '' : 'Kies een recruiter: elke functie wordt een eigen campagne, met dezelfde recruiter.',
           fnRows: x.fns.map(f => f.kind === 'linked' ? { name: f.name, meta: `Campagne${kaarten(f.cards)}`, fg: '#1D1D1B', acts: [{ label: 'Stoppen', onClick: () => this.stopFunction(x, f) }] }
             : f.kind === 'pending' ? { name: f.name, meta: `Nog geen campagne${kaarten(f.cards)}`, fg: '#B45309',
-              acts: [...(oneRec ? [{ label: `Toevoegen · ${x.rec}`, strong: true, onClick: () => this.addFunctions(x, [f]) }] : []), { label: 'Geen functie', onClick: () => this.ignoreFunction(x, f, true) }] }
+              acts: [...(oneRec ? [{ label: `Toevoegen · ${ina ? 'Niet actief' : x.rec}`, strong: true, onClick: () => this.addFunctions(x, [f]) }] : []), { label: 'Geen functie', onClick: () => this.ignoreFunction(x, f, true) }] }
             : { name: f.name, meta: 'Geen functie, geen campagne', fg: '#8C8C8A', acts: [{ label: 'Herstel', onClick: () => this.ignoreFunction(x, f, false) }] }),
           split: x.split.length && oneRec ? { text: `Eén campagne voor het hele bord. In Trello staan de functies ${list(x.split)}.`, onClick: () => this.splitBoard(x) } : null,
           canPick: !x.ign, picked: on, togglePick: () => setSel([x], !on),
           ign: x.ign, rec: x.ign ? '' : x.rec, mkt: x.ign ? '' : x.mkt, recOpts: x.ign ? none : opt(this.recs(), x.rec, true), mktOpts: x.ign ? none : opt(this.mkts(), x.mkt),
-          recBorder: x.rec || x.ign ? '#E4E1DE' : '#F9A800', mktBorder: x.mkt || ina || x.ign ? '#E4E1DE' : '#F9A800',
+          recBorder: x.rec || x.ign ? '#E4E1DE' : '#F9A800', mktBorder: x.mkt || x.ign ? '#E4E1DE' : '#F9A800',
           onRec: e => this.waitFlash(this.assign([x], { rec: e.target.value })), onMkt: e => this.assign([x], { mkt: e.target.value }),
           addText: oneRec && pend.length ? `+ ${pend.length} ${pend.length === 1 ? 'functie' : 'functies'}` : '', add: () => this.addFunctions(x, pend),
           canIgnore: !x.ign && !x.linked, ignore: () => this.ignoreClients([x], true), restore: () => this.ignoreClients([x], false) };
@@ -504,28 +493,29 @@ export default class App extends React.Component {
   }
   /**
    * Gives clients (from assignItems) a recruiter and/or marketeer; '' leaves that one as it is. A recruiter covers all
-   * functions: each one without a campaign gets one. Returns the clients that are still loading from Trello: until
+   * functions: each one without a campaign gets one. Niet actief ('__inactive') does the same without a recruiter:
+   * the campaigns are only the Recruitment Marketeer's. Returns the clients that are still loading from Trello: until
    * their functions are in, they can't be split into functions, so they keep their recruiter for now.
    */
   assign(list, { rec = '', mkt = '' }) {
     if (rec === '__multi') rec = '';
     const on = !!rec && rec !== '__inactive';
-    const wait = on ? list.filter(x => !x.linked && !x.loaded) : [], go = list.filter(x => !wait.includes(x));
+    const wait = rec ? list.filter(x => !x.linked && !x.loaded) : [], go = list.filter(x => !wait.includes(x));
     // Who followed the client before (an inactive one: nobody); the new recruiter sees it as taken over from them.
     const from = x => x.rec === '__inactive' ? '' : x.recs.includes(rec) ? rec : x.recs[0] || '';
     if (on) this.logAssigns(go.map(x => ({ client: x.name, from: from(x), to: rec, fns: x.linked ? x.fns.filter(f => f.kind === 'pending').map(f => f.name) : [] })));
     const L = this.state.source === 'trello';
     if (rec && go.length) {
-      const off = rec === '__inactive', keys = new Set(go.map(x => x.key));
+      const off = rec === '__inactive', r = off ? '' : rec, keys = new Set(go.map(x => x.key));
       if (L) this.setState(s => {
         const inactive = { ...(s.live.inactive || {}) };
         go.forEach(x => { if (off) inactive[x.key] = true; else delete inactive[x.key]; });
-        const links = off ? s.live.links : [...s.live.links.map(k => keys.has(k.boardId) ? { ...k, rec } : k), ...go.flatMap(x => this.newLinks(x, x.fns.filter(f => f.kind === 'pending'), rec))];
+        const links = [...s.live.links.map(k => keys.has(k.boardId) ? { ...k, rec: r } : k), ...go.flatMap(x => this.newLinks(x, x.fns.filter(f => f.kind === 'pending'), r))];
         return { live: { ...s.live, inactive, links } };
       }, () => this.rebuildLive());
       else {
-        const add = (off ? go.filter(x => !x.linked) : go).flatMap(x => this.newCampaigns(x, x.fns.filter(f => f.kind === 'pending'), off ? '' : rec, off));
-        this.setState(s => ({ campaigns: [...s.campaigns.map(c => !keys.has(c.client) || (c.ended && !c.inactive) ? c : off ? { ...c, ended: true, inactive: true } : { ...c, rec, ended: false, inactive: false }), ...add] }));
+        const add = go.flatMap(x => this.newCampaigns(x, x.fns.filter(f => f.kind === 'pending'), r, off));
+        this.setState(s => ({ campaigns: [...s.campaigns.map(c => !keys.has(c.client) || (c.ended && !c.inactive) ? c : { ...c, rec: r, ended: false, inactive: off }), ...add] }));
       }
     }
     if (mkt && list.length) {
@@ -546,19 +536,19 @@ export default class App extends React.Component {
     if (fns.length) return fns.map(f => ({ id: `t-${b.id}-${f.fnId}`, boardId: b.id, boardName: b.name, labelId: f.labelId, ...(f.labelId ? {} : { listId: f.fnId }), labelName: f.name, vac: f.name, rec }));
     return x.linked ? [] : [{ id: 't-' + b.id + '-all', boardId: b.id, boardName: b.name, labelId: null, labelName: 'Hele bord', vac: 'Alle functies', rec }];
   }
-  /** Demo campaigns for functions fns of client x, or one for all functions when it has none. */
+  /** Demo campaigns for functions fns of client x, or one for all functions when it has none. off: on Niet actief. */
   newCampaigns(x, fns, rec, off = false) {
     const now = Date.now(), list = fns.length ? fns : x.linked ? [] : [{ name: 'Alle functies', cards: 0 }];
-    return list.map((f, i) => ({ id: `n${now}-${i}`, client: x.name, vac: f.name, rec, start: CUR, ended: off, inactive: off, actions: [],
+    return list.map((f, i) => ({ id: `n${now}-${i}`, client: x.name, vac: f.name, rec, start: CUR, ended: false, inactive: off, actions: [],
       weeks: [{ w: CUR, leads: f.cards, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: f.cards, gescreend: 0, voorgesteld: 0, gesprek: 0, geplaatst: 0, reasons: {} } }] }));
   }
-  /** New functions of an assigned client get a campaign, with the client's recruiter. */
+  /** New functions of an assigned client get a campaign, with the client's recruiter (none on Niet actief). */
   addFunctions(x, fns) {
-    const rec = x.rec;
+    const off = x.rec === '__inactive', rec = off ? '' : x.rec;
     this.logAssigns([{ client: x.name, from: rec, to: rec, fns: fns.map(f => f.name) }]);
     if (this.state.source === 'trello') this.setState(s => ({ live: { ...s.live, links: [...s.live.links, ...this.newLinks(x, fns, rec)] } }), () => this.rebuildLive());
-    else this.setState(s => ({ campaigns: [...s.campaigns, ...this.newCampaigns(x, fns, rec)] }));
-    this.flash(`${x.name}: ${names(fns.map(f => f.name))} toegevoegd · ${rec}`);
+    else this.setState(s => ({ campaigns: [...s.campaigns, ...this.newCampaigns(x, fns, rec, off)] }));
+    this.flash(`${x.name}: ${names(fns.map(f => f.name))} toegevoegd · ${off ? 'Niet actief' : rec}`);
   }
   /** Stops the campaign of one function; it counts as Geen functie from then on (Herstel adds it again). */
   stopFunction(x, f) {
@@ -579,9 +569,9 @@ export default class App extends React.Component {
   /** A board linked as one campaign earlier gets a campaign per function instead. */
   splitBoard(x) {
     if (!window.confirm(`${x.name} splitsen in ${x.split.length} campagnes (${names(x.split.map(f => f.name))})? De campagne ‘Alle functies’ stopt; eerdere feedback daarop blijft bewaard, maar is niet meer te zien.`)) return;
-    const rec = x.rec;
+    const off = x.rec === '__inactive', rec = off ? '' : x.rec;
     this.setState(s => ({ live: { ...s.live, links: [...s.live.links.filter(k => !(k.boardId === x.key && linkKey(k) === '*')), ...this.newLinks(x, x.split, rec)] } }), () => this.rebuildLive());
-    this.flash(`${x.name} gesplitst in ${x.split.length} campagnes · ${rec}`);
+    this.flash(`${x.name} gesplitst in ${x.split.length} campagnes · ${off ? 'Niet actief' : rec}`);
   }
   /** The button in the bar for ticked clients: the chosen recruiter and/or marketeer for all of them. */
   assignPicked(list) {
@@ -608,7 +598,7 @@ export default class App extends React.Component {
   panelVals(me) {
     const st = this.state, P = st.panel, au = this.author();
     const mineN = st.inbox.filter(n => n.to === me.name || (me.rec && n.to === me.rec));
-    const openFb = new Set(st.campaigns.filter(c => !c.ended && c.weeks[c.weeks.length - 1].q == null).map(c => `${c.client} – ${c.vac}`));
+    const openFb = new Set(st.campaigns.filter(c => !c.ended && !c.inactive && c.weeks[c.weeks.length - 1].q == null).map(c => `${c.client} – ${c.vac}`));
     const setP = p => () => {
       const upd = { panel: st.panel === p ? null : p, navOpen: false };
       if (p === 'inbox' && !me.isPreview) upd.inbox = st.inbox.map(n => mineN.includes(n) && !n.read ? { ...n, read: true } : n);
@@ -748,7 +738,7 @@ export default class App extends React.Component {
       dev: this.state.account.rights.includes('dev') })[view] || false; // your own right, also in Bekijk als
   }
   /** Can `me` fill in the recruiter feedback of campaign c? */
-  canFeedback(c, me = this.me()) { return me.rights.has('feedback.all') || (me.rights.has('feedback.own') && !!me.rec && c.rec === me.rec); }
+  canFeedback(c, me = this.me()) { return !c.inactive && (me.rights.has('feedback.all') || (me.rights.has('feedback.own') && !!me.rec && c.rec === me.rec)); }
   go(view) {
     if (!this.viewOk(view)) view = this.homeView();
     this._hashOpen = null;
@@ -861,7 +851,7 @@ export default class App extends React.Component {
   flash(t) { this.setState({ toast: t }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2400); }
   queue(st = this.state) {
     const me = this.me(), rec = me.rights.has('feedback.all') ? st.ci.rec : me.rec;
-    return st.campaigns.filter(c => !c.ended && (rec === 'all' || c.rec === rec))
+    return st.campaigns.filter(c => !c.ended && !c.inactive && (rec === 'all' || c.rec === rec))
       .sort((a, b) => (a.weeks[a.weeks.length - 1].q == null ? 0 : 1) - (b.weeks[b.weeks.length - 1].q == null ? 0 : 1));
   }
   enterCheckin(id) {
@@ -962,22 +952,23 @@ export default class App extends React.Component {
   }
   deco(c) {
     const R = this.state.rules, h = health(c, R), m = monitor(c, h), ws = c.weeks, cur = ws[ws.length - 1], prev = ws[ws.length - 2] || null;
-    const S = MONITOR[m.s], missing = cur.q == null;
-    const qd = (!missing && prev && prev.q != null) ? cur.q - prev.q : null;
+    // On Niet actief there is no recruiter, so no feedback is missing.
+    const S = MONITOR[m.s], ina = !!c.inactive, noQ = cur.q == null, missing = noQ && !ina;
+    const qd = (!noQ && prev && prev.q != null) ? cur.q - prev.q : null;
     const ld = prev ? cur.leads - prev.leads : null;
     const l8 = ws.slice(-8), pts = [];
     l8.forEach((w, i) => { if (w.q != null) pts.push(`${(l8.length > 1 ? i / (l8.length - 1) * 72 : 36).toFixed(1)},${(22 - (w.q - 1) / 9 * 20).toFixed(1)}`); });
     const l6 = ws.slice(-6), mx = Math.max(...l6.map(w => w.leads), 1);
     const lastFb = [...ws].reverse().find(w => w.q != null);
     return {
-      id: c.id, client: c.client, vac: c.vac, rec: c.rec, start: c.start, startLabel: wl(c.start), cur, lvl: h.lvl,
+      id: c.id, client: c.client, vac: c.vac, rec: ina ? 'Niet actief' : c.rec, inactive: ina, start: c.start, startLabel: wl(c.start), cur, lvl: h.lvl,
       ms: m.s, msRank: S.rank, monBy: m.by, statusLabel: S.label, sFg: S.fg, sBg: S.bg,
       monText: m.s === 'klant' ? `Sinds week ${wl(m.w)}${m.by ? ` · ${m.by}` : ''}` : m.s === 'check' ? `Gecheckt${m.by ? ` door ${m.by}` : ''}`
         : m.s === 'goed' ? 'Geen signalen deze week' : m.stale ? `Nieuw signaal na de check van ${cur.monBy || 'de marketeer'}` : '',
       href: '#campagne=' + encodeURIComponent(c.id),
       reasons: h.reasons.map(r => ({ t: r.t, fg: STAT[r.l].fg, bg: STAT[r.l].bg })),
-      missing, qText: missing ? '—' : cur.q + '/10', qFg: qc(cur.q),
-      qdText: missing ? 'nog niet beoordeeld' : qd == null ? 'eerste week' : qd === 0 ? 'gelijk aan vorige week' : `${qd > 0 ? '▲' : '▼'} ${Math.abs(qd)} t.o.v. vorige week`,
+      missing, qText: noQ ? '—' : cur.q + '/10', qFg: qc(cur.q),
+      qdText: noQ ? (ina ? 'geen recruiter' : 'nog niet beoordeeld') : qd == null ? 'eerste week' : qd === 0 ? 'gelijk aan vorige week' : `${qd > 0 ? '▲' : '▼'} ${Math.abs(qd)} t.o.v. vorige week`,
       qdShort: qd == null || qd === 0 ? '' : `${qd > 0 ? '▲' : '▼'}${Math.abs(qd)}`,
       qdColor: qd == null || qd === 0 ? '#8C8C8A' : qd > 0 ? '#1A7A4A' : '#D32F2F',
       prevQText: prev && prev.q != null ? prev.q + '/10' : '—',
@@ -986,8 +977,8 @@ export default class App extends React.Component {
       spark: pts.join(' '),
       ...(() => { const qv = ws.filter(w => w.q != null).map(w => w.q), a = avgOf(qv); return { avgQ: a == null ? '—' : nl(a), avgFg: qc(a == null ? null : Math.round(a)), avgSub: qv.length ? `over ${qv.length} ${qv.length === 1 ? 'week' : 'weken'}` : '' }; })(),
       bars: l6.map(w => ({ h: Math.max(3, Math.round(w.leads / mx * 24)) + 'px', bg: w === cur ? '#FB8915' : 'rgba(27,27,99,.28)' })),
-      lastAt: missing ? 'Ontbreekt' : (cur.at || 'Week ' + wl(cur.w)), atColor: missing ? '#D32F2F' : '#3C3C3A', atWeight: missing ? 600 : 400,
-      quote: missing ? (lastFb ? `Nog geen feedback. Week ${wl(lastFb.w)}: ${lastFb.rec}` : 'Nog geen feedback') : (cur.rec || 'Geen toelichting'),
+      lastAt: ina ? 'Niet actief' : missing ? 'Ontbreekt' : (cur.at || 'Week ' + wl(cur.w)), atColor: missing ? '#D32F2F' : '#3C3C3A', atWeight: missing ? 600 : 400,
+      quote: ina ? 'Niet actief: geen recruiter, dus geen recruiterfeedback' : missing ? (lastFb ? `Nog geen feedback. Week ${wl(lastFb.w)}: ${lastFb.rec}` : 'Nog geen feedback') : (cur.rec || 'Geen toelichting'),
       hasQuote: true,
       open: () => this.open(c.id), check: () => this.setMon(c, 'check')
     };
@@ -1000,8 +991,9 @@ export default class App extends React.Component {
     const ownOnly = can('campaigns.own') && !can('campaigns.all'), overview = can('campaigns.all') || can('campaigns.own');
     const D = shown.map(c => this.deco(c));
     const cnt = {}; MONITOR_KEYS.forEach(k => { cnt[k] = D.filter(d => d.ms === k).length; });
+    // Feedback recruiter: only campaigns with a recruiter (not Niet actief) count.
     const missingD = D.filter(d => d.missing), ri = this.remindInfo(missingD);
-    const done = D.length - missingD.length;
+    const fbTotal = D.filter(d => !d.inactive).length, done = fbTotal - missingD.length;
     const setF = p => this.setState(s => ({ f: { ...s.f, ...p } }));
 
     const klantOpen = shown.filter(c => !c.weeks[c.weeks.length - 1].klant).length;
@@ -1026,7 +1018,7 @@ export default class App extends React.Component {
     // Feedback recruiter: the first 3 missing, the rest behind a button.
     const missShown = st.missAll ? missingD : missingD.slice(0, 3);
     const sum = {
-      active: D.length, done, donePct: (done / Math.max(D.length, 1) * 100) + '%', levels,
+      active: D.length, fbTotal, done, donePct: (done / Math.max(fbTotal, 1) * 100) + '%', levels,
       hasMissing: missingD.length > 0,
       missingList: missShown.map(d => ({ client: d.client, vac: d.vac, rec: d.rec, fill: () => this.open(d.id) })),
       hasMoreMissing: missingD.length > 3, missAll: !!st.missAll, moreMissingLabel: st.missAll ? 'Minder tonen' : `Alle ${missingD.length} campagnes`,
@@ -1036,7 +1028,7 @@ export default class App extends React.Component {
     };
     const byPrio = (a, b) => (a.cur.q ?? 5.5) - (b.cur.q ?? 5.5);
     const bySeverity = (a, b) => b.lvl - a.lvl || byPrio(a, b);
-    // Campaigns without signals come up once a week as Alles goed check; a Check button per row ticks them off.
+    // Campaigns without signals come up once a week as Wekelijkse controle; a Check button per row ticks them off.
     const groups = [
       { k: 'actie', sub: 'Bekijken en bijsturen deze week' }, { k: 'goed', sub: 'Geen signalen. Even nakijken en afvinken' },
       { k: 'klant', sub: 'Wacht op input van de klant, zoals saldo of foto’s' }, { k: 'check', sub: 'Beoordeeld deze week' }
@@ -1118,7 +1110,7 @@ export default class App extends React.Component {
       qDots: ws.map((w, i) => w.q == null ? null : { x: ((i + 0.5) / n * 100) + '%', y: (w.q * 10) + '%', q: w.q, fg: qc(w.q) }).filter(Boolean),
       story: ws.slice().reverse().map(w => ({
         w: w.w, wl: wl(w.w), range: range(w.w), leads: w.leads, qText: w.q != null ? `Kwaliteit ${w.q}/10` : w.w < FB_START ? 'Voor start monitor' : 'Geen score', qBg: qb(w.q), qFg: qc(w.q),
-        missing: w.q == null && w.w >= FB_START, hasFb: w.q != null, rec: w.rec || '—',
+        missing: w.q == null && w.w >= FB_START && !selC.inactive, hasFb: w.q != null, rec: w.rec || '—',
         klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A',
         canFill: canFb && w.w === CUR && !selC.ended, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !selC.ended, addKlant: () => this.startKlant(selC.id),
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
@@ -1151,7 +1143,7 @@ export default class App extends React.Component {
         return { text, dirty: text.trim() !== (cw.upd || ''), has: !!last, last: last || {},
           saved: !last ? '' : last.cur ? `Opgeslagen door ${last.by}` : `Laatste update: ${last.meta.replace('Update van ', '')}`,
           set: e => { const v = e.target.value; this.setState({ upd: { id: selC.id, text: v } }); }, save: () => this.saveUpd(selC),
-          hint: selC.rec ? `${selC.rec} ziet dit hier en bij de wekelijkse feedback, en krijgt een melding.` : 'Deze campagne heeft nog geen recruiter.' };
+          hint: selC.inactive ? 'Niet actief: deze campagne heeft geen recruiter.' : selC.rec ? `${selC.rec} ziet dit hier en bij de wekelijkse feedback, en krijgt een melding.` : 'Deze campagne heeft nog geen recruiter.' };
       })()
     };
     const canAsk = can('questions.ask') && selC.id !== 'none', askOpts = canAsk ? this.askTargets(selC) : [];
@@ -1225,8 +1217,8 @@ export default class App extends React.Component {
     let kc = {};
     if (kC) {
       const cw = kC.weeks[kC.weeks.length - 1], pw = kC.weeks[kC.weeks.length - 2];
-      kc = { client: kC.client, vac: kC.vac, rec: kC.rec, leads: cw.leads, qText: cw.q != null ? `kwaliteit ${cw.q}/10` : 'nog geen score',
-        recText: cw.rec || `${kC.rec} heeft nog geen feedback ingevuld.`, recColor: cw.rec ? '#1D1D1B' : '#8C8C8A',
+      kc = { client: kC.client, vac: kC.vac, rec: kC.inactive ? 'Niet actief' : kC.rec, leads: cw.leads, qText: cw.q != null ? `kwaliteit ${cw.q}/10` : 'nog geen score',
+        recText: cw.rec || (kC.inactive ? 'Niet actief: geen recruiterfeedback.' : `${kC.rec} heeft nog geen feedback ingevuld.`), recColor: cw.rec ? '#1D1D1B' : '#8C8C8A',
         prevKlant: pw && pw.klant ? `“${pw.klant}”` : 'geen' };
     }
     return {
@@ -1364,7 +1356,7 @@ export default class App extends React.Component {
     const chTitle = [nN ? `${nN} ${nN === 1 ? 'nieuw bedrijf' : 'nieuwe bedrijven'}` : '', nO ? `${nO} overgenomen` : '', gone.length ? `${gone.length} overgedragen` : ''].filter(Boolean).join(' · ');
     // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
     const groups = groupByClient(mine.map(c => {
-      // Alles goed check is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
+      // Wekelijkse controle is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
       const cur = c.weeks[c.weeks.length - 1], ms = monitor(c, health(c, R)).s;
       const nieuw = c.live ? c.live.nieuw : Math.floor(rnd(c.id + 'today') * (cur.leads / 4 + 1.5)) + Math.round(rnd(c.id + 'bl') * 1.4);
       const contact = c.live ? c.live.contact : Math.round(rnd(c.id + 'cp') * 3) + Math.round(cur.leads / 4);

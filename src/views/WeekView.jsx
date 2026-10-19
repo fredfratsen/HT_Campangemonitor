@@ -33,7 +33,7 @@ export default function WeekView({ v }) {
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Feedback recruiter</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1' }}>{sum.done}</span>
-            <span style={{ fontSize: '18px', color: '#8C8C8A' }}>/ {sum.active}</span>
+            <span style={{ fontSize: '18px', color: '#8C8C8A' }}>/ {sum.fbTotal}</span>
           </div>
           <div style={{ height: '8px', borderRadius: '999px', background: '#F5F2ED', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: sum.donePct, background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)' }} />

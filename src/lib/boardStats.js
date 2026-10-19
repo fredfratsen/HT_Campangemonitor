@@ -116,3 +116,18 @@ export function liveCampaign(k, s, f, acts, quick = false) {
   return { id: k.id, boardId: k.boardId, client: k.boardName, vac: k.vac, rec: k.rec, start, ended: false, weeks, actions: acts, trello: true,
     live: s ? { ...s.live } : { nieuw: 0, contact: 0 }, ...(quick ? { quick: true } : {}) };
 }
+
+/**
+ * The campaigns of the Trello links L.links: from the full board (full[boardId], boardStats) once it's loaded, until
+ * then from the snapshot (quick[boardId].stats). A board in neither shows no campaign yet. A board on Niet actief
+ * keeps its campaigns for the Recruitment Marketeer, without a recruiter (inactive).
+ */
+export function liveCampaigns(L, full, quick) {
+  const ina = L.inactive || {};
+  return L.links.map(k => {
+    const key = linkKey(k), f = L.fb[k.id] || {}, acts = L.actions[k.id] || [];
+    const c = full[k.boardId] ? liveCampaign(k, full[k.boardId][key], f, acts)
+      : quick[k.boardId] ? liveCampaign(k, quick[k.boardId].stats[key], f, acts, true) : null;
+    return c && ina[k.boardId] ? { ...c, rec: '', inactive: true } : c;
+  }).filter(Boolean);
+}

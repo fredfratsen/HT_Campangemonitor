@@ -2,7 +2,7 @@
 // show right after login, before the full boards are loaded in the background.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, linkKey } from '../src/lib/boardStats.js';
+import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey } from '../src/lib/boardStats.js';
 import { intakeName, stageOf } from '../src/lib/constants.js';
 import { CUR } from '../src/lib/weeks.js';
 import { board, intakeBoard, BOARD_ID, KOK, BEDIENING, IN, INTAKE_CARD } from './trello-fixture.js';
@@ -108,6 +108,20 @@ test('a campaign linked to an intake list, a label or the whole board gets those
 test('candidates without a function: no intake list and no label, Informatie not counted', () => {
   assert.equal(withoutFunction(intakeBoard()), 1, 'only the card "none"');
   assert.equal(withoutFunction(board()), 0);
+});
+
+test('a board on Niet actief keeps its campaigns, without a recruiter', () => {
+  const link = { id: `t-${BOARD_ID}-all`, boardId: BOARD_ID, boardName: 'Hotel Zee', labelId: null, vac: 'Alle functies', rec: 'Kim' };
+  const L = { links: [link], fb: {}, actions: {}, inactive: {} }, full = { [BOARD_ID]: boardStats(board()) };
+  const [on] = liveCampaigns(L, full, {});
+  assert.equal(on.rec, 'Kim');
+  assert.equal(on.inactive, undefined);
+  const [off] = liveCampaigns({ ...L, inactive: { [BOARD_ID]: true } }, full, {});
+  assert.equal(off.rec, '', 'no recruiter, so in nobody\'s weekly feedback');
+  assert.equal(off.inactive, true);
+  assert.equal(off.ended, false, 'still in the marketeer\'s screens');
+  assert.deepEqual(off.weeks.map(w => w.leads), on.weeks.map(w => w.leads));
+  assert.deepEqual(liveCampaigns(L, {}, {}), [], 'a board that is not loaded yet shows no campaign');
 });
 
 test('a function without cards yet is a campaign of one empty week', () => {
