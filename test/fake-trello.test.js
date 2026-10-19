@@ -59,6 +59,31 @@ test('through the proxy, every function on every demo board has new candidates i
   assert.equal(answer('https://example.com/x', now), null, 'other sites are left alone');
 });
 
+test('in the afternoon some candidates got ‘Geen gehoor’ today, read through the proxy, the same a minute later', async () => {
+  const t = new Date().setHours(15, 0, 0, 0), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'htcm-fake-'));
+  let at = t;
+  globalThis.fetch = async (url, opts) => answer(url, at) || before(url, opts);
+  const docs = fileDocs(dir), router = trelloRouter(() => ({ key: 'k', token: 't' }), { intake: createTrelloIntake(docs), now: () => at });
+  const server = await new Promise(ok => { const s = express().use(router).listen(0, () => ok(s)); });
+  const get = async p => (await before(`http://127.0.0.1:${server.address().port}${p}`)).json();
+  try {
+    const called = async () => {
+      let n = 0, contact = 0;
+      for (const b of await get('/members/me/boards')) { const l = boardStats(await get(`/boards/${b.id}`), at)['*'].live; n += l.gebeld; contact += l.contact; }
+      return { n, contact };
+    };
+    const first = await called();
+    assert.ok(first.n > 0 && first.contact > 0, 'some called, some still to call');
+    at += 6e4;
+    assert.deepEqual(await called(), first);
+  } finally {
+    globalThis.fetch = before;
+    await new Promise(ok => { server.close(ok); server.closeAllConnections(); });
+    docs.flushAll();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a minute later the first function has one more new candidate, in the feedback week and on the call list', async () => {
   // Minutes 10–15 of this hour: a round of 5 starts at 10, and no demo card comes in on the hour in between.
   const hour = Math.floor(Date.now() / 36e5) * 36e5, t = hour + 11 * 6e4, cur = feedbackWeek(t);

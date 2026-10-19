@@ -57,10 +57,12 @@ export function withoutFunction(bd) {
 /**
  * Per campaign key ('*', or a function: a label or intake list id): minW, the earliest week with a card; weeks, per week the new candidates,
  * how far they got (gescreend … geplaatst) and why they were rejected; live, the open cards in Nieuw and
- * Contactpoging now. A label without cards has no key.
+ * Contactpoging now, and gebeld: those of them that got a ‘Geen gehoor’ today (geenGehoor, from the server), which
+ * are off today's call list until midnight. A label without cards has no key.
  */
-export function boardStats(bd) {
+export function boardStats(bd, now = Date.now()) {
   const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
+  const today = new Date(now).setHours(0, 0, 0, 0), calledToday = c => !!c.geenGehoor && Date.parse(c.geenGehoor) >= today;
   const fnsOf = functions(bd).of;
   const cfs = bd.customFields || [], rf = cfs.find(f => /reden\s*afgewezen/i.test(f.name)), sd = cfs.find(f => /sollicitatiedatum/i.test(f.name)), ropt = {};
   ((rf && rf.options) || []).forEach(o => { ropt[o.id] = o.value && o.value.text; });
@@ -72,7 +74,7 @@ export function boardStats(bd) {
     const w = weekOf(dv && dv.value && dv.value.date ? Date.parse(dv.value.date) : cardTs(c.id)), r = RANK[stage] || 0;
     const reason = rv ? (ropt[rv.idValue] || (rv.value && rv.value.text) || null) : null;
     for (const key of ['*', ...new Set(fnsOf(c))]) {
-      const s = out[key] || (out[key] = { minW: w, weeks: {}, live: { nieuw: 0, contact: 0 } });
+      const s = out[key] || (out[key] = { minW: w, weeks: {}, live: { nieuw: 0, contact: 0, gebeld: 0 } });
       if (w < s.minW) s.minW = w;
       const t = s.weeks[w] || (s.weeks[w] = emptyTr());
       t.nieuw++;
@@ -81,7 +83,7 @@ export function boardStats(bd) {
       if (r >= 3) t.voorgesteld++;
       if (r >= 4) t.geplaatst++;
       if (reason) t.reasons[reason] = (t.reasons[reason] || 0) + 1;
-      if (!c.closed && (stage === 'nieuw' || stage === 'contact')) s.live[stage]++;
+      if (!c.closed && (stage === 'nieuw' || stage === 'contact')) s.live[calledToday(c) ? 'gebeld' : stage]++;
     }
   }
   return out;
@@ -114,7 +116,7 @@ export function liveCampaign(k, s, f, acts, quick = false) {
     weeks.push({ w, leads: e.leads ?? tr.nieuw, q: e.q ?? null, rec: e.rec || '', klant: e.klant || '', note: e.note || '', needsAction: !!e.needsAction, at: e.at || '', recBy: e.recBy, klantBy: e.klantBy, ...mon, tr });
   }
   return { id: k.id, boardId: k.boardId, client: k.boardName, vac: k.vac, rec: k.rec, start, ended: false, weeks, actions: acts, trello: true,
-    live: s ? { ...s.live } : { nieuw: 0, contact: 0 }, ...(quick ? { quick: true } : {}), ...(k.halt ? { halt: k.halt } : {}) };
+    live: s ? { gebeld: 0, ...s.live } : { nieuw: 0, contact: 0, gebeld: 0 }, ...(quick ? { quick: true } : {}), ...(k.halt ? { halt: k.halt } : {}) };
 }
 
 /**

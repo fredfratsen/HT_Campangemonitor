@@ -49,7 +49,7 @@ test('a board loaded through the proxy is there for the next login, also after a
   assert.deepEqual((await a.get('/snapshot')).boards, {}, 'nothing before the first load');
   await a.get(`/boards/${BOARD_ID}`);
   const snap = (await a.get('/snapshot')).boards;
-  assert.deepEqual(snap[BOARD_ID].stats['*'], { minW: CUR - 2, weeks: { [CUR]: { nieuw: 3 }, [CUR - 1]: { nieuw: 1 }, [CUR - 2]: { nieuw: 1 } }, live: { nieuw: 1, contact: 1 } });
+  assert.deepEqual(snap[BOARD_ID].stats['*'], { minW: CUR - 2, weeks: { [CUR]: { nieuw: 3 }, [CUR - 1]: { nieuw: 1 }, [CUR - 2]: { nieuw: 1 } }, live: { nieuw: 1, contact: 1, gebeld: 0 } });
   assert.ok(Math.abs(snap[BOARD_ID].at - Date.now()) < 60000, 'when it was loaded');
   await a.stop();
   const b = await serve(dir);

@@ -5,8 +5,9 @@
 // to api.trello.com is then answered here, with six demo clients, each with a few functions and candidates over the
 // last weeks. Some clients have their functions as labels, some as intake lists ("Nieuwe Sollicitant | Kok"), one
 // both; a board's history (with made-up candidate names, as Trello's has real ones) says which intake list each
-// card came in through. Trello keys are filled in when none are set. Each board takes FAKE_TRELLO_DELAY ms to load (default
-// 2000), so you can see the app show the snapshot first and update it after. Every minute the first function of
+// card came in through, and which candidates got ‘Geen gehoor’ today (a comment, as the Trello button makes). Trello
+// keys are filled in when none are set. Each board takes FAKE_TRELLO_DELAY ms to load (default 2000), so you can see
+// the app show the snapshot first and update it after. Every minute the first function of
 // each client gets one more candidate (in Nieuw, applied this week), so the numbers move: up to 4 more, then back.
 //
 // Without FAKE_TRELLO=1 this file does nothing, and the real Trello is used.
@@ -55,13 +56,21 @@ function board(b, now) {
   const cards = [], actions = [], groups = groups0.length ? groups0 : [null];
   let n = b * 1e6;
   const at = t => hex(Math.floor(t / 1000), 8) + hex(n++, 16);
-  // A candidate comes in on the intake list of their function (or Nieuw) and, unless still new, moves on a few hours later.
+  const today = new Date(now).setHours(0, 0, 0, 0), dmy = t => new Date(t).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+  // A candidate comes in on the intake list of their function (or Nieuw) and, unless still new, moves on a few hours
+  // later. About a third of those still to call got the Trello button ‘Geen gehoor’ today, between 9:00 and 13:00.
   const card = (created, list, fn, extra = {}) => {
     const cid = at(created), from = intakeOf(fn), to = list === 'Nieuw' ? from : list, who = NAMES[n % NAMES.length];
     cards.push({ id: cid, idList: L[to], idLabels: fn && how !== 'kolommen' ? [fn.id] : [], closed: false, customFieldItems: [], ...extra });
     actions.push({ id: at(created), type: 'createCard', date: new Date(created).toISOString(), data: { card: { id: cid, name: who }, list: ref(from) } });
     const moved = Math.min(created + 3 * 36e5, (created + now) / 2);
     if (to !== from) actions.push({ id: at(moved), type: 'updateCard', date: new Date(moved).toISOString(), data: { card: { id: cid, name: who }, listBefore: ref(from), listAfter: ref(to) } });
+    const called = Math.max(created + 6e4, today + 9 * 36e5) + Math.floor(rnd(cid, 'tijd') * 4 * 36e5);
+    // Not with at(): whether it happened yet changes over the day, and the ids of the cards after it must not.
+    if ((list === 'Nieuw' || list === 'Contactpoging') && rnd(cid, 'geen gehoor') < 0.35 && called < now) {
+      actions.push({ id: hex(Math.floor(called / 1000), 8) + 'cc' + hex(n, 14), type: 'commentCard', date: new Date(called).toISOString(),
+        data: { text: `📵 Geen gehoor ${dmy(called)}`, card: { id: cid, name: who }, list: ref(to) } });
+    }
   };
 
   // Candidates per function per week, from 7 weeks before the feedback week up to today. Recent ones are still in

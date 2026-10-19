@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey } from '../src/lib/boardStats.js';
 import { intakeName, stageOf } from '../src/lib/constants.js';
 import { CUR } from '../src/lib/weeks.js';
-import { board, intakeBoard, BOARD_ID, KOK, BEDIENING, IN, INTAKE_CARD } from './trello-fixture.js';
+import { board, intakeBoard, dayOf, BOARD_ID, KOK, BEDIENING, IN, INTAKE_CARD, CARD } from './trello-fixture.js';
 
 const tr = (nieuw, o = {}) => ({ nieuw, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, reasons: {}, ...o });
 
@@ -15,16 +15,29 @@ test('a board counts per campaign: the whole board and each function, by applica
   assert.deepEqual(s['*'], {
     minW: CUR - 2,
     weeks: { [CUR]: tr(3), [CUR - 1]: tr(1, { gescreend: 1, gesprek: 1 }), [CUR - 2]: tr(1, { reasons: { Afstand: 1 } }) },
-    live: { nieuw: 1, contact: 1 },
+    live: { nieuw: 1, contact: 1, gebeld: 0 },
   });
-  assert.deepEqual(s[KOK], { minW: CUR, weeks: { [CUR]: tr(3) }, live: { nieuw: 1, contact: 1 } }, 'the Informatie list does not count');
-  assert.deepEqual(s[BEDIENING].live, { nieuw: 0, contact: 0 }, 'archived and rejected cards are not on the call list');
+  assert.deepEqual(s[KOK], { minW: CUR, weeks: { [CUR]: tr(3) }, live: { nieuw: 1, contact: 1, gebeld: 0 } }, 'the Informatie list does not count');
+  assert.deepEqual(s[BEDIENING].live, { nieuw: 0, contact: 0, gebeld: 0 }, 'archived and rejected cards are not on the call list');
+});
+
+test('a card with a ‘Geen gehoor’ from today is off today\'s call list until midnight, counted as called', () => {
+  const at = (d, h) => { const t = dayOf(CUR, d); t.setHours(h, 0); return t.getTime(); };
+  const bd = board(), card = id => bd.cards.find(c => c.id === id);
+  card(CARD.kokContact).geenGehoor = new Date(at(2, 9)).toISOString();
+  card(CARD.kokNew).geenGehoor = new Date(at(1, 16)).toISOString();
+  card(CARD.kokArchived).geenGehoor = new Date(at(2, 10)).toISOString();
+  assert.deepEqual(boardStats(bd, at(2, 23))[KOK].live, { nieuw: 1, contact: 0, gebeld: 1 }, 'yesterday\'s counts again, an archived card not at all');
+  assert.deepEqual(boardStats(bd, at(3, 0))[KOK].live, { nieuw: 1, contact: 1, gebeld: 0 }, 'the next day it is back');
+  card(CARD.kokNew).geenGehoor = new Date(at(2, 8)).toISOString();
+  assert.deepEqual(boardStats(bd, at(2, 23))['*'].live, { nieuw: 0, contact: 0, gebeld: 2 }, 'from Nieuw too');
+  assert.deepEqual(quickStats(boardStats(bd, at(2, 23)), CUR)['*'].live, { nieuw: 0, contact: 0, gebeld: 2 }, 'the snapshot counts the same');
 });
 
 test('the snapshot keeps only new candidates per week and today\'s call list', () => {
   const q = quickStats(boardStats(board()), CUR - 1);
-  assert.deepEqual(q['*'], { minW: CUR - 2, weeks: { [CUR]: { nieuw: 3 }, [CUR - 1]: { nieuw: 1 } }, live: { nieuw: 1, contact: 1 } });
-  assert.deepEqual(q[BEDIENING], { minW: CUR - 2, weeks: { [CUR - 1]: { nieuw: 1 } }, live: { nieuw: 0, contact: 0 } }, 'no pipeline, no rejection reasons, no older weeks');
+  assert.deepEqual(q['*'], { minW: CUR - 2, weeks: { [CUR]: { nieuw: 3 }, [CUR - 1]: { nieuw: 1 } }, live: { nieuw: 1, contact: 1, gebeld: 0 } });
+  assert.deepEqual(q[BEDIENING], { minW: CUR - 2, weeks: { [CUR - 1]: { nieuw: 1 } }, live: { nieuw: 0, contact: 0, gebeld: 0 } }, 'no pipeline, no rejection reasons, no older weeks');
 });
 
 test('a campaign from the snapshot shows the same weeks and numbers as one from the full board', () => {
@@ -34,11 +47,12 @@ test('a campaign from the snapshot shows the same weeks and numbers as one from 
   const quick = liveCampaign(link, JSON.parse(JSON.stringify(quickStats(boardStats(board()), CUR - 11)))['*'], fb, [], true);
   for (const c of [full, quick]) {
     assert.deepEqual(c.weeks.map(w => [w.w, w.leads, w.q]), [[CUR - 2, 1, null], [CUR - 1, 5, null], [CUR, 3, 7]]);
-    assert.deepEqual(c.live, { nieuw: 1, contact: 1 });
+    assert.deepEqual(c.live, { nieuw: 1, contact: 1, gebeld: 0 });
     assert.equal(c.start, CUR - 2);
     assert.equal(c.client, 'Hotel Zee');
   }
   assert.equal(quick.quick, true, 'marked, so the pipeline shows as still loading');
+  assert.deepEqual(liveCampaign(link, { minW: CUR, weeks: {}, live: { nieuw: 2, contact: 1 } }, {}, [], true).live, { nieuw: 2, contact: 1, gebeld: 0 }, 'a snapshot from before ‘Geen gehoor’ was read');
   assert.equal(full.quick, undefined);
   assert.equal(full.weeks[1].tr.gesprek, 1);
   assert.equal(quick.weeks[1].tr.gesprek, 0);
@@ -65,13 +79,13 @@ test('a candidate counts for the intake list it came in through, also after movi
   const s = boardStats(intakeBoard());
   assert.deepEqual(Object.keys(s).sort(), ['*', KOK, IN.bediening, IN.barista].sort(), 'no key for Spoed: the intake list decides');
   assert.deepEqual(s['*'].weeks[CUR], tr(7, { gescreend: 1 }), 'every card once, Informatie not');
-  assert.deepEqual(s['*'].live, { nieuw: 2, contact: 3 });
+  assert.deepEqual(s['*'].live, { nieuw: 2, contact: 3, gebeld: 0 });
   // Kok: the label and the list "Nieuwe Sollicitant | Kok" are one function, under the label: inKok, kokMoved, labelOnly.
   assert.deepEqual(s[KOK].weeks[CUR], tr(3));
-  assert.deepEqual(s[KOK].live, { nieuw: 1, contact: 2 });
+  assert.deepEqual(s[KOK].live, { nieuw: 1, contact: 2, gebeld: 0 });
   // Bediening: bedMislabeled (labelled Kok, came in through Bediening) and inBedSpoed.
   assert.deepEqual(s[IN.bediening].weeks[CUR], tr(2, { gescreend: 1 }));
-  assert.deepEqual(s[IN.bediening].live, { nieuw: 1, contact: 0 });
+  assert.deepEqual(s[IN.bediening].live, { nieuw: 1, contact: 0, gebeld: 0 });
   assert.deepEqual(s[IN.barista].weeks[CUR], tr(1), 'an archived intake list still counts for the cards that came in through it');
 });
 
@@ -138,5 +152,5 @@ test('a function without cards yet is a campaign of one empty week', () => {
   const link = { id: 't-x', boardId: BOARD_ID, boardName: 'Hotel Zee', labelId: 'cccccccccccccccccccccccc', vac: 'Afwas', rec: 'Kim' };
   const c = liveCampaign(link, undefined, {}, []);
   assert.deepEqual(c.weeks.map(w => [w.w, w.leads]), [[CUR, 0]]);
-  assert.deepEqual(c.live, { nieuw: 0, contact: 0 });
+  assert.deepEqual(c.live, { nieuw: 0, contact: 0, gebeld: 0 });
 });

@@ -47,6 +47,13 @@ function move(b, id, to, t = clock) {
     listBefore: ref(b, from), listAfter: ref(b, b.lists[to]), board: { id: b.id, name: b.name } } });
   touch(b, t);
 }
+/** Someone comments `text` on the card at time t, as the Trello button ‘Geen gehoor’ does. */
+function comment(b, id, text, t = clock) {
+  const c = b.cards.find(x => x.id === id), list = Object.values(b.lists).find(l => l.id === c.idList);
+  b.actions.push({ id: newId(t), type: 'commentCard', date: iso(t), data: { text, card: { id, name: b.names[id] }, list: ref(b, list), board: { id: b.id, name: b.name } } });
+  touch(b, t);
+}
+const geenGehoor = t => `📵 Geen gehoor ${new Date(t).toLocaleDateString('nl-NL')} ${new Date(t).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}`;
 
 globalThis.fetch = async (url, opts) => {
   const u = new URL(String(url));
@@ -103,7 +110,7 @@ test('a candidate keeps the function of the intake list they came in through aft
   const a = await serve(tmp());
   assert.deepEqual(intakeOf(await a.load(b)), { [jan]: b.lists.kok.id, [piet]: b.lists.bed.id });
   const stats = (await a.get('/snapshot')).boards[b.id].stats;
-  assert.deepEqual(stats[b.lists.kok.id].live, { nieuw: 0, contact: 1 }, 'the snapshot counts Jan for Kok');
+  assert.deepEqual(stats[b.lists.kok.id].live, { nieuw: 0, contact: 1, gebeld: 0 }, 'the snapshot counts Jan for Kok');
   await a.stop();
 });
 
@@ -211,6 +218,77 @@ test('cards gone from a board are forgotten, and a new Trello key forgets everyt
   assert.ok(!fs.readFileSync(file, 'utf8').includes(b.id));
 });
 
+// ── ‘Geen gehoor’: called today, off the call list until midnight ────────
+
+const calledOf = bd => Object.fromEntries(bd.cards.filter(c => c.geenGehoor).map(c => [c.id, c.geenGehoor]));
+const afternoon = () => { const d = new Date(); d.setHours(15, 0, 0, 0); return d.getTime(); };
+
+test('a card that got ‘Geen gehoor’ today is off the call list; other comments and older ones don\'t count', async () => {
+  clock = afternoon();
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const [jan, piet, sara] = ['Jan', 'Piet', 'Sara'].map(n => { const id = arrive(b, 'kok', clock - 3 * DAY, n); move(b, id, 'contact', clock - 2 * DAY); return id; });
+  const janAt = clock - HOUR;
+  comment(b, jan, geenGehoor(janAt), janAt);
+  comment(b, piet, 'Belt zelf terug', clock - HOUR);
+  comment(b, sara, geenGehoor(clock - DAY), clock - DAY);
+  const a = await serve(tmp());
+  assert.deepEqual(calledOf(await a.load(b)), { [jan]: iso(janAt) });
+  const live = async () => (await a.get('/snapshot')).boards[b.id].stats[b.lists.kok.id].live;
+  assert.deepEqual(await live(), { nieuw: 0, contact: 2, gebeld: 1 });
+  clock += 5 * MIN; const saraAt = clock; comment(b, sara, geenGehoor(saraAt), saraAt); clock += MIN;
+  assert.deepEqual(calledOf(await a.load(b)), { [jan]: iso(janAt), [sara]: iso(saraAt) }, 'read in the next load');
+  assert.deepEqual(await live(), { nieuw: 0, contact: 1, gebeld: 2 });
+  await a.stop();
+});
+
+test('the text of a comment and the candidate\'s name never reach the browser or a file', async () => {
+  clock = afternoon();
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const c = arrive(b, 'kok', clock - DAY, 'Fatima de Boer'); move(b, c, 'contact', clock - 2 * HOUR);
+  comment(b, c, geenGehoor(clock - HOUR), clock - HOUR); comment(b, c, 'Nieuw nummer: 06-12345678', clock - 30 * MIN);
+  const dir = tmp(), a = await serve(dir);
+  await a.get('/members/me/boards');
+  const body = await a.text(`/boards/${b.id}`);
+  assert.ok(body.includes(iso(clock - HOUR)), 'when the ‘Geen gehoor’ was');
+  for (const secret of ['Fatima', '06-12345678', 'Geen gehoor']) assert.ok(!body.includes(secret), secret);
+  await a.stop();
+  for (const f of fs.readdirSync(dir)) for (const secret of ['Fatima', '06-12345678', 'Geen gehoor']) assert.ok(!fs.readFileSync(path.join(dir, f), 'utf8').includes(secret), `${f}: ${secret}`);
+});
+
+test('after midnight a ‘Geen gehoor’ is forgotten and the card is back on the call list', async () => {
+  clock = afternoon();
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const jan = arrive(b, 'kok', clock - 3 * DAY); move(b, jan, 'contact', clock - 2 * DAY);
+  comment(b, jan, geenGehoor(clock - HOUR), clock - HOUR);
+  const dir = tmp(), a = await serve(dir);
+  await a.load(b);
+  clock += DAY; touch(b, clock - MIN);
+  assert.deepEqual(calledOf(await a.load(b)), {});
+  assert.deepEqual((await a.get('/snapshot')).boards[b.id].stats[b.lists.kok.id].live, { nieuw: 0, contact: 1, gebeld: 0 });
+  await a.stop();
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'trello-intake.json'), 'utf8')).boards[b.id].geenGehoor, {}, 'forgotten on disk too');
+});
+
+test('a memory from before ‘Geen gehoor’ was read catches up from midnight, so this morning\'s calls count', async () => {
+  clock = afternoon();
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const jan = arrive(b, 'kok', clock - 3 * DAY); move(b, jan, 'contact', clock - 2 * DAY);
+  const morning = clock - 6 * HOUR; comment(b, jan, geenGehoor(morning), morning);
+  const piet = arrive(b, 'kok', clock - 10 * MIN);
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, 'trello-intake.json'), JSON.stringify({ boards: { [b.id]: { since: iso(clock - 10 * MIN), cards: { [jan]: b.lists.kok.id, [piet]: b.lists.kok.id } } } }));
+  const a = await serve(dir);
+  b.down = true;
+  assert.deepEqual(calledOf(await a.load(b)), {}, 'the history can\'t be read just then');
+  b.down = false; touch(b, clock); clock += 5 * MIN;
+  assert.deepEqual(calledOf(await a.load(b)), { [jan]: iso(morning) }, 'and is read from midnight the next time');
+  clock += 5 * MIN; arrive(b, 'bed'); clock += MIN;
+  await a.load(b);
+  const next = calls.filter(c => c.includes('/actions')).at(-1);
+  assert.ok(sinceOf(next) > clock - 30 * MIN, 'after that, only what is new again');
+  await a.stop();
+});
+
 // ── Loading boards: from memory when unchanged, and every 5 minutes ──────
 
 test('a board Trello reports unchanged comes from memory; a changed one, or one loaded over an hour ago, from Trello', async () => {
@@ -243,7 +321,7 @@ test('every round the server loads the boards that changed: linked ones, and one
   arrive(active, 'kok'); clock += 5 * MIN;
   await a.router.refresh();
   assert.deepEqual(boardCalls(), [active.id]);
-  assert.deepEqual((await a.get('/snapshot')).boards[active.id].stats[active.lists.kok.id].live, { nieuw: 1, contact: 0 }, 'in the numbers without anyone opening the app');
+  assert.deepEqual((await a.get('/snapshot')).boards[active.id].stats[active.lists.kok.id].live, { nieuw: 1, contact: 0, gebeld: 0 }, 'in the numbers without anyone opening the app');
   await a.stop();
 });
 

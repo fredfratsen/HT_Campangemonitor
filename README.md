@@ -16,7 +16,9 @@ Everyone logs in with a personal account. What you see and can do depends on you
 
 - **Live campagnes**: today's call work per client, with new candidates and contact attempts pulled from Trello.
   One row per client (Trello board) with its Recruitment Marketeer and how much feedback is still open; a client
-  with several functions folds open to one row per function. Open feedback links straight to the check-in.
+  with several functions folds open to one row per function. Open feedback links straight to the check-in. A card
+  that got the Trello button *Geen gehoor* today is off the list until midnight, so the numbers count down as you
+  call; the *Contactpogingen* block says how many were called today (see [Geen gehoor](#geen-gehoor)).
 - **Wekelijkse feedback recruiter**: the weekly check-in per campaign, headed with the week it is about (for
   example *Feedback week 39*). It covers new candidates, a quality score (1–10), written feedback, an optional
   action, and a **Bijsturing nodig** (needs adjusting) flag. That flag puts the campaign on *Actie nodig* even when
@@ -49,9 +51,10 @@ have *Eigen klanten bekijken* instead, see the last point)
   where you resume it. A stopped one leaves all those screens; only *Toewijzing beheren* activates it again, in
   Toewijzing (where *Stoppen* does the same since this change, instead of setting the function to *Geen functie*).
   Either way the recruiter keeps the campaign in Live campagnes and Mijn campagnes, tagged, until its call list
-  (new candidates plus contact attempts) is 0, and is asked no weekly feedback for it. The campaign stays linked and
-  keeps its feedback: the link (or demo campaign) gets `halt: { kind: 'pauze' | 'stop', by, w }`, with `by` stamped
-  by the server, and every change goes into the audit log.
+  (new candidates plus contact attempts, also those that got *Geen gehoor* today) is 0, and is asked no weekly
+  feedback for it. The campaign stays linked and keeps its feedback: the link (or demo campaign) gets
+  `halt: { kind: 'pauze' | 'stop', by, w }`, with `by` stamped by the server, and every change goes into the audit
+  log.
 - **Vraag stellen** on a campaign (right: *Vragen stellen over campagnes*): send a question to the campaign's
   Recruitment Marketeer and/or recruiter. They answer it under Meldingen, and the answer comes back there too.
 - **Feedback klant**: record the client's feedback, separately from the recruiter's.
@@ -227,9 +230,12 @@ variable afterwards.
   *Reden afgewezen*) come through. Descriptions and other custom fields are never fetched. To know which intake list
   a card came in through, the server also reads each board's history; Trello always sends the card's title (the
   candidate's name) with it. The server keeps only the card and list ids of each move and drops the rest right away,
-  so names are never stored or sent to the browser (`server/trello.js`). The privacy notice says so.
+  so names are never stored or sent to the browser (`server/trello.js`). The same goes for comments, read for
+  [Geen gehoor](#geen-gehoor): their text is dropped right away, only the card id and the time are kept, until
+  midnight. The privacy notice says so.
   The server only stores counts (the [Trello snapshot](#trello-snapshot)) and, per card, the id of its intake list
-  (the [intake memory](#functions-from-intake-lists)), never cards, names or rejection reasons.
+  and today's ‘Geen gehoor’ time (the [intake memory](#functions-from-intake-lists)), never cards, names, comments or
+  rejection reasons.
 - **The blacklist is the exception**: the only place the app stores candidates' personal data, typed in by the
   team. It is its own document (`DATA_DIR/blacklist.json`), only reachable through `/api/blacklist` with a
   blacklist right, and never part of `/api/state`, so people without the right never receive it. Notifications
@@ -266,6 +272,7 @@ variable afterwards.
   | Blacklist proposals nobody decided on | 30 days |
   | Trello snapshot (counts per campaign) | Until the next load of that board; boards gone from Trello are removed |
   | Trello intake memory (card id → intake list id) | While the card is on the board; boards gone from Trello are removed |
+  | *Geen gehoor* time per card (in the intake memory) | Only today's: removed at the board's first load after midnight |
 
 - **Privacy notice** at `/privacy`, linked from the login page. It is a draft: have it checked and fill in the
   contact person in `server/pages.js`.
@@ -475,9 +482,10 @@ A candidate keeps the function of the intake list they came in through, also aft
 *Gescreend* or *Afgewezen*, without anyone putting a label on the card:
 
 - The server reads each board's history (`server/trello.js`) and remembers per card which intake list it came in
-  through, in `DATA_DIR/trello-intake.json` (`server/trelloIntake.js`): only card and list ids. The first time it
-  reads the 12 weeks the monitor shows; after that only what is new, starting 5 minutes before the newest move it
-  read, so a move Trello shows late is still picked up. Reading a move twice changes nothing.
+  through, in `DATA_DIR/trello-intake.json` (`server/trelloIntake.js`): only card and list ids (plus today's
+  [Geen gehoor](#geen-gehoor) times). The first time it reads the 12 weeks the monitor shows; after that only what is
+  new, starting 5 minutes before the newest move it read, so a move Trello shows late is still picked up. Reading a
+  move twice changes nothing.
 - The app gets each card with `idIntake` and counts it for that function (`src/lib/boardStats.js`). The intake list
   goes before the card's labels; only a card without one follows its labels. Moved between two intake lists, the
   last one counts.
@@ -485,6 +493,24 @@ A candidate keeps the function of the intake list they came in through, also aft
   earlier keeps its feedback). A new intake list with the name of an archived one continues its function.
 - When the history can't be read, the board still loads with what the server remembers, and catches up next time.
 - Older than the 12 weeks: a card that had already moved on and has no label counts only for the client as a whole.
+
+### Geen gehoor
+
+The recruiters have a Trello card button *Geen gehoor* that comments `📵 Geen gehoor 19-10-2026 14:32` on the card.
+Live campagnes leaves a card with such a comment from today off the call list until midnight:
+
+- The server reads comments in the same history read as the moves (`server/trello.js`). A comment with *Geen gehoor*
+  in it (any case) counts, at the time Trello logged it, not the date in the text. Other comments are ignored. The
+  text and the card's title are dropped right away.
+- The intake memory keeps per card only the time of its last *Geen gehoor*, and only today's (`geenGehoor` in
+  `DATA_DIR/trello-intake.json`); the app gets it on the card. A memory from before this was read catches up from
+  midnight once, so the morning's calls count on the day of the update.
+- `boardStats` counts an open card in *Nieuw* (or an intake list) or *Contactpoging* with a *Geen gehoor* from today
+  as `live.gebeld` instead of `nieuw`/`contact`, in the app and in the snapshot alike. After midnight it is back,
+  at the latest within the hour, when the board is loaded again.
+- A paused or stopped campaign stays with the recruiter while it has cards called today: they aren't done yet.
+- Limits: it can take up to 5 minutes before the number drops. A *Geen gehoor* comment deleted after a mistaken click
+  still counts until midnight.
 
 ### Every 5 minutes
 
@@ -514,7 +540,8 @@ did it, in `DATA_DIR/trello-snapshot.json`:
 - In the background the app loads the boards as before, and the numbers move to the live state (*Trello bijgewerkt
   09:14*). Until a campaign's board is in, its page shows *Laden uit Trello…* for the pipeline.
 - Only counts per campaign go in: new candidates per week (the 12 weeks a campaign shows) and today's call list
-  (open cards in *Nieuw* and *Contactpoging*). No cards, no pipeline, no rejection reasons.
+  (open cards in *Nieuw* and *Contactpoging*, and how many of them got *Geen gehoor* today). No cards, no
+  pipeline, no rejection reasons.
 - The server fills it from every board it loads from Trello (`server/trelloSnapshot.js`), also in its round every
   5 minutes (see [Every 5 minutes](#every-5-minutes)); the app never writes to it. Boards Trello no longer lists are removed, and a new Trello key starts it over. It has no daily copies: every
   load rebuilds it.

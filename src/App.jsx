@@ -1426,8 +1426,8 @@ export default class App extends React.Component {
     // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
     const groups = groupByClient(mine.map(c => {
       // Wekelijkse controle is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
-      const ms = monitor(c, health(c, R)).s, { nieuw, contact } = callList(c);
-      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, total: nieuw + contact, open: openWeeks(c).length > 0,
+      const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c);
+      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open: openWeeks(c).length > 0,
         rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? HALT[c.halt.kind].label : '' };
     }));
     const mx = Math.max(...groups.map(g => g.total), 1), exp = this.state.liveExp;
@@ -1458,7 +1458,7 @@ export default class App extends React.Component {
       kpis: [
         { label: 'Vandaag te bellen', value: sum('total'), sub: 'nieuw + contactpogingen', fg: '#FFFFFF', lfg: 'rgba(255,255,255,.8)', bg: '#1B1B63', border: '#1B1B63' },
         { label: 'Nieuwe kandidaten', value: sum('nieuw'), sub: 'eerste keer bellen', fg: '#1B1B63', lfg: '#5C5C5A', bg: '#FFFFFF', border: '#E4E1DE' },
-        { label: 'Contactpogingen', value: sum('contact'), sub: 'opnieuw bellen', fg: '#B45309', lfg: '#5C5C5A', bg: '#FFFFFF', border: '#E4E1DE' }
+        { label: 'Contactpogingen', value: sum('contact'), sub: sum('gebeld') ? `opnieuw bellen · ${sum('gebeld')} vandaag gebeld` : 'opnieuw bellen', fg: '#B45309', lfg: '#5C5C5A', bg: '#FFFFFF', border: '#E4E1DE' }
       ]
     };
   }
