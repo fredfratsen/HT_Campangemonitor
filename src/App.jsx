@@ -34,7 +34,7 @@ import SettingsView from './views/settings/SettingsView.jsx';
 import DevView from './views/DevView.jsx';
 
 // Per-browser settings (chosen data source, news read, "Bekijk als")
-const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as';
+const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as', ACTIE_VIEW_KEY = 'ht-cm-actie-view';
 // Below this width the sidebar is a slide-in menu (keep in sync with the media query in styles/app.css).
 const PHONE_MQ = '(max-width: 900px)';
 // How often the open app loads the Trello boards that changed (as the server does, see server/trello.js).
@@ -68,7 +68,7 @@ export default class App extends React.Component {
       toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {} }, liveExp: {}, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
-      blSum: null
+      blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards')
     };
   }
 
@@ -1029,12 +1029,19 @@ export default class App extends React.Component {
     const byPrio = (a, b) => (a.cur.q ?? 5.5) - (b.cur.q ?? 5.5);
     const bySeverity = (a, b) => b.lvl - a.lvl || byPrio(a, b);
     // Campaigns without signals come up once a week as Wekelijkse controle; a Check button per row ticks them off.
+    // Actie nodig shows cards or, by choice (remembered in this browser), a list with one line per campaign.
+    const actieList = st.actieView === 'list';
+    const actieViews = [['cards', 'Kaarten'], ['list', 'Lijst']].map(([k, label]) => {
+      const on = st.actieView === k || (k === 'cards' && !actieList);
+      return { label, on, bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#1D1D1B' : '#5C5C5A', sh: on ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => { lsSet(ACTIE_VIEW_KEY, k); this.setState({ actieView: k }); } };
+    });
     const groups = [
       { k: 'actie', sub: 'Bekijken en bijsturen deze week' }, { k: 'goed', sub: 'Geen signalen. Even nakijken en afvinken' },
       { k: 'klant', sub: 'Wacht op input van de klant, zoals saldo of foto’s' }, { k: 'check', sub: 'Beoordeeld deze week' }
     ].map(g => {
-      const items = D.filter(d => d.ms === g.k).sort(bySeverity), compact = g.k === 'goed' || g.k === 'check';
-      return { label: MONITOR[g.k].label, fg: MONITOR[g.k].fg, n: items.length, sub: g.sub, items, cards: !compact && items.length > 0, rows: compact && items.length > 0, canCheck: g.k === 'goed' && can('campaigns.monitor') };
+      const items = D.filter(d => d.ms === g.k).sort(bySeverity), compact = g.k === 'goed' || g.k === 'check', asList = g.k === 'actie' && actieList, any = items.length > 0;
+      return { label: MONITOR[g.k].label, fg: MONITOR[g.k].fg, n: items.length, sub: g.sub, items, cards: !compact && !asList && any, rows: compact && any, list: asList && any,
+        views: g.k === 'actie' ? actieViews : null, canCheck: g.k === 'goed' && can('campaigns.monitor') };
     }).filter(g => g.n > 0);
 
     // dashboard

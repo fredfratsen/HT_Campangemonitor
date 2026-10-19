@@ -30,6 +30,8 @@ have *Eigen klanten bekijken* instead, see the last point)
 
 - **Weekoverzicht**: the **Monitorstatus** of this week's campaigns (see [Monitor status](#monitor-status-and-health-rules)),
   grouped per status. Each campaign opens on click, or in a new browser tab with the icon (or Cmd/Ctrl-click).
+  *Actie nodig* shows cards or, with the *Kaarten | Lijst* switch, a compact list with one line per campaign; the
+  choice is remembered in the browser.
   The **Feedback recruiter** card lists the first 3 campaigns without feedback (*Alle campagnes* shows the rest)
   and has a button to send reminders. A recruiter gets at most one reminder per 48 hours; the server checks this.
 - **Campagnes**: all active campaigns with status, client and vacancy, recruiter, candidates, quality and average

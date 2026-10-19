@@ -62,6 +62,9 @@ export default function WeekView({ v }) {
             <h2 style={{ margin: '0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', letterSpacing: '-.01em' }}>{g.label}</h2>
             <span style={{ fontSize: '15px', color: '#8C8C8A' }}>{g.n}</span>
             <span style={{ fontSize: '13px', color: '#5C5C5A' }}>{g.sub}</span>
+            {g.views ? <div role="group" aria-label={`${g.label} tonen als`} style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: '2px', background: '#F5F2ED', borderRadius: '999px', padding: '3px' }}>
+                {g.views.map((t, i) => <button key={i} onClick={t.onClick} aria-pressed={t.on} style={{ border: '0', borderRadius: '999px', padding: '5px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', background: t.bg, color: t.fg, boxShadow: t.sh }}>{t.label}</button>)}
+              </div> : null}
           </div>
           {g.cards ? <div className="m-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: '14px' }}>
               {g.items.map((c, j) => <div key={j} className="hov-lift" {...cardClick(c.href, c.open)} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer', boxShadow: '0 1px 2px rgba(29,29,27,.05)', transition: 'box-shadow 150ms' }}>
@@ -90,7 +93,27 @@ export default function WeekView({ v }) {
                   </div>
                 </div>)}
             </div> : null}
-          {g.rows ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
+          {g.list ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
+              {g.items.map((c, j) => <div key={j} className="hov-row week-row" {...cardClick(c.href, c.open)} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) 132px 72px minmax(0,1.7fr) auto', gap: '16px', alignItems: 'center', padding: '10px 12px 10px 20px', borderTop: j ? '1px solid #F5F2ED' : '0', cursor: 'pointer', fontSize: '14px' }}>
+                  <div style={{ minWidth: '0' }}>
+                    <div>
+                      <span style={{ fontWeight: '600' }}>{c.client}</span>
+                      <span style={{ color: '#5C5C5A' }}> – {c.vac}</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#8C8C8A' }}>{c.rec}{c.monText ? <span style={{ fontWeight: '600', color: c.sFg }}> · {c.monText}</span> : null}</div>
+                  </div>
+                  <div style={{ color: '#3C3C3A', whiteSpace: 'nowrap' }}>{c.cur.leads} kandidaten {c.ldShort ? <span style={{ fontSize: '12px', color: c.ldColor }}>{c.ldShort}</span> : null}</div>
+                  <div style={{ whiteSpace: 'nowrap' }}>
+                    <span style={{ fontWeight: '600', color: c.qFg }}>{c.qText}</span>
+                    {c.qdShort ? <span style={{ fontSize: '12px', color: c.qdColor }}> {c.qdShort}</span> : null}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {c.reasons.map((r, i3) => <span key={i3} style={{ fontSize: '11px', fontWeight: '500', padding: '2px 7px', borderRadius: '6px', background: r.bg, color: r.fg }}>{r.t}</span>)}
+                  </div>
+                  <NewTabLink href={c.href} label={`${c.client} – ${c.vac} openen in een nieuw tabblad`} />
+                </div>)}
+            </div> : null}
+          {g.rows ?<div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
               {g.items.map((c, j) => <div key={j} className="hov-row week-row" {...cardClick(c.href, c.open)} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) auto auto minmax(0,2fr) auto', gap: '16px', alignItems: 'center', padding: '8px 12px 8px 20px', borderTop: '1px solid #F5F2ED', cursor: 'pointer', fontSize: '14px' }}>
                   <div style={{ minWidth: '0' }}>
                     <span style={{ fontWeight: '600' }}>{c.client}</span>
