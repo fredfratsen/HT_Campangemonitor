@@ -1,18 +1,30 @@
-// Monitor status (src/lib/helpers.js): Actie nodig, In afwachting van klant or Check, from the health rules and
-// what a marketeer set.
+// Monitor status (src/lib/helpers.js): Actie nodig, Alles goed check, In afwachting van klant or Check, from the
+// health rules and what a marketeer set.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { health, monitor } from '../src/lib/helpers.js';
-import { DEF_RULES } from '../src/lib/constants.js';
+import { DEF_RULES, MONITOR, MONITOR_KEYS } from '../src/lib/constants.js';
 
 const week = (w, o = {}) => ({ w, leads: 8, q: 8, rec: 'ok', klant: '', note: '', needsAction: false, at: 'x', tr: { nieuw: 8 }, ...o });
 const camp = weeks => ({ id: 'c1', client: 'Klant', vac: 'Kok', rec: 'Kim', weeks });
 const mon = c => monitor(c, health(c, DEF_RULES));
 
-test('without a choice the rules decide: a signal is Actie nodig, none is Check', () => {
-  assert.deepEqual(mon(camp([week(38), week(39), week(40)])), { s: 'check', by: '', w: null, stale: false });
+test('without a choice the rules decide: a signal is Actie nodig, none is Alles goed check', () => {
+  assert.deepEqual(mon(camp([week(38), week(39), week(40)])), { s: 'goed', by: '', w: null, stale: false });
   assert.equal(mon(camp([week(38), week(39), week(40, { q: 3 })])).s, 'actie', 'red signal');
   assert.equal(mon(camp([week(38), week(39), week(40, { q: null })])).s, 'actie', 'missing feedback (was Monitoren) is Actie nodig too');
+});
+
+test('a campaign without signals is on Check only once someone checked it this week', () => {
+  assert.deepEqual(mon(camp([week(38), week(39), week(40, { mon: 'check', monBy: 'Danielle', monSig: [] })])), { s: 'check', by: 'Danielle', w: 40, stale: false });
+  assert.equal(mon(camp([week(38), week(39, { mon: 'check', monSig: [] }), week(40)])).s, 'goed', 'every week it comes up again');
+  assert.equal(mon(camp([week(38), week(39), week(40, { mon: 'open' })])).s, 'goed', 'undoing the check');
+});
+
+test('the statuses in order of priority: what needs doing first, Check last', () => {
+  assert.deepEqual(MONITOR_KEYS, ['actie', 'goed', 'klant', 'check']);
+  assert.deepEqual(MONITOR_KEYS.map(k => MONITOR[k].rank), [3, 2, 1, 0]);
+  assert.equal(MONITOR.goed.label, 'Alles goed check');
 });
 
 test('a check holds for the signals seen at that moment, not for new ones', () => {

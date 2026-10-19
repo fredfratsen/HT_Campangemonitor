@@ -108,8 +108,9 @@ Every active campaign has one monitor status per week. The health rules decide i
 | Status | When |
 |---|---|
 | **Actie nodig** | At least one health rule fires, and nobody has set another status |
+| **Alles goed check** | No rule fires and nobody has checked the campaign yet this week. So every campaign comes up once a week; in the Weekoverzicht a *Check* button per row ticks it off |
 | **In afwachting van klant** | Set by hand when the client still has to deliver something, such as ad balance or photos. It stays on in the weeks after, until someone changes it |
-| **Check** | Set by hand: the campaign has been reviewed this week, whatever its scores. Also when no rule fires at all. If a signal appears after the check that wasn't there at the time, the campaign goes back to *Actie nodig* |
+| **Check** | Set by hand: the campaign has been reviewed this week, whatever its scores. The next week it starts over. If a signal appears after the check that wasn't there at the time, the campaign goes back to *Actie nodig* |
 
 The health rules and their defaults are below. Red signals sort above orange ones; both put a campaign on *Actie
 nodig*. Anyone with the right *Health-regels aanpassen* can switch each rule on or off and change its threshold in

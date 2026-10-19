@@ -32,8 +32,9 @@ export default function RulesView({ v }) {
           </div>)}
       </div>
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
-        {[['#B45309', 'In afwachting van klant', 'Gezet door een marketeer als de klant nog iets moet aanleveren, zoals saldo of foto’s. Blijft staan tot iemand het wijzigt.'],
-          ['#1A7A4A', 'Check', 'Gezet door een marketeer als de campagne is beoordeeld, of vanzelf als er geen regel afgaat.']].map(([fg, label, sub], i) => <div key={i} className="rule-head" style={{ padding: '16px 22px', display: 'flex', alignItems: 'center', gap: '10px', borderTop: i ? '1px solid #F5F2ED' : '0' }}>
+        {[['#1B1B63', 'Alles goed check', 'Vanzelf als er geen regel afgaat: elke week kijkt een marketeer ook de rustige campagnes na en zet ze op Check.'],
+          ['#B45309', 'In afwachting van klant', 'Gezet door een marketeer als de klant nog iets moet aanleveren, zoals saldo of foto’s. Blijft staan tot iemand het wijzigt.'],
+          ['#1A7A4A', 'Check', 'Gezet door een marketeer als de campagne deze week is beoordeeld. De week erna begint het opnieuw.']].map(([fg, label, sub], i) => <div key={i} className="rule-head" style={{ padding: '16px 22px', display: 'flex', alignItems: 'center', gap: '10px', borderTop: i ? '1px solid #F5F2ED' : '0' }}>
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: fg, flex: 'none' }} />
             <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px', flex: 'none' }}>{label}</span>
             <span style={{ fontSize: '13px', color: '#8C8C8A' }}>{sub}</span>

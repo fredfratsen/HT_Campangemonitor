@@ -10,11 +10,12 @@ export const STAT = [
 ];
 // Monitor status of a campaign this week (see monitor() in helpers.js), in order of priority.
 export const MONITOR = {
-  actie: { label: 'Actie nodig', fg: '#D32F2F', bg: '#FDECEA', rank: 2 },
+  actie: { label: 'Actie nodig', fg: '#D32F2F', bg: '#FDECEA', rank: 3 },
+  goed: { label: 'Alles goed check', fg: '#1B1B63', bg: '#E7E7F0', rank: 2 },
   klant: { label: 'In afwachting van klant', fg: '#B45309', bg: '#FEF3C7', rank: 1 },
   check: { label: 'Check', fg: '#1A7A4A', bg: '#E6F4ED', rank: 0 }
 };
-export const MONITOR_KEYS = ['actie', 'klant', 'check'];
+export const MONITOR_KEYS = ['actie', 'goed', 'klant', 'check'];
 // A recruiter gets at most one feedback reminder per 48 hours (checked by the server too).
 export const REMIND_GAP_MS = 48 * 36e5;
 export const DEF_RULES = { qRedOn: true, qRed: 4, declOn: true, declWeeks: 2, minLeadsOn: true, minLeads: 2, manualOn: true, qOrangeOn: true, qOrange: 6, dropOn: true, dropPct: 30, missingOn: true };
@@ -73,6 +74,7 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 21, date: '19 okt', tag: 'Verbeterd', title: 'Elke week een check, ook als alles goed gaat', text: 'Een campagne zonder signalen staat niet meer vanzelf op Check. Hij komt elke week in het weekoverzicht onder Alles goed check, zodat iemand hem toch even nakijkt. Met de knop Check in de rij vink je hem af; de week erna komt hij weer terug. Komt er na je check een nieuw signaal bij, dan gaat hij zoals altijd naar Actie nodig.' },
   { id: 20, date: '16 okt', tag: 'Nieuw', title: 'Mail als je melding verder komt', text: 'Heb je een bug, idee of verbetering gemeld, dan krijg je een mail zodra de status op Opgepakt, Opgelost of Doen we niet komt. In de mail staat wie de status veranderde en wat je meldde; de link opent je meldingen onder Bug of idee melden.' },
   { id: 19, date: '16 okt', tag: 'Verbeterd', title: 'Functies uit kolommen, zonder labels', text: 'Een kandidaat telt mee voor de functie van de kolom waarin hij binnenkwam, zoals ‘Nieuwe Sollicitant | Kok’, ook nadat de kaart naar Contactpoging, Gescreend of Afgewezen is verplaatst. Labels zetten is daarvoor niet meer nodig. Maakt een klant een nieuwe kolom aan, dan staat die functie vanzelf onder Toewijzing. De cijfers uit Trello worden voortaan elke 5 minuten bijgewerkt, ook als je de app open laat staan.' },
   { id: 18, date: '15 okt', tag: 'Verbeterd', title: 'Recruitment Marketeers zien hun eigen klanten', text: 'In het weekoverzicht, bij Campagnes en bij Feedback klant zie je als Recruitment Marketeer alleen nog de klanten waarvan jij de Recruitment Marketeer bent. Herinneringen gaan dus ook alleen naar de recruiters van jouw klanten. De teamlead wijst klanten toe onder Toewijzing. De teamlead, Account Managers en de developer zien nog steeds alle klanten.' },

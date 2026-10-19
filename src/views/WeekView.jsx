@@ -19,7 +19,7 @@ export default function WeekView({ v }) {
       <div className="m-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '16px' }}>
         <div className="span-2" style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px', gridColumn: 'span 2', minWidth: '0' }}>
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Monitorstatus</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: '16px' }}>
             {sum.levels.map((l, i) => <button key={i} onClick={l.onClick} style={{ border: '0', background: 'none', padding: '0', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1', color: l.fg }}>{l.n}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#3C3C3A' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: l.fg }} />{l.label}</span>
@@ -99,7 +99,10 @@ export default function WeekView({ v }) {
                   <div style={{ color: '#3C3C3A' }}>{c.cur.leads} kandidaten</div>
                   <div style={{ fontWeight: '600', color: c.qFg }}>{c.qText}</div>
                   <div style={{ color: '#5C5C5A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.quote}</div>
-                  <NewTabLink href={c.href} label={`${c.client} – ${c.vac} openen in een nieuw tabblad`} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {g.canCheck ? <button onClick={e => { e.stopPropagation(); c.check(); }} aria-label={`${c.client} – ${c.vac} op Check zetten`} style={{ border: '1.5px solid #1A7A4A', background: '#FFFFFF', color: '#1A7A4A', borderRadius: '6px', padding: '4px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Check</button> : null}
+                    <NewTabLink href={c.href} label={`${c.client} – ${c.vac} openen in een nieuw tabblad`} />
+                  </div>
                 </div>)}
             </div> : null}
         </section>)}

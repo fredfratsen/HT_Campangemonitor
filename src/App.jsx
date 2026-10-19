@@ -931,8 +931,8 @@ export default class App extends React.Component {
     return {
       id: c.id, client: c.client, vac: c.vac, rec: c.rec, start: c.start, startLabel: wl(c.start), cur, lvl: h.lvl,
       ms: m.s, msRank: S.rank, monBy: m.by, statusLabel: S.label, sFg: S.fg, sBg: S.bg,
-      monText: m.s === 'klant' ? `Sinds week ${wl(m.w)}${m.by ? ` · ${m.by}` : ''}` : m.s === 'check' ? (m.by ? `Gecheckt door ${m.by}` : 'Geen signalen deze week')
-        : m.stale ? `Nieuw signaal na de check van ${cur.monBy || 'de marketeer'}` : '',
+      monText: m.s === 'klant' ? `Sinds week ${wl(m.w)}${m.by ? ` · ${m.by}` : ''}` : m.s === 'check' ? `Gecheckt${m.by ? ` door ${m.by}` : ''}`
+        : m.s === 'goed' ? 'Geen signalen deze week' : m.stale ? `Nieuw signaal na de check van ${cur.monBy || 'de marketeer'}` : '',
       href: '#campagne=' + encodeURIComponent(c.id),
       reasons: h.reasons.map(r => ({ t: r.t, fg: STAT[r.l].fg, bg: STAT[r.l].bg })),
       missing, qText: missing ? '—' : cur.q + '/10', qFg: qc(cur.q),
@@ -948,7 +948,7 @@ export default class App extends React.Component {
       lastAt: missing ? 'Ontbreekt' : (cur.at || 'Week ' + wl(cur.w)), atColor: missing ? '#D32F2F' : '#3C3C3A', atWeight: missing ? 600 : 400,
       quote: missing ? (lastFb ? `Nog geen feedback. Week ${wl(lastFb.w)}: ${lastFb.rec}` : 'Nog geen feedback') : (cur.rec || 'Geen toelichting'),
       hasQuote: true,
-      open: () => this.open(c.id)
+      open: () => this.open(c.id), check: () => this.setMon(c, 'check')
     };
   }
 
@@ -995,11 +995,13 @@ export default class App extends React.Component {
     };
     const byPrio = (a, b) => (a.cur.q ?? 5.5) - (b.cur.q ?? 5.5);
     const bySeverity = (a, b) => b.lvl - a.lvl || byPrio(a, b);
+    // Campaigns without signals come up once a week as Alles goed check; a Check button per row ticks them off.
     const groups = [
-      { k: 'actie', sub: 'Bekijken en bijsturen deze week' }, { k: 'klant', sub: 'Wacht op input van de klant, zoals saldo of foto’s' }, { k: 'check', sub: 'Beoordeeld, of zonder signalen' }
+      { k: 'actie', sub: 'Bekijken en bijsturen deze week' }, { k: 'goed', sub: 'Geen signalen. Even nakijken en afvinken' },
+      { k: 'klant', sub: 'Wacht op input van de klant, zoals saldo of foto’s' }, { k: 'check', sub: 'Beoordeeld deze week' }
     ].map(g => {
-      const items = D.filter(d => d.ms === g.k).sort(bySeverity);
-      return { label: MONITOR[g.k].label, fg: MONITOR[g.k].fg, n: items.length, sub: g.sub, items, cards: g.k !== 'check' && items.length > 0, rows: g.k === 'check' && items.length > 0 };
+      const items = D.filter(d => d.ms === g.k).sort(bySeverity), compact = g.k === 'goed' || g.k === 'check';
+      return { label: MONITOR[g.k].label, fg: MONITOR[g.k].fg, n: items.length, sub: g.sub, items, cards: !compact && items.length > 0, rows: compact && items.length > 0, canCheck: g.k === 'goed' && can('campaigns.monitor') };
     }).filter(g => g.n > 0);
 
     // dashboard
@@ -1321,10 +1323,11 @@ export default class App extends React.Component {
     const chTitle = [nN ? `${nN} ${nN === 1 ? 'nieuw bedrijf' : 'nieuwe bedrijven'}` : '', nO ? `${nO} overgenomen` : '', gone.length ? `${gone.length} overgedragen` : ''].filter(Boolean).join(' · ');
     // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
     const groups = groupByClient(mine.map(c => {
-      const cur = c.weeks[c.weeks.length - 1];
+      // Alles goed check is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
+      const cur = c.weeks[c.weeks.length - 1], ms = monitor(c, health(c, R)).s;
       const nieuw = c.live ? c.live.nieuw : Math.floor(rnd(c.id + 'today') * (cur.leads / 4 + 1.5)) + Math.round(rnd(c.id + 'bl') * 1.4);
       const contact = c.live ? c.live.contact : Math.round(rnd(c.id + 'cp') * 3) + Math.round(cur.leads / 4);
-      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, total: nieuw + contact, open: cur.q == null, rank: MONITOR[monitor(c, health(c, R)).s].rank };
+      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, total: nieuw + contact, open: cur.q == null, rank: MONITOR[ms === 'goed' ? 'check' : ms].rank };
     }));
     const mx = Math.max(...groups.map(g => g.total), 1), exp = this.state.liveExp;
     const dotOf = rank => MONITOR[MONITOR_KEYS.find(k => MONITOR[k].rank === rank)].fg;
