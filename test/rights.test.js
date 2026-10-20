@@ -54,11 +54,39 @@ test('Bekijk als: recruiters and marketeers see each other, a recruiter never a 
   assert.equal(canViewAs(mkt, kim), true);
   assert.equal(canViewAs(mkt, mare), true);
   for (const t of [dev, lead, am]) { assert.equal(canViewAs(kim, t), false); assert.equal(canViewAs(mkt, t), false); }
-  assert.equal(canViewAs(lead, kim), false, 'teamlead: not part of this');
-  assert.equal(canViewAs(am, kim), false);
   assert.equal(canViewAs(kim, kim), false, 'not yourself');
   assert.equal(canViewAs(dev, mkt), true, 'Dev sees everyone');
   assert.equal(canViewAs(dev, lead), true);
+});
+
+test('Bekijk als: teamleads and account managers open a recruiter’s view (for Live campagnes), nobody else’s', () => {
+  const juul = { id: 'r-juul', name: 'Juul', role: 'recruiter', recName: 'Juul' };
+  for (const who of [lead, am]) {
+    assert.equal(canViewAs(who, kim), true, who.role);
+    assert.equal(canViewAs(who, juul), true, who.role);
+    for (const t of [mkt, dev, lead2, am]) assert.equal(canViewAs(who, t), false, `${who.role} → ${t.role}`);
+  }
+});
+
+test('Ermee bezig / Done on Live campagnes: every role sets and clears it on any client, the server stamps who and when', () => {
+  const now = Date.now();
+  for (const who of [kim, mkt, am, lead, dev]) {
+    const a = makeAuthorizer(who, {});
+    for (const s of ['bezig', 'done']) {
+      const r = a('live.status', 'b1', undefined, { s, by: 'Iemand anders', at: 1 });
+      assert.equal(r.value.s, s, who.role);
+      assert.equal(r.value.by, who.name, `${who.role}: the name of whoever clicked`);
+      assert.ok(Math.abs(r.value.at - now) < 5000, `${who.role}: the time from the server clock`);
+      assert.deepEqual(Object.keys(r.value).sort(), ['at', 'by', 's'], 'nothing else is stored');
+    }
+    assert.equal(a('live.status', 'b1', { s: 'done', by: 'Juul', at: 1 }, undefined), '', `${who.role}: back to nothing`);
+  }
+  assert.equal(makeAuthorizer(kim, {})('live.status', 'b1', { s: 'bezig', by: 'Juul', at: 1 }, { s: 'done', by: 'Juul', at: 1 }).value.by, 'Kim', 'a helper takes over the name');
+});
+
+test('Ermee bezig / Done: anything other than bezig or done is refused, even from the Dev', () => {
+  const a = makeAuthorizer(dev, {});
+  for (const after of [{ s: 'klaar' }, { s: '' }, {}, 'bezig', null, 7, ['bezig']]) assert.equal(a('live.status', 'b1', undefined, after), NO_RIGHT, JSON.stringify(after));
 });
 
 const week = (w, o = {}) =>({ w, leads: 5, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: 5 }, ...o });

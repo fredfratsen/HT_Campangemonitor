@@ -9,6 +9,7 @@ import {
 } from './lib/constants.js';
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
+import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
@@ -149,8 +150,12 @@ export default class App extends React.Component {
       if (this.state.view === 'klant') this.enterKlant();
       if (this.state.source === 'trello') this.startLive();
       this._trTimer = setInterval(() => this.refreshLive(), REFRESH_MS);
+      this.atMidnight();
     });
   }
+
+  /** Ermee bezig / Done only counts on the day it was set: redraw at midnight, so the colours go without a change. */
+  atMidnight() { this._midT = setTimeout(() => { this.forceUpdate(); this.atMidnight(); }, msToMidnight() + 500); }
 
   /** Other people's changes arrive here (see lib/sync.js). */
   applyShared(docs, done) {
@@ -185,7 +190,7 @@ export default class App extends React.Component {
     this.meterTick();
   }
 
-  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('popstate', this._pop); window.removeEventListener('scroll', this._scroll); clearTimeout(this._yT); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); this.stopMeter(); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('popstate', this._pop); window.removeEventListener('scroll', this._scroll); clearTimeout(this._yT); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); clearTimeout(this._midT); this.stopMeter(); if (this.sync) this.sync.stop(); }
 
   /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
   navChanged() {
@@ -1409,6 +1414,13 @@ export default class App extends React.Component {
       campaigns: st.campaigns, onDemo: st.source !== 'trello'
     };
   }
+  /** Ermee bezig / Done for the client with this key (Trello board, or client in demo): s is 'bezig', 'done' or ''. */
+  setLiveStatus(key, s) {
+    this.setState(st => {
+      const { [key]: was, ...rest } = st.live.status || {};
+      return { live: { ...st.live, status: s ? { ...rest, [key]: { s, by: this.author(), at: Date.now() } } : rest } };
+    });
+  }
   liveData(me) {
     const R = this.state.rules;
     // A campaign on Pauze or stopped stays here, tagged, until all its candidates are called.
@@ -1442,9 +1454,13 @@ export default class App extends React.Component {
       fbText: off ? 'Niet nodig' : !openN ? '✓ Ingevuld' : openN === n ? 'Open' : `${openN} van ${n} open`, fbOpen: openN > 0, fbFg: off ? '#8C8C8A' : '#1A7A4A',
       fill: e => { e.stopPropagation(); this.startCheckin(openId); }
     });
+    // Ermee bezig / Done per client, today only. Anyone can set it, also in Bekijk als (under their own name).
+    const status = this.state.live.status || {};
     const rows = groups.map(g => {
       const ev = recent[g.client], mineEv = ev && ev.to === me.rec, multi = g.fns.length > 1, on = multi && !!exp[g.key];
-      return { ...cells(g, g.fns.length, g.open, g.firstOpen, g.fns.every(f => f.tag)), client: g.client, vac: multi ? `${g.fns.length} functies` : g.fns[0].vac, mkt: g.fns[0].mkt || '—',
+      const e = status[g.key], st = statusToday(e, now);
+      return { ...cells(g, g.fns.length, g.open, g.firstOpen, g.fns.every(f => f.tag)), key: g.key, client: g.client, vac: multi ? `${g.fns.length} functies` : g.fns[0].vac, mkt: g.fns[0].mkt || '—',
+        st, stBy: st ? e.by : '', stAt: st ? hhmm(e.at) : '', setSt: x => { x.stopPropagation(); this.setLiveStatus(g.key, nextStatus(st)); },
         tag: multi ? '' : g.fns[0].tag, multi, expanded: on, open: multi ? () => this.setState(s => ({ liveExp: { ...s.liveExp, [g.key]: !on } })) : () => this.open(g.fns[0].id),
         fns: on ? g.fns.map(f => ({ ...cells(f, 1, f.open ? 1 : 0, f.id, !!f.tag), vac: f.vac, tag: f.tag, open: () => this.open(f.id) })) : [],
         hasBadge: !!mineEv, badge: mineEv ? (ev.from ? `Overgenomen van ${ev.from}` : 'Nieuw') : '', bBg: mineEv && ev.from ? '#E7E7F0' : '#FFF8E0', bFg: mineEv && ev.from ? '#1B1B63' : '#B45309' };

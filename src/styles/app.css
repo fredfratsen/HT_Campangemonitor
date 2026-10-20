@@ -11,6 +11,53 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
 .hov-lift:hover{box-shadow:0 4px 16px rgba(29,29,27,.12) !important}
 .hov-row:hover{background:#FDFBF8 !important}
 
+/* Live campagnes: Ermee bezig (orange) and Done (green) colour a whole client, function rows included, with a bar
+   down the left. The gradients run from a rich tint to near-white, for some depth. See LiveView. */
+.live-block{position:relative}
+.live-st-bezig::before,.live-st-done::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;z-index:1;transform-origin:top;pointer-events:none}
+.live-st-bezig::before{background:linear-gradient(180deg,#F9CE00,#FB8915)}
+.live-st-done::before{background:linear-gradient(180deg,#3CC27F,#1A7A4A)}
+.live-st-bezig > .live-row:not(.live-fn){background:linear-gradient(90deg,#FFE2BD 0%,#FFF3E2 55%,#FFFDF9 100%) no-repeat}
+.live-st-done > .live-row:not(.live-fn){background:linear-gradient(90deg,#C9EED8 0%,#E8F7EE 55%,#FBFEFC 100%) no-repeat}
+.live-st-bezig > .live-fn{background:linear-gradient(#FFF7EC,#FFF7EC) no-repeat}
+.live-st-done > .live-fn{background:linear-gradient(#F1FAF5,#F1FAF5) no-repeat}
+.live-st-bezig > .hov-row:not(.live-fn):hover{background:linear-gradient(90deg,#FFD49E 0%,#FFEBD1 55%,#FFF8EE 100%) !important}
+.live-st-done > .hov-row:not(.live-fn):hover{background:linear-gradient(90deg,#B5E7C9 0%,#DDF2E5 55%,#F4FBF7 100%) !important}
+.live-st-bezig > .live-fn:hover{background:#FFEFDB !important}
+.live-st-done > .live-fn:hover{background:#E4F5EA !important}
+.live-pill{display:inline-flex;align-items:center;gap:8px;min-height:38px;max-width:100%;padding:5px 14px;border-radius:999px;border:1.5px solid #E4E1DE;background:#FFFFFF;color:#1B1B63;font-size:13px;font-weight:600;line-height:1.15;text-align:left;cursor:pointer;transition:border-color 150ms,box-shadow 150ms}
+.live-pill:hover{border-color:#1B1B63;box-shadow:0 2px 8px rgba(27,27,99,.12)}
+.live-pill-bezig{border-color:transparent;background:linear-gradient(135deg,#F9CE00 0%,#FB8915 100%);color:#1D1D1B;box-shadow:0 2px 8px rgba(251,137,21,.35),inset 0 1px 0 rgba(255,255,255,.5)}
+.live-pill-done{border-color:transparent;background:linear-gradient(135deg,#1C8450 0%,#14603A 100%);color:#FFFFFF;box-shadow:0 2px 8px rgba(26,122,74,.35),inset 0 1px 0 rgba(255,255,255,.25)}
+.live-pill-bezig:hover{border-color:transparent;box-shadow:0 4px 14px rgba(251,137,21,.5),inset 0 1px 0 rgba(255,255,255,.5)}
+.live-pill-done:hover{border-color:transparent;box-shadow:0 4px 14px rgba(26,122,74,.5),inset 0 1px 0 rgba(255,255,255,.25)}
+.live-pill-who{display:block;font-size:11px;font-weight:500;opacity:.85}
+.live-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#1D1D1B;animation:live-pulse 1.6s ease-in-out infinite}
+.live-check{flex:none;font-size:15px;line-height:1}
+.live-swatch{width:10px;height:10px;border-radius:3px}
+.live-swatch-bezig{background:linear-gradient(135deg,#F9CE00,#FB8915)}
+.live-swatch-done{background:linear-gradient(135deg,#3CC27F,#1A7A4A)}
+/* When the status changes while you look: the colour sweeps in from the left, the bar grows, the pill pops (and
+   Done's check bounces). Two names per animation, so going from bezig to done starts it again. */
+.live-st-anim.live-st-bezig > .live-row{animation:live-sweep-a 420ms cubic-bezier(.2,.7,.2,1)}
+.live-st-anim.live-st-done > .live-row{animation:live-sweep-b 420ms cubic-bezier(.2,.7,.2,1)}
+.live-st-anim.live-st-bezig::before{animation:live-bar-a 320ms ease-out}
+.live-st-anim.live-st-done::before{animation:live-bar-b 320ms ease-out}
+.live-st-anim .live-pill-bezig{animation:live-pop-a 380ms cubic-bezier(.3,1.6,.5,1)}
+.live-st-anim .live-pill-done{animation:live-pop-b 380ms cubic-bezier(.3,1.6,.5,1)}
+.live-st-anim .live-pill-done .live-check{animation:live-check 500ms cubic-bezier(.3,1.8,.5,1)}
+@keyframes live-sweep-a{from{background-size:0% 100%}to{background-size:100% 100%}}
+@keyframes live-sweep-b{from{background-size:0% 100%}to{background-size:100% 100%}}
+@keyframes live-bar-a{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes live-bar-b{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes live-pop-a{0%{transform:scale(.9)}60%{transform:scale(1.07)}100%{transform:scale(1)}}
+@keyframes live-pop-b{0%{transform:scale(.9)}60%{transform:scale(1.07)}100%{transform:scale(1)}}
+@keyframes live-check{0%{transform:scale(0) rotate(-45deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){
+  .live-block *,.live-block::before{animation:none !important}
+}
+
 /* Shell */
 .app-shell{display:grid;grid-template-columns:228px minmax(0,1fr);min-height:100vh}
 .app-aside{position:sticky;top:0;height:100vh;overflow-y:auto;background:#FFFFFF;border-right:1px solid #E4E1DE;display:flex;flex-direction:column;gap:28px;padding:24px 14px}
@@ -143,8 +190,9 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .mine-row > :nth-child(2){row-gap:0 !important}
   .mine-row > :nth-child(5):empty{display:none}
 
-  /* Live campagnes: name, then the three numbers, then marketeer · feedback, then the bar. Function rows skip the marketeer. */
-  .live-row{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,.6fr) !important;grid-template-areas:"name name name" "n c t" "mkt fb fb" "bar bar bar";gap:10px 12px !important;padding:14px 16px !important}
+  /* Live campagnes: name, the Ermee bezig / Done toggle, then the three numbers, then marketeer · feedback, then the
+     bar. Function rows skip the marketeer and the toggle. */
+  .live-row{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,.6fr) !important;grid-template-areas:"name name name" "st st st" "n c t" "mkt fb fb" "bar bar bar";gap:10px 12px !important;padding:14px 16px !important}
   .live-row > :nth-child(1){grid-area:name}
   .live-row > :nth-child(2){grid-area:mkt}
   .live-row > :nth-child(3){grid-area:n}
@@ -152,8 +200,9 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .live-row > :nth-child(5){grid-area:t}
   .live-row > :nth-child(6){grid-area:fb}
   .live-row > :nth-child(7){grid-area:bar}
+  .live-row > :nth-child(8){grid-area:st}
   .live-fn{grid-template-areas:"name name name" "n c t" "fb fb fb" "bar bar bar";padding-left:28px !important}
-  .live-fn > :nth-child(2){display:none}
+  .live-fn > :nth-child(2),.live-fn > :nth-child(8){display:none}
   .live-fn > :first-child{padding-left:0 !important}
 
   .week-row{grid-template-columns:minmax(0,1fr) auto auto !important;gap:2px 8px !important;padding:12px 8px 12px 16px !important}

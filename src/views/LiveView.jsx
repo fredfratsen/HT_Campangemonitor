@@ -1,8 +1,9 @@
 import React from 'react';
 import HaltTag from '../components/HaltTag.jsx';
 
-const COLS = 'minmax(180px,1.4fr) 110px 96px 120px 64px 120px minmax(80px,1fr)';
-const ROW = { display: 'grid', gridTemplateColumns: COLS, gap: '16px', alignItems: 'center', cursor: 'pointer', fontSize: '14px' };
+// Narrow enough to fit next to the menu from 1280 px wide, Status column included.
+const COLS = 'minmax(160px,1.4fr) 100px 96px 120px 56px 112px minmax(40px,1fr) 128px';
+const ROW = { display: 'grid', gridTemplateColumns: COLS, gap: '14px', alignItems: 'center', cursor: 'pointer', fontSize: '14px' };
 const NUM = { textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px' };
 
 /** The numbers, feedback and bar of a client row or a function row. Open feedback leads to Wekelijkse feedback recruiter. */
@@ -21,6 +22,60 @@ function Cells({ r }) {
         <div style={{ width: r.cPct, background: '#FB8915' }} />
       </div>
     </>
+  );
+}
+
+const ST = { bezig: 'Ermee bezig', done: 'Done' };
+const NEXT = { '': 'Ermee bezig', bezig: 'Done', done: 'geen status' };
+
+/** The Ermee bezig / Done toggle of a client: nothing → Ermee bezig → Done → nothing, with who set it and when. */
+function StatusPill({ r }) {
+  const now = r.st ? `${ST[r.st]}, door ${r.stBy} om ${r.stAt}` : 'nog niet opgepakt';
+  return (
+    <button type="button" className={`live-pill live-pill-${r.st || 'none'}`} onClick={r.setSt} aria-label={`${r.client}: ${now}. Klik voor ${NEXT[r.st]}.`} title={`Klik voor ${NEXT[r.st]}`}>
+      {r.st === 'bezig' ? <span className="live-dot" aria-hidden="true" /> : r.st === 'done' ? <span className="live-check" aria-hidden="true">✓</span> : null}
+      <span>
+        <span style={{ display: 'block' }}>{r.st ? ST[r.st] : 'Oppakken'}</span>
+        {r.st ? <span className="live-pill-who">{r.stBy} · {r.stAt}</span> : null}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * One client, and its functions when folded open. Ermee bezig / Done colours the whole block; the colour sweeps in
+ * when it changes while the screen is open (also when a colleague changed it), not when the screen opens.
+ */
+function ClientBlock({ r }) {
+  const [prev, setPrev] = React.useState(r.st), [moved, setMoved] = React.useState(false);
+  if (prev !== r.st) { setPrev(r.st); setMoved(true); }
+  const cls = ['live-block', r.st && `live-st-${r.st}`, moved && 'live-st-anim'].filter(Boolean).join(' ');
+  return (
+    <div className={cls} style={{ borderBottom: '1px solid #F5F2ED' }}>
+      <div className="hov-row live-row" onClick={r.open} aria-expanded={r.multi ? r.expanded : undefined} style={{ ...ROW, padding: '12px 20px' }}>
+        <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
+          <span style={{ minWidth: '0' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontWeight: '600' }}>{r.client}{r.hasBadge ? <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', background: r.bBg, color: r.bFg }}>{r.badge}</span> : null}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: r.multi ? '#1B1B63' : '#5C5C5A', fontWeight: r.multi ? '500' : '400' }}>{r.vac}{r.tag ? <HaltTag t={r.tag} /> : null}{r.multi ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', transform: r.expanded ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg> : null}</span>
+          </span>
+        </div>
+        <div data-label="Marketeer" style={{ color: '#3C3C3A' }}>{r.mkt}</div>
+        <Cells r={r} />
+        <div><StatusPill r={r} /></div>
+      </div>
+      {/* Under a status the function rows take its colour (app.css), instead of their own grey. */}
+      {r.fns.map((f, j) => <div key={j} className="hov-row live-row live-fn" onClick={f.open} style={{ ...ROW, padding: '9px 20px', background: r.st ? undefined : '#FAF8F5', borderTop: '1px solid #F5F2ED' }}>
+          <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '19px', fontSize: '13px' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', flex: 'none', background: f.dot }} />
+            <span style={{ fontWeight: '500' }}>{f.vac}</span>
+            {f.tag ? <HaltTag t={f.tag} /> : null}
+          </div>
+          <div />
+          <Cells r={f} />
+          <div />
+        </div>)}
+    </div>
   );
 }
 
@@ -79,8 +134,8 @@ export default function LiveView({ v }) {
           </select>
         </div> : null}
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-        <div className="m-table" style={{ minWidth: '860px' }}>
-          <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: COLS, gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>
+        <div className="m-table" style={{ minWidth: '940px' }}>
+          <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: COLS, gap: '14px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>
             <div>Klant · vacature</div>
             <div>Marketeer</div>
             <div style={{ textAlign: 'right' }}>Nieuw bellen</div>
@@ -88,36 +143,19 @@ export default function LiveView({ v }) {
             <div style={{ textAlign: 'right' }}>Totaal</div>
             <div>Feedback</div>
             <div />
+            <div>Status</div>
           </div>
-          {/* One row per client; a client with several functions folds open to one row per function. */}
-          {live.rows.map((r, i) => <div key={i} style={{ borderBottom: '1px solid #F5F2ED' }}>
-              <div className="hov-row live-row" onClick={r.open} aria-expanded={r.multi ? r.expanded : undefined} style={{ ...ROW, padding: '12px 20px' }}>
-                <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
-                  <span style={{ minWidth: '0' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontWeight: '600' }}>{r.client}{r.hasBadge ? <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', background: r.bBg, color: r.bFg }}>{r.badge}</span> : null}</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: r.multi ? '#1B1B63' : '#5C5C5A', fontWeight: r.multi ? '500' : '400' }}>{r.vac}{r.tag ? <HaltTag t={r.tag} /> : null}{r.multi ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', transform: r.expanded ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg> : null}</span>
-                  </span>
-                </div>
-                <div data-label="Marketeer" style={{ color: '#3C3C3A' }}>{r.mkt}</div>
-                <Cells r={r} />
-              </div>
-              {r.fns.map((f, j) => <div key={j} className="hov-row live-row live-fn" onClick={f.open} style={{ ...ROW, padding: '9px 20px', background: '#FAF8F5', borderTop: '1px solid #F5F2ED' }}>
-                  <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '19px', fontSize: '13px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', flex: 'none', background: f.dot }} />
-                    <span style={{ fontWeight: '500' }}>{f.vac}</span>
-                    {f.tag ? <HaltTag t={f.tag} /> : null}
-                  </div>
-                  <div />
-                  <Cells r={f} />
-                </div>)}
-            </div>)}
+          {/* One row per client; a client with several functions folds open to one row per function. Keyed by
+              client, so a row that moves (sort, new numbers) keeps its own colour and doesn't replay the sweep. */}
+          {live.rows.map(r => <ClientBlock key={r.key} r={r} />)}
         </div>
       </div>
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: '#5C5C5A' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#1B1B63' }} />Nieuw: kaarten in ‘Nieuw’ of ‘Nieuwe Sollicitant | …’, nog niet gebeld</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#FB8915' }} />Contactpogingen: kaarten in lijst ‘Contactpoging’, opnieuw bellen</span>
         <span>📵 Kreeg een kaart vandaag ‘Geen gehoor’ in Trello, dan telt hij pas morgen weer mee</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span className="live-swatch live-swatch-bezig" />Ermee bezig</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span className="live-swatch live-swatch-done" />Done vandaag · om middernacht begint iedereen weer blanco</span>
       </div>
     </div>
   );

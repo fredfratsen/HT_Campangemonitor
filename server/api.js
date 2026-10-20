@@ -19,7 +19,7 @@ const MONTH_OPTIONS = [0, 3, 6, 12, 24];
 // Checks an integration's values before they are saved, and on request afterwards.
 const TESTS = { trello: testTrello, smtp: testSmtp };
 
-export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs = 15000 }) {
+export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs = 15000, events = false }) {
   const api = express.Router();
   const json = express.json({ limit: '100kb' });
   api.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -41,7 +41,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   const fileName = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
   // ── App data ─────────────────────────────────────────────────────────
-  api.get('/config', (req, res) => res.json({ trello: !!secrets.get('trello'), mail: !!secrets.get('smtp'), auth: true, pollMs }));
+  api.get('/config', (req, res) => res.json({ trello: !!secrets.get('trello'), mail: !!secrets.get('smtp'), auth: true, pollMs, events }));
   // For "Bekijk als", you also get the rights of the people whose view you may open.
   api.get('/me', (req, res) => res.json({
     account: accounts.selfView(req.account),
@@ -50,6 +50,19 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   api.get('/state', (req, res) => {
     if (req.query.rev != null && Number(req.query.rev) === store.rev) return res.json({ rev: store.rev, unchanged: true });
     res.json({ rev: store.rev, docs: store.docs });
+  });
+  // Server push: an open app hears the new rev as soon as anyone changes the shared data, and fetches it with GET
+  // /state (so through the same route as polling). Only version numbers go out. Needs a long-running process, so not
+  // on Netlify, where the app just keeps polling.
+  if (events) api.get('/events', (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    const send = rev => res.write(`data: {"rev":${rev}}\n\n`);
+    res.write('retry: 5000\n\n');
+    send(store.rev);
+    const off = store.onChange(send);
+    // Proxies close a connection that stays silent for too long.
+    const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+    req.on('close', () => { off(); clearInterval(ping); });
   });
   const lastDenied = new Map();
   api.post('/state/patch', express.json({ limit: '2mb' }), (req, res) => {

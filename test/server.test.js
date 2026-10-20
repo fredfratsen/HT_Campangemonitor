@@ -52,7 +52,7 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
       let data = null; try { data = JSON.parse(text); } catch (e) { /* html */ }
       return { status: r.status, loc: r.headers.get('location'), text, data, headers: r.headers };
     }
-    return { req, get: p => req('GET', p), form: (p, b) => req('POST', p, b), api: (m, p, b) => req(m, p, b || {}, { json: true }) };
+    return { req, cookie, get: p => req('GET', p), form: (p, b) => req('POST', p, b), api: (m, p, b) => req(m, p, b || {}, { json: true }) };
   }
   /** On the server the link is printed at startup; on Netlify, opening /setup writes it to the function log. */
   async function ownerLink(kind) {
@@ -195,6 +195,32 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     const audit = (await S.dev.get('/api/admin/audit?type=data.campaign_halt')).data.entries;
     assert.deepEqual(audit.map(e => [e.actorName, e.details.campagne, e.details.actie]), [
       ['Tsjerk', 'Hotel Pauze – Kok', 'weer actief'], ['Pauze Marketeer', 'Hotel Pauze – Kok', 'gestopt'], ['Pauze Marketeer', 'Hotel Pauze – Kok', 'gepauzeerd']]);
+  });
+
+  // Ermee bezig / Done on Live campagnes has to show up on a colleague's screen at once, not after the next poll.
+  if (mode === 'server') test('server push: a saved change reaches every open app at once, as a version number only', async () => {
+    assert.equal((await client().get('/api/events')).status, 401, 'not without logging in');
+    const r = await fetch(BASE + '/api/events', { headers: { cookie: S.dev.cookie() }, signal: AbortSignal.timeout(5000) });
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /^text\/event-stream/);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    const nextRev = async () => {
+      let m;
+      while (!(m = buf.match(/data: \{"rev":(\d+)\}\n\n/))) { const { value, done } = await reader.read(); assert.ok(!done, 'stream ended'); buf += dec.decode(value); }
+      buf = buf.slice(m.index + m[0].length);
+      return Number(m[1]);
+    };
+    try {
+      assert.equal(await nextRev(), (await S.dev.get('/api/state')).data.rev, 'the current version straight away');
+      const p = await S.rec.api('POST', '/api/state/patch', { patches: [{ doc: 'live.status', set: { b9: { s: 'bezig', by: 'Iemand', at: 1 } } }] });
+      assert.deepEqual(p.data.rejected, []);
+      assert.equal(await nextRev(), p.data.rev, 'someone else’s change arrives on the stream');
+      assert.ok(!buf.includes('bezig'), 'only the version, never the data');
+      const st = (await S.dev.get('/api/state')).data.docs['live.status'].b9;
+      assert.equal(st.s, 'bezig');
+      assert.equal(st.by, 'Test Recruiter', 'the server stamps who clicked');
+    } finally { await reader.cancel().catch(() => {}); }
   });
 
   test('a new bug or idea is mailed to the address the Dev set, through the mail server under Integraties', async () => {

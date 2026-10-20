@@ -40,7 +40,7 @@ export const ROLES = {
   dev: { label: 'Dev', level: 'owner', rights: RIGHT_KEYS, desc: 'Alles, inclusief integraties, auditlog en privacy-tools.' },
   teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello, regels, de blacklist en tijdwinst.' },
   marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.own', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'campaigns.pause', 'reminders.send'], desc: 'Campagnes, monitorstatus, klantfeedback, campagnewijzigingen, pauzeren en stopzetten, en herinneringen, voor de eigen klanten.' },
-  accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet de campagnes van alle klanten, maar wijzigt niets. Kan vragen stellen over campagnes.' },
+  accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet de campagnes van alle klanten, maar wijzigt niets, behalve de status op Live campagnes. Kan vragen stellen over campagnes.' },
   recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own', 'blacklist.view'], desc: 'Eigen campagnes, wekelijkse feedback, Live campagnes en de blacklist raadplegen.' },
 };
 export const ROLE_KEYS = Object.keys(ROLES);
@@ -70,9 +70,11 @@ export function visibleCampaigns(campaigns, me, mktOf) {
 
 /**
  * "Bekijk als": whose view each role may open. Recruiters and Recruitment Marketeers can open each other's,
- * except that a recruiter never sees a Recruitment Marketeer's view. With the "dev" right you can open anyone's.
+ * except that a recruiter never sees a Recruitment Marketeer's view. Teamleads and Account Managers open a
+ * recruiter's, to follow (and set Ermee bezig / Done on) their Live campagnes. With the "dev" right you can open
+ * anyone's.
  */
-export const VIEW_AS = { marketeer: ['marketeer', 'recruiter'], recruiter: ['recruiter'] };
+export const VIEW_AS = { marketeer: ['marketeer', 'recruiter'], recruiter: ['recruiter'], teamlead: ['recruiter'], accountmanager: ['recruiter'] };
 export function canViewAs(actor, target) {
   if (!actor || !target || actor.id === target.id || !ROLES[target.role]) return false;
   return can(actor, 'dev') || (VIEW_AS[actor.role] || []).includes(target.role);

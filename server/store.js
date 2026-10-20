@@ -1,7 +1,7 @@
 // Shared app data: a handful of documents, each a flat map key -> value, kept as one JSON document (a file with
 // daily backups, or a Netlify Blob; see jsonfile.js). One document is plenty for a team this size.
 
-export const DOCS = new Set(['campaigns', 'rules', 'trIgnored', 'mktDemo', 'live.links', 'live.fb', 'live.actions', 'live.ignored', 'live.inactive', 'live.mkt', 'assignLog', 'inbox', 'ideas', 'seen', 'meta']);
+export const DOCS = new Set(['campaigns', 'rules', 'trIgnored', 'mktDemo', 'live.links', 'live.fb', 'live.actions', 'live.ignored', 'live.inactive', 'live.mkt', 'live.status', 'assignLog', 'inbox', 'ideas', 'seen', 'meta']);
 const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /** @param docs  document factory from jsonfile.js (files or Netlify Blobs) */
@@ -9,6 +9,9 @@ export function createStore(docs) {
   const f = docs('campagnemonitor', () => ({ rev: 0, docs: {} }));
   if (f.file) console.log(f.isNew ? `[store] nieuw databestand: ${f.file}` : `[store] ${f.file} geladen (rev ${f.data.rev})`);
   const state = f.data;
+  /** Called with the new rev after every change (server push, see GET /api/events). */
+  const listeners = new Set();
+  const changed = () => { for (const fn of listeners) { try { fn(state.rev); } catch (e) { /* a closed stream */ } } };
 
   /** Checks the shape of [{ doc, set: {key: value}, del: [key] }]. Throws on bad input. */
   function validate(patches) {
@@ -45,17 +48,20 @@ export function createStore(docs) {
         applied.push({ doc: p.doc, key: k, before, after: value });
       }
     }
-    if (applied.length) { state.rev++; f.save(); }
+    if (applied.length) { state.rev++; f.save(); changed(); }
     return { rev: state.rev, rejected, applied };
   }
 
   /** Server-side edits (anonymisation): fn(docs) changes documents in place. */
-  function mutate(fn) { fn(state.docs); state.rev++; f.save(); }
+  function mutate(fn) { fn(state.docs); state.rev++; f.save(); changed(); }
+
+  /** Calls fn(rev) after every change; returns a function that stops it. */
+  function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
   return {
     get rev() { return state.rev; },
     get docs() { return state.docs; },
-    patch, mutate,
+    patch, mutate, onChange,
     flush: f.flush,
   };
 }

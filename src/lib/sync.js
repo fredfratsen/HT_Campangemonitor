@@ -2,7 +2,8 @@
 //
 // Every shared document is a flat map of key -> value (a campaign by id, a rule by name, ...). After each state
 // change only the entries that actually changed are sent, so two people saving different campaigns at the same
-// moment never overwrite each other. Other people's changes arrive by polling.
+// moment never overwrite each other. Other people's changes arrive by polling, and right away when the server
+// pushes a new version number (GET /api/events); polling stays as the backup when that stream is down.
 //
 // The server checks every change against the rights of whoever is logged in. Changes it refuses come back as
 // `rejected`: those keys are not sent again this session, and the server's version is loaded instead.
@@ -33,6 +34,7 @@ export function toDocs(st) {
     'live.ignored': L && (L.ignored || {}),
     'live.inactive': L && (L.inactive || {}),
     'live.mkt': L && (L.mkt || {}),
+    'live.status': L && (L.status || {}),
     assignLog: st.assignLog && byId(st.assignLog),
     inbox: st.inbox && byId(st.inbox),
     ideas: st.ideas && byId(st.ideas),
@@ -50,7 +52,7 @@ export function fromDocs(docs) {
     rules: { ...DEF_RULES, ...rules },
     trIgnored: d('trIgnored'),
     mktDemo: d('mktDemo'),
-    live: { links: Object.values(d('live.links')), fb: d('live.fb'), actions: d('live.actions'), ignored: d('live.ignored'), inactive: d('live.inactive'), mkt: d('live.mkt') },
+    live: { links: Object.values(d('live.links')), fb: d('live.fb'), actions: d('live.actions'), ignored: d('live.ignored'), inactive: d('live.inactive'), mkt: d('live.mkt'), status: d('live.status') },
     assignLog: Object.values(d('assignLog')).sort((a, b) => b.at - a.at),
     inbox: Object.values(d('inbox')).sort((a, b) => tsOf(b) - tsOf(a)),
     ideas: Object.values(d('ideas')).sort((a, b) => tsOf(b) - tsOf(a)),
@@ -142,10 +144,16 @@ export class Sync {
     window.addEventListener('focus', this.onVisible);
     this.onUnload = () => { const p = this.diff(); if (p.length && navigator.sendBeacon) navigator.sendBeacon('/api/state/patch', new Blob([JSON.stringify({ patches: p.map(({ doc, set, del }) => ({ doc, set, del })) })], { type: 'application/json' })); };
     window.addEventListener('pagehide', this.onUnload);
+    // A new version on the server: fetch it now instead of at the next poll. The browser reconnects by itself.
+    if (this.config.events && typeof EventSource !== 'undefined') {
+      this.events = new EventSource('/api/events');
+      this.events.onmessage = e => { let rev; try { rev = JSON.parse(e.data).rev; } catch (x) { return; } if (rev !== this.rev && !document.hidden) this.pull(); };
+    }
   }
 
   stop() {
     clearInterval(this.timer); clearTimeout(this.t);
+    if (this.events) this.events.close();
     if (this.onVisible) { document.removeEventListener('visibilitychange', this.onVisible); window.removeEventListener('focus', this.onVisible); }
     if (this.onUnload) window.removeEventListener('pagehide', this.onUnload);
   }

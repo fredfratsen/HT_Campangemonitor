@@ -84,7 +84,7 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   app.use(auth.guard);
 
   app.use('/api/trello', trello);
-  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs }));
+  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs, events: hosting !== 'netlify' }));
 
   // The app itself
   if (distDir && fs.existsSync(distDir)) {

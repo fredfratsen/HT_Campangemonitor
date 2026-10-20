@@ -18,6 +18,11 @@ Everyone logs in with a personal account. What you see and can do depends on you
   The recruiter picks the order: most or least to call, client A–Z or Z–A, or newest or oldest client first (when the
   client was assigned to them, or else when its Trello board was made). Clients that tie stay in A–Z order, and the
   choice is remembered in their browser.
+  Each client has a **status toggle**: *Oppakken* → **Ermee bezig** (orange) → **Done** (green) → nothing again,
+  showing who set it and when. The colour covers the client and all its functions, so colleagues who help out see
+  who is on what without messaging each other. Anyone can set it, also through *Bekijk als* (under their own
+  name), and it shows up on everyone's screen within a second. It is for today: at midnight every client starts
+  blank again. Stored per Trello board in `live.status`.
   One row per client (Trello board) with its Recruitment Marketeer and how much feedback is still open; a client
   with several functions folds open to one row per function. Open feedback links straight to the check-in. A card
   that got the Trello button *Geen gehoor* today is off the list until midnight, so the numbers count down as you
@@ -157,7 +162,7 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset, the Bugs & ideeën board) |
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, the status of bugs and ideas, managing the blacklist, Tijdwinst |
 | **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, pausing and stopping campaigns, client feedback, logging campaign changes, reminders |
-| **Account Manager** | Lid (member) | Campaign overview of all clients and asking questions about campaigns; changes nothing |
+| **Account Manager** | Lid (member) | Campaign overview of all clients and asking questions about campaigns; changes nothing except the status toggle on Live campagnes |
 | **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
 
 The rules for managing people:
@@ -182,7 +187,7 @@ answer, and only to whoever asked it.
 | Dev | Anyone |
 | Recruitment Marketeer | Recruiters and other Recruitment Marketeers |
 | Recruiter | Other recruiters, never a Recruitment Marketeer |
-| Teamlead, Account Manager | Nobody |
+| Teamlead, Account Manager | Recruiters (to follow their Live campagnes) |
 
 Anything you save is still saved as yourself, with your own rights, and the switch is written to the audit log.
 
@@ -453,7 +458,9 @@ Then open <http://localhost:8888/setup>; the link appears in that terminal.
   `DATA_DIR/trello-intake.json` (see [Functions from intake lists](#functions-from-intake-lists)).
 - For each JSON file except those two, a dated copy is kept for each of the last 14 days as a safety net.
 - The app sends only what changed (per campaign, per rule, ...), so two people saving at the same moment don't
-  overwrite each other. Other people's changes appear within about 15 seconds, or right away when you switch back
+  overwrite each other. Other people's changes appear within a second: the server pushes the new version number
+  to every open app (`GET /api/events`, Server-Sent Events, no data), and the app then fetches the changes the
+  usual way. If that stream is down, the app still checks every 15 seconds, and right away when you switch back
   to the tab.
 - Each browser remembers the chosen **Databron**, which news you've read, and the Dev's *Bekijk als* choice.
 - The feedback week moves on automatically: each round is about the current week, and all feedback for a week is

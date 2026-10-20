@@ -145,6 +145,13 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
       if (before === undefined && isEmpty(after)) return '';
       return need(has('campaign.changes'));
     },
+    // Ermee bezig / Done on Live campagnes: anyone, on any client, so colleagues see who is on what. Who and when
+    // come from the server, so the name on the toggle is always whoever clicked.
+    'live.status'(key, before, after) {
+      if (after === undefined) return '';
+      if (!after || !['bezig', 'done'].includes(after.s)) return NO_RIGHT;
+      return { value: { s: after.s, by: actor.name, at: now } };
+    },
     assignLog(key, before, after) {
       if (!any('assign', 'trello.link')) return NO_RIGHT;
       if (before === undefined) return after && after.by !== actor.name ? { value: { ...after, by: actor.name } } : '';
