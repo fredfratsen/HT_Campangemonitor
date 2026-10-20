@@ -73,6 +73,11 @@ export default function LiveView({ v }) {
             <div style={{ fontSize: '12px', color: k.lfg, marginTop: '2px' }}>{k.sub}</div>
           </div>)}
       </div>
+      {live.rows.length > 1 ? <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-12px' }}>
+          <select value={live.sortValue} onChange={live.setSort} aria-label="Volgorde van de live campagnes" style={{ height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 10px', fontSize: '14px', background: '#FFFFFF' }}>
+            {live.sortOptions.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
+        </div> : null}
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
         <div className="m-table" style={{ minWidth: '860px' }}>
           <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: COLS, gap: '16px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE', alignItems: 'end' }}>

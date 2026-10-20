@@ -8,7 +8,7 @@ import {
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
 } from './lib/constants.js';
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
-import { groupByClient, callList, recruiterSees } from './lib/clientGroups.js';
+import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
@@ -36,7 +36,7 @@ import DevView from './views/DevView.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 
 // Per-browser settings (chosen data source, news read, "Bekijk als")
-const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as', ACTIE_VIEW_KEY = 'ht-cm-actie-view';
+const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as', ACTIE_VIEW_KEY = 'ht-cm-actie-view', LIVE_SORT_KEY = 'ht-cm-live-sort';
 // Below this width the sidebar is a slide-in menu (keep in sync with the media query in styles/app.css).
 const PHONE_MQ = '(max-width: 900px)';
 // How often the open app loads the Trello boards that changed (as the server does, see server/trello.js).
@@ -74,7 +74,7 @@ export default class App extends React.Component {
       toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {} }, liveExp: {}, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
-      blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), confirm: null
+      blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null
     };
   }
 
@@ -1423,13 +1423,16 @@ export default class App extends React.Component {
     ];
     const nN = mineNew.filter(e => !e.from).length, nO = mineNew.filter(e => e.from).length;
     const chTitle = [nN ? `${nN} ${nN === 1 ? 'nieuw bedrijf' : 'nieuwe bedrijven'}` : '', nO ? `${nO} overgenomen` : '', gone.length ? `${gone.length} overgedragen` : ''].filter(Boolean).join(' · ');
+    // Added: when the client was last assigned to me; without that in the log, when its Trello board was made (that's earlier).
+    const added = {};
+    this.state.assignLog.forEach(e => { if (e.mode === this.state.source && e.to === me.rec && e.at > (added[e.client] || 0)) added[e.client] = e.at; });
     // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
-    const groups = groupByClient(mine.map(c => {
+    const sort = this.state.liveSort, groups = groupByClient(mine.map(c => {
       // Wekelijkse controle is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
       const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c);
       return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open: openWeeks(c).length > 0,
-        rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? HALT[c.halt.kind].label : '' };
-    }));
+        rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? HALT[c.halt.kind].label : '', added: added[c.client] || trelloCreated(c.boardId) };
+    }), sort);
     const mx = Math.max(...groups.map(g => g.total), 1), exp = this.state.liveExp;
     const dotOf = rank => MONITOR[MONITOR_KEYS.find(k => MONITOR[k].rank === rank)].fg;
     // Feedback: open ones link to Wekelijkse feedback recruiter, on the first open function. off: all on Pauze or stopped.
@@ -1452,7 +1455,9 @@ export default class App extends React.Component {
     return {
       sinceText: (() => { const d = new Date(since); const today = new Date().toDateString() === d.toDateString(); return `Sinds je vorige login (${today ? 'vandaag' : d.getDate() + ' ' + MON[d.getMonth()]} ${hhmm(since)}) · minstens 24 uur zichtbaar`; })(),
       markSeen: () => { if (me.isPreview) { this.flash('Dat kan niet in Bekijk als'); return; } this.setState(s => ({ seen: { ...s.seen, [me.id]: { ...(s.seen[me.id] || {}), dismissed: Date.now() } } })); },
-      count: mine.length, rows, isEmpty: mine.length === 0, changes, hasChanges: changes.length > 0, chTitle, hasOpen: lateN + curN > 0,
+      count: mine.length, rows, isEmpty: mine.length === 0, changes,
+      sortOptions: LIVE_SORTS.map(([v, l]) => ({ v, l: 'Sorteer: ' + l })), sortValue: LIVE_SORTS.some(([k]) => k === sort) ? sort : LIVE_SORTS[0][0],
+      setSort: e => { const k = e.target.value; lsSet(LIVE_SORT_KEY, k); this.setState({ liveSort: k }); }, hasChanges: changes.length > 0, chTitle, hasOpen: lateN + curN > 0,
       openText: lateN ? `${lateN} ${lateN === 1 ? 'campagne' : 'campagnes'} van week ${wl(CUR - 1)} ${lateN === 1 ? 'staat' : 'staan'} nog open` : curN === 1 ? '1 campagne wacht op je feedback' : `${curN} campagnes wachten op je feedback`,
       openSub: lateN ? `· vervalt ${dueTxt(CUR - 1)}${curN ? ` · nog ${curN} voor week ${wl(CUR)}` : ''}` : `voor week ${wl(CUR)}`,
       kpis: [

@@ -18,22 +18,39 @@ export function recruiterSees(c) {
   return n.nieuw + n.contact + n.gebeld > 0;
 }
 
+/** The orders a recruiter can pick for Live campagnes, [key, label]; the first is the default. */
+export const LIVE_SORTS = [['most', 'meeste te bellen'], ['least', 'minste te bellen'], ['az', 'klant A–Z'], ['za', 'klant Z–A'],
+  ['newest', 'nieuwste klant eerst'], ['oldest', 'oudste klant eerst']];
+
+/** When Trello made the thing with this id: its first 8 hex characters are the seconds since 1970. 0 for any other id. */
+export function trelloCreated(id) {
+  return /^[0-9a-f]{24}$/i.test(id || '') ? parseInt(id.slice(0, 8), 16) * 1000 : 0;
+}
+
+/** Order sort (LIVE_SORTS) on rows with total and added; a tie goes A–Z on name, so rows with the same count stay put. */
+function order(sort, name) {
+  const abc = (a, b) => name(a).localeCompare(name(b), 'nl', { numeric: true, sensitivity: 'base' });
+  const most = (a, b) => b.total - a.total, first = { most, least: (a, b) => a.total - b.total, az: abc, za: (a, b) => abc(b, a),
+    newest: (a, b) => b.added - a.added, oldest: (a, b) => a.added - b.added }[sort] || most;
+  return (a, b) => first(a, b) || abc(a, b);
+}
+
 /**
- * rows: one per function, { id, key (the board, or the client in demo), client, nieuw, contact, gebeld, total, open (no
- * feedback yet this week), rank (MONITOR rank) }. Returns one group per key with the call counts added up, open: how
- * many have no feedback, firstOpen: the id of the first of those, rank: the most urgent. Most to call first, also
- * within a group.
+ * rows: one per function, { id, key (the board, or the client in demo), client, vac, nieuw, contact, gebeld, total, open
+ * (no feedback yet this week), rank (MONITOR rank), added (when the client was added, 0 if unknown) }. Returns one group
+ * per key with the call counts added up, open: how many have no feedback, firstOpen: the id of the first of those,
+ * rank: the most urgent, added: the newest. In order sort (LIVE_SORTS, most to call first by default), also within a group.
  */
-export function groupByClient(rows) {
-  const byTotal = (a, b) => b.total - a.total, by = new Map();
+export function groupByClient(rows, sort) {
+  const by = new Map();
   for (const r of rows) {
     if (!by.has(r.key)) by.set(r.key, []);
-    by.get(r.key).push(r);
+    by.get(r.key).push({ ...r, added: r.added || 0 });
   }
   return [...by].map(([key, fns]) => {
-    fns.sort(byTotal);
+    fns.sort(order(sort, f => f.vac));
     const sum = k => fns.reduce((s, f) => s + f[k], 0), open = fns.filter(f => f.open);
     return { key, client: fns[0].client, fns, nieuw: sum('nieuw'), contact: sum('contact'), gebeld: sum('gebeld'), total: sum('total'),
-      open: open.length, firstOpen: open.length ? open[0].id : null, rank: Math.max(...fns.map(f => f.rank)) };
-  }).sort(byTotal);
+      open: open.length, firstOpen: open.length ? open[0].id : null, rank: Math.max(...fns.map(f => f.rank)), added: Math.max(...fns.map(f => f.added)) };
+  }).sort(order(sort, g => g.client));
 }

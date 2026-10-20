@@ -15,6 +15,9 @@ Everyone logs in with a personal account. What you see and can do depends on you
 **Recruiter work** (right: *Eigen recruiterfeedback invullen*, plus a recruiter name on the account)
 
 - **Live campagnes**: today's call work per client, with new candidates and contact attempts pulled from Trello.
+  The recruiter picks the order: most or least to call, client A–Z or Z–A, or newest or oldest client first (when the
+  client was assigned to them, or else when its Trello board was made). Clients that tie stay in A–Z order, and the
+  choice is remembered in their browser.
   One row per client (Trello board) with its Recruitment Marketeer and how much feedback is still open; a client
   with several functions folds open to one row per function. Open feedback links straight to the check-in. A card
   that got the Trello button *Geen gehoor* today is off the list until midnight, so the numbers count down as you
