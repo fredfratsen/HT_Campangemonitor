@@ -77,10 +77,12 @@ Changes go in [src/views/LiveView.jsx](../../../src/views/LiveView.jsx), `liveDa
 | State | Pill | Click goes to |
 |---|---|---|
 | none | outlined "Oppakken" | Ermee bezig |
-| bezig | orange gradient "● Ermee bezig · Kim 10:42" | Done |
-| done | green gradient "✓ Done · Kim 11:30" | none (deletes the key) |
+| bezig | orange gradient "Ermee bezig" | Done |
+| done | green gradient "✓ Done" | none (deletes the key) |
 
-- The pill shows `by` and `at` (HH:MM) from the entry.
+- All three states have the same fixed size, 108 × 38 px. The user asked for a status-only button, the size of
+  Oppakken, after seeing the first version.
+- `by` and `at` (HH:MM) are in the tooltip and the `aria-label`, not on the button.
 - `stopPropagation` keeps the pill from opening or folding the row; clicking the row still does that, as before.
 - Function rows get no pill: the status belongs to the restaurant.
 

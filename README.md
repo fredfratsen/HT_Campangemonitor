@@ -19,7 +19,7 @@ Everyone logs in with a personal account. What you see and can do depends on you
   client was assigned to them, or else when its Trello board was made). Clients that tie stay in A–Z order, and the
   choice is remembered in their browser.
   Each client has a **status toggle**: *Oppakken* → **Ermee bezig** (orange) → **Done** (green) → nothing again,
-  showing who set it and when. The colour covers the client and all its functions, so colleagues who help out see
+  always the same size; who set it and when shows on hover. The colour covers the client and all its functions, so colleagues who help out see
   who is on what without messaging each other. Anyone can set it, also through *Bekijk als* (under their own
   name), and it shows up on everyone's screen within a second. It is for today: at midnight every client starts
   blank again. Stored per Trello board in `live.status`.

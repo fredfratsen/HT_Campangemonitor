@@ -25,15 +25,14 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
 .live-st-done > .hov-row:not(.live-fn):hover{background:linear-gradient(90deg,#B5E7C9 0%,#DDF2E5 55%,#F4FBF7 100%) !important}
 .live-st-bezig > .live-fn:hover{background:#FFEFDB !important}
 .live-st-done > .live-fn:hover{background:#E4F5EA !important}
-.live-pill{display:inline-flex;align-items:center;gap:8px;min-height:38px;max-width:100%;padding:5px 14px;border-radius:999px;border:1.5px solid #E4E1DE;background:#FFFFFF;color:#1B1B63;font-size:13px;font-weight:600;line-height:1.15;text-align:left;cursor:pointer;transition:border-color 150ms,box-shadow 150ms}
+/* One fixed size for Oppakken, Ermee bezig and Done, so the button doesn't jump when it changes. */
+.live-pill{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:108px;height:38px;padding:0 10px;border-radius:999px;border:1.5px solid #E4E1DE;background:#FFFFFF;color:#1B1B63;font-size:13px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;transition:border-color 150ms,box-shadow 150ms}
 .live-pill:hover{border-color:#1B1B63;box-shadow:0 2px 8px rgba(27,27,99,.12)}
 .live-pill-bezig{border-color:transparent;background:linear-gradient(135deg,#F9CE00 0%,#FB8915 100%);color:#1D1D1B;box-shadow:0 2px 8px rgba(251,137,21,.35),inset 0 1px 0 rgba(255,255,255,.5)}
 .live-pill-done{border-color:transparent;background:linear-gradient(135deg,#1C8450 0%,#14603A 100%);color:#FFFFFF;box-shadow:0 2px 8px rgba(26,122,74,.35),inset 0 1px 0 rgba(255,255,255,.25)}
 .live-pill-bezig:hover{border-color:transparent;box-shadow:0 4px 14px rgba(251,137,21,.5),inset 0 1px 0 rgba(255,255,255,.5)}
 .live-pill-done:hover{border-color:transparent;box-shadow:0 4px 14px rgba(26,122,74,.5),inset 0 1px 0 rgba(255,255,255,.25)}
-.live-pill-who{display:block;font-size:11px;font-weight:500;opacity:.85}
-.live-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#1D1D1B;animation:live-pulse 1.6s ease-in-out infinite}
-.live-check{flex:none;font-size:15px;line-height:1}
+.live-check{flex:none;font-size:14px;line-height:1}
 .live-swatch{width:10px;height:10px;border-radius:3px}
 .live-swatch-bezig{background:linear-gradient(135deg,#F9CE00,#FB8915)}
 .live-swatch-done{background:linear-gradient(135deg,#3CC27F,#1A7A4A)}
@@ -53,7 +52,6 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
 @keyframes live-pop-a{0%{transform:scale(.9)}60%{transform:scale(1.07)}100%{transform:scale(1)}}
 @keyframes live-pop-b{0%{transform:scale(.9)}60%{transform:scale(1.07)}100%{transform:scale(1)}}
 @keyframes live-check{0%{transform:scale(0) rotate(-45deg)}100%{transform:scale(1) rotate(0)}}
-@keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){
   .live-block *,.live-block::before{animation:none !important}
 }

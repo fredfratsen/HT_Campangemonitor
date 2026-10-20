@@ -2,7 +2,7 @@ import React from 'react';
 import HaltTag from '../components/HaltTag.jsx';
 
 // Narrow enough to fit next to the menu from 1280 px wide, Status column included.
-const COLS = 'minmax(160px,1.4fr) 100px 96px 120px 56px 112px minmax(40px,1fr) 128px';
+const COLS = 'minmax(160px,1.4fr) 100px 96px 120px 56px 112px minmax(40px,1fr) 108px';
 const ROW = { display: 'grid', gridTemplateColumns: COLS, gap: '14px', alignItems: 'center', cursor: 'pointer', fontSize: '14px' };
 const NUM = { textAlign: 'right', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '18px' };
 
@@ -28,16 +28,16 @@ function Cells({ r }) {
 const ST = { bezig: 'Ermee bezig', done: 'Done' };
 const NEXT = { '': 'Ermee bezig', bezig: 'Done', done: 'geen status' };
 
-/** The Ermee bezig / Done toggle of a client: nothing → Ermee bezig → Done → nothing, with who set it and when. */
+/**
+ * The Ermee bezig / Done toggle of a client: nothing → Ermee bezig → Done → nothing. Same size in every state; who set
+ * it and when is in the tooltip.
+ */
 function StatusPill({ r }) {
   const now = r.st ? `${ST[r.st]}, door ${r.stBy} om ${r.stAt}` : 'nog niet opgepakt';
   return (
-    <button type="button" className={`live-pill live-pill-${r.st || 'none'}`} onClick={r.setSt} aria-label={`${r.client}: ${now}. Klik voor ${NEXT[r.st]}.`} title={`Klik voor ${NEXT[r.st]}`}>
-      {r.st === 'bezig' ? <span className="live-dot" aria-hidden="true" /> : r.st === 'done' ? <span className="live-check" aria-hidden="true">✓</span> : null}
-      <span>
-        <span style={{ display: 'block' }}>{r.st ? ST[r.st] : 'Oppakken'}</span>
-        {r.st ? <span className="live-pill-who">{r.stBy} · {r.stAt}</span> : null}
-      </span>
+    <button type="button" className={`live-pill live-pill-${r.st || 'none'}`} onClick={r.setSt} aria-label={`${r.client}: ${now}. Klik voor ${NEXT[r.st]}.`} title={`${r.st ? `${ST[r.st]} · ${r.stBy} ${r.stAt}\n` : ''}Klik voor ${NEXT[r.st]}`}>
+      {r.st === 'done' ? <span className="live-check" aria-hidden="true">✓</span> : null}
+      {r.st ? ST[r.st] : 'Oppakken'}
     </button>
   );
 }
