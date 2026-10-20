@@ -52,7 +52,8 @@ function ClientBlock({ r }) {
   const cls = ['live-block', r.st && `live-st-${r.st}`, moved && 'live-st-anim'].filter(Boolean).join(' ');
   return (
     <div className={cls} style={{ borderBottom: '1px solid #F5F2ED' }}>
-      <div className="hov-row live-row" onClick={r.open} aria-expanded={r.multi ? r.expanded : undefined} style={{ ...ROW, padding: '12px 20px' }}>
+      {/* A coloured row gets its hover from app.css: hov-row would replace the gradient, and the sweep with it. */}
+      <div className={r.st ? 'live-row' : 'hov-row live-row'} onClick={r.open} aria-expanded={r.multi ? r.expanded : undefined} style={{ ...ROW, padding: '12px 20px' }}>
         <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
           <span style={{ minWidth: '0' }}>
@@ -65,7 +66,7 @@ function ClientBlock({ r }) {
         <div><StatusPill r={r} /></div>
       </div>
       {/* Under a status the function rows take its colour (app.css), instead of their own grey. */}
-      {r.fns.map((f, j) => <div key={j} className="hov-row live-row live-fn" onClick={f.open} style={{ ...ROW, padding: '9px 20px', background: r.st ? undefined : '#FAF8F5', borderTop: '1px solid #F5F2ED' }}>
+      {r.fns.map((f, j) => <div key={j} className={r.st ? 'live-row live-fn' : 'hov-row live-row live-fn'} onClick={f.open} style={{ ...ROW, padding: '9px 20px', background: r.st ? undefined : '#FAF8F5', borderTop: '1px solid #F5F2ED' }}>
           <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '19px', fontSize: '13px' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', flex: 'none', background: f.dot }} />
             <span style={{ fontWeight: '500' }}>{f.vac}</span>

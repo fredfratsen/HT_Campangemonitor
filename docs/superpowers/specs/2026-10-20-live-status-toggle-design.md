@@ -102,7 +102,11 @@ Changes go in [src/views/LiveView.jsx](../../../src/views/LiveView.jsx), `liveDa
 
 - The gradient sweeps in from the left (~400 ms, background-size/position).
 - The pill pops (scale 1 → 1.06 → 1).
-- Done also gets a check-mark bounce.
+- Done also gets a check-mark bounce, and more on top, added at the user's request ("a slow rolling flash"):
+  - after the green sweeps in, a beam of light (white core, green halo) rolls across the client row at an even pace (~2.2 s in all);
+  - meanwhile the row brightens briefly with a thin glowing green outline, and the left bar glows;
+  - the button sends out a ripple ring.
+- Coloured rows don't use `hov-row`: its `background !important` replaced the gradient under the mouse, so the person who clicked never saw the animation. They get an inset-shadow hover instead.
 - Going back to none has no sweep; the row just returns to white.
 - Under `prefers-reduced-motion: reduce`, colours switch with no animation.
 
