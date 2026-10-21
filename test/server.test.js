@@ -197,6 +197,22 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
       ['Tsjerk', 'Hotel Pauze – Kok', 'weer actief'], ['Pauze Marketeer', 'Hotel Pauze – Kok', 'gestopt'], ['Pauze Marketeer', 'Hotel Pauze – Kok', 'gepauzeerd']]);
   });
 
+  test('a new campaign is announced to its recruiter when the marketeer resumes it, not before', async () => {
+    const inv = await S.dev.api('POST', '/api/admin/members', { name: 'Ads Marketeer', role: 'marketeer' });
+    const mkt = client();
+    await mkt.form(new URL(inv.data.link).pathname, { email: 'rm3@example.com', password: 'de marketeer met ads', password2: 'de marketeer met ads' });
+    const link = { id: 't-b8-kok', boardId: 'b8', boardName: 'Hotel Nieuw', labelId: 'l8', vac: 'Kok', rec: 'Tessa' };
+    await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.links', set: { [link.id]: { ...link, halt: { kind: 'pauze', nieuw: true, w: 43 } } } }, { doc: 'live.mkt', set: { b8: 'Ads Marketeer' } }] });
+    const notes = async () => Object.values((await S.dev.get('/api/state')).data.docs.inbox || {}).filter(n => n.to === 'Tessa' && n.title.includes('Hotel Nieuw'));
+    assert.deepEqual(await notes(), [], 'nothing while it waits for its ads');
+    const r = await mkt.api('POST', '/api/state/patch', { patches: [{ doc: 'live.links', set: { [link.id]: link } }] });
+    assert.deepEqual(r.data.rejected, []);
+    const st = (await S.dev.get('/api/state')).data;
+    assert.equal(r.data.rev, st.rev, 'the answer has the rev with the announcement, so the app fetches it');
+    assert.deepEqual((await notes()).map(n => [n.title, n.from]), [['Nieuw bedrijf voor jou: Hotel Nieuw', 'Ads Marketeer']]);
+    assert.deepEqual(Object.values(st.docs.assignLog || {}).filter(e => e.client === 'Hotel Nieuw').map(e => [e.to, e.by]), [['Tessa', 'Ads Marketeer']]);
+  });
+
   // Ermee bezig / Done on Live campagnes has to show up on a colleague's screen at once, not after the next poll.
   if (mode === 'server') test('server push: a saved change reaches every open app at once, as a version number only', async () => {
     assert.equal((await client().get('/api/events')).status, 401, 'not without logging in');

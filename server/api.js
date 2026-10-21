@@ -6,6 +6,7 @@ import { AccountError, TTL, normEmail, validEmail } from './accounts.js';
 import { passwordProblem, otpauthUrl } from './crypto.js';
 import { qrDataUrl } from './pages.js';
 import { makeAuthorizer } from './authorize.js';
+import { announceResumed } from './announce.js';
 import { INTEGRATIONS } from './secrets.js';
 import { testTrello } from './trello.js';
 import { testSmtp } from './mail.js';
@@ -70,6 +71,10 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     try { r = store.patch(req.body && req.body.patches, makeAuthorizer(req.account, store.docs)); }
     catch (e) { return res.status(400).json({ error: e.message }); }
     auditPatch(req.account, r.applied);
+    // A new campaign that's resumed goes to its recruiter now. The answer carries the rev after that, so the app
+    // sees it missed a change and fetches it.
+    const news = announceResumed(r.applied, store.docs, req.account.name);
+    if (news.length) store.patch(news);
     for (const a of r.applied) {
       if (a.doc !== 'ideas' || !a.after) continue;
       if (a.before === undefined) mailIdea(req, a.after);
@@ -79,7 +84,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
       lastDenied.set(req.account.id, Date.now());
       audit.log('data.denied', { actor: req.account, details: { wijzigingen: r.rejected.slice(0, 10).map(x => `${x.doc}/${x.key}`) } });
     }
-    res.json({ rev: r.rev, rejected: r.rejected.map(({ doc, key }) => ({ doc, key })) });
+    res.json({ rev: store.rev, rejected: r.rejected.map(({ doc, key }) => ({ doc, key })) });
   });
 
   /** Rule and assignment changes go into the audit log. */

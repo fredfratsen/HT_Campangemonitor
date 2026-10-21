@@ -1,5 +1,6 @@
 // Live campagnes per client: recruiters call per Trello board, so the functions (campaigns) of one board share a row.
 import { rnd } from './helpers.js';
+import { waitsForAds } from './halt.js';
 
 /**
  * Today's call list of campaign c: nieuw (not called yet), contact (call again) and gebeld (got ‘Geen gehoor’ today,
@@ -11,9 +12,13 @@ export function callList(c) {
   return { nieuw: Math.floor(rnd(c.id + 'today') * (cur.leads / 4 + 1.5)) + Math.round(rnd(c.id + 'bl') * 1.4),
     contact: Math.round(rnd(c.id + 'cp') * 3) + Math.round(cur.leads / 4), gebeld: Math.round(rnd(c.id + 'gg') * 2) };
 }
-/** A campaign on Pauze or stopped (halt) stays with the recruiter until all its candidates are called. */
+/**
+ * A campaign on Pauze or stopped (halt) stays with the recruiter until all its candidates are called. A new one that
+ * waits for its ads isn't theirs yet: they see it once it's resumed (and hear of it then, see server/announce.js).
+ */
 export function recruiterSees(c) {
   if (!c.halt) return true;
+  if (waitsForAds(c.halt)) return false;
   const n = callList(c);
   return n.nieuw + n.contact + n.gebeld > 0;
 }

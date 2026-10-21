@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from '../src/lib/clientGroups.js';
+import { startHalt } from '../src/lib/halt.js';
 
 const fn = (id, key, nieuw, contact, o = {}) => ({ id, key, client: key, vac: id, nieuw, contact, gebeld: 0, total: nieuw + contact, open: false, rank: 0, ...o });
 
@@ -81,4 +82,11 @@ test('a recruiter keeps a paused or stopped campaign until all its candidates ar
   assert.equal(recruiterSees(c('pauze', 0, 0, 1)), true, 'a ‘Geen gehoor’ today is not yet called');
   assert.equal(recruiterSees(c('pauze', 0, 0)), false);
   assert.equal(recruiterSees(c('stop', 0, 0)), false);
+});
+
+test('a new campaign waiting for its ads stays out of sight of the recruiter, candidates or not', () => {
+  const c = { id: 'k', live: { nieuw: 3, contact: 1, gebeld: 0 }, weeks: [{ leads: 0 }], halt: startHalt('Robbin', 43) };
+  assert.equal(recruiterSees(c), false);
+  const { nieuw, ...byHand } = c.halt;
+  assert.equal(recruiterSees({ ...c, halt: byHand }), true, 'paused by hand: as before');
 });

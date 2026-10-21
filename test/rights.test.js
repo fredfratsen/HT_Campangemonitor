@@ -6,6 +6,7 @@ import { rightsOf, can, canViewAs, manageError, overridesFor, visibleCampaigns, 
 import { makeAuthorizer, NO_RIGHT, REMINDED } from '../server/authorize.js';
 import { DEF_RULES } from '../src/lib/constants.js';
 import { feedbackWeek, wl } from '../src/lib/weeks.js';
+import { startHalt } from '../src/lib/halt.js';
 
 const dev = { id: 'r-tsjerk', name: 'Tsjerk', role: 'dev', recName: 'Tsjerk' };
 const dev2 = { id: 'u-dev2', name: 'Dev Twee', role: 'dev' };
@@ -304,6 +305,17 @@ test('Trello: a marketeer pauses, resumes and stops campaigns of their own clien
   const stopped = halt(link, 'stop', 'Danielle');
   assert.equal(L('live.links', link.id, stopped, { ...stopped, rec: 'Juul' }), '', 'a new recruiter leaves who stopped it');
   assert.equal(makeAuthorizer({ ...mkt, grants: ['trello.link'] }, docs)('live.links', link.id, stopped, { ...stopped, rec: 'Juul' }), '', 'also for Trello-koppeling alone');
+});
+
+test('a campaign made in Toewijzing starts on Pauze; the marketeer, teamlead and dev resume it', () => {
+  const link = { id: 't-b1-kok', boardId: 'b1', boardName: 'Hotel A', labelId: 'l1', vac: 'Kok', rec: 'Kim' };
+  const docs = { 'live.mkt': { b1: 'Danielle' } }, paused = { ...link, halt: startHalt('Iemand', W) };
+  const made = makeAuthorizer(lead, docs)('live.links', link.id, undefined, paused);
+  assert.equal(made.value.halt.by, 'Robbin', 'stamped');
+  assert.equal(made.value.halt.nieuw, true, 'still marked as new');
+  for (const who of [mkt, lead, dev]) assert.equal(makeAuthorizer(who, docs)('live.links', link.id, made.value, link), '', who.role);
+  assert.equal(makeAuthorizer(mkt, docs)('live.links', link.id, undefined, paused), NO_RIGHT, 'a marketeer makes no campaigns');
+  assert.equal(makeAuthorizer(kim, docs)('live.links', link.id, made.value, link), NO_RIGHT, 'nor does a recruiter resume one');
 });
 
 test('demo campaigns: the same rules, on the campaign itself', () => {

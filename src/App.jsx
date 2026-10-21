@@ -10,6 +10,7 @@ import {
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
 import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
+import { startHalt, waitsForAds, haltLabel, haltLine } from './lib/halt.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
@@ -53,8 +54,8 @@ const DAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 /** "wo 4 okt 10:12" */
 const when = ts => { const d = new Date(ts); return `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const names = a => a.length > 1 ? `${a.slice(0, -1).join(', ')} en ${a[a.length - 1]}` : a.join('');
-/** "Gepauzeerd door Danielle · week 43" for halt h (see HALT). */
-const haltLine = h => { const d = HALT[h.kind].done; return `${d[0].toUpperCase() + d.slice(1)}${h.by ? ` door ${h.by}` : ''} · week ${wl(h.w)}`; };
+/** "2 nieuwe campagnes op Pauze tot de ads live staan": new campaigns start on Pauze (lib/halt.js startHalt). */
+const pausedText = n => `${n} nieuwe ${n === 1 ? 'campagne' : 'campagnes'} op Pauze tot de ads live staan`;
 
 class TrelloError extends Error {}
 
@@ -487,7 +488,7 @@ export default class App extends React.Component {
           canPick: !x.ign, picked: on, togglePick: () => setSel([x], !on),
           ign: x.ign, rec: x.ign ? '' : x.rec, mkt: x.ign ? '' : x.mkt, recOpts: x.ign ? none : opt(this.recs(), x.rec, true), mktOpts: x.ign ? none : opt(this.mkts(), x.mkt),
           recBorder: x.rec || x.ign ? '#E4E1DE' : '#F9A800', mktBorder: x.mkt || x.ign ? '#E4E1DE' : '#F9A800',
-          onRec: e => this.waitFlash(this.assign([x], { rec: e.target.value })), onMkt: e => this.assign([x], { mkt: e.target.value }),
+          onRec: e => this.assignFlash(this.assign([x], { rec: e.target.value })), onMkt: e => this.assign([x], { mkt: e.target.value }),
           addText: oneRec && pend.length ? `+ ${pend.length} ${pend.length === 1 ? 'functie' : 'functies'}` : '', add: () => this.addFunctions(x, pend),
           canIgnore: !x.ign && !x.linked, ignore: () => this.ignoreClients([x], true), restore: () => this.ignoreClients([x], false) };
       }),
@@ -506,61 +507,98 @@ export default class App extends React.Component {
   /**
    * Gives clients (from assignItems) a recruiter and/or marketeer; '' leaves that one as it is. A recruiter covers all
    * functions: each one without a campaign gets one. Niet actief ('__inactive') does the same without a recruiter:
-   * the campaigns are only the Recruitment Marketeer's. Returns the clients that are still loading from Trello: until
-   * their functions are in, they can't be split into functions, so they keep their recruiter for now.
+   * the campaigns are only the Recruitment Marketeer's. Returns made: how many new campaigns there are (they start on
+   * Pauze), and wait: the clients that are still loading from Trello. Until their functions are in, they can't be split
+   * into functions, so they keep their recruiter for now.
    */
   assign(list, { rec = '', mkt = '' }) {
     if (rec === '__multi') rec = '';
     const on = !!rec && rec !== '__inactive';
     const wait = rec ? list.filter(x => !x.linked && !x.loaded) : [], go = list.filter(x => !wait.includes(x));
     // Who followed the client before (an inactive one: nobody); the new recruiter sees it as taken over from them.
+    // New functions wait for their ads, so the recruiter hears of them once they're resumed (server/announce.js).
     const from = x => x.rec === '__inactive' ? '' : x.recs.includes(rec) ? rec : x.recs[0] || '';
-    if (on) this.logAssigns(go.map(x => ({ client: x.name, from: from(x), to: rec, fns: x.linked ? x.fns.filter(f => f.kind === 'pending').map(f => f.name) : [] })));
-    const L = this.state.source === 'trello';
+    if (on) this.logAssigns(go.map(x => ({ client: x.name, from: from(x), to: rec, fns: [], wacht: !this.runs(x) })));
+    const L = this.state.source === 'trello', made = {};
     if (rec && go.length) {
-      const off = rec === '__inactive', r = off ? '' : rec, keys = new Set(go.map(x => x.key));
+      const off = rec === '__inactive', r = off ? '' : rec, keys = new Set(go.map(x => x.key)), pend = x => x.fns.filter(f => f.kind === 'pending');
+      const add = go.flatMap(x => { const a = L ? this.newLinks(x, pend(x), r) : this.newCampaigns(x, pend(x), r, off); made[x.key] = a.map(c => c.vac); return a; });
       if (L) this.setState(s => {
         const inactive = { ...(s.live.inactive || {}) };
         go.forEach(x => { if (off) inactive[x.key] = true; else delete inactive[x.key]; });
-        const links = [...s.live.links.map(k => keys.has(k.boardId) ? { ...k, rec: r } : k), ...go.flatMap(x => this.newLinks(x, x.fns.filter(f => f.kind === 'pending'), r))];
+        const links = [...s.live.links.map(k => keys.has(k.boardId) ? { ...k, rec: r } : k), ...add];
         return { live: { ...s.live, inactive, links } };
       }, () => this.rebuildLive());
-      else {
-        const add = go.flatMap(x => this.newCampaigns(x, x.fns.filter(f => f.kind === 'pending'), r, off));
-        this.setState(s => ({ campaigns: [...s.campaigns.map(c => !keys.has(c.client) || (c.ended && !c.inactive) ? c : { ...c, rec: r, ended: false, inactive: off }), ...add] }));
-      }
+      else this.setState(s => ({ campaigns: [...s.campaigns.map(c => !keys.has(c.client) || (c.ended && !c.inactive) ? c : { ...c, rec: r, ended: false, inactive: off }), ...add] }));
     }
     if (mkt && list.length) {
       const set = m => ({ ...m, ...Object.fromEntries(list.map(x => [x.key, mkt])) });
       if (L) this.setState(s => ({ live: { ...s.live, mkt: set(s.live.mkt || {}) } }));
       else this.setState(s => ({ mktDemo: set(s.mktDemo) }));
     }
-    return wait;
+    // The marketeer hears of the campaigns that wait for their ads as soon as there are some and the client is theirs,
+    // whichever of the two came first: a new marketeer of all of them, the same one of the ones made now.
+    this.tellMarketeers(list.map(x => {
+      const isNew = !!mkt && mkt !== x.mkt, waiting = isNew ? x.fns.filter(f => f.kind === 'linked' && waitsForAds(f.halt)).map(f => f.name) : [];
+      return { client: x.name, to: mkt || x.mkt, fns: [...waiting, ...(made[x.key] || [])], isNew: isNew || !x.linked };
+    }));
+    return { made: Object.values(made).flat().length, wait };
+  }
+  /** Does client x (from assignItems) have a campaign that doesn't wait for its ads, so its recruiter sees it? */
+  runs(x) {
+    return this.state.source === 'trello' ? this.state.live.links.some(k => k.boardId === x.key && !waitsForAds(k.halt))
+      : this.state.campaigns.some(c => c.client === x.key && !c.ended && !waitsForAds(c.halt));
+  }
+  /**
+   * Lets Recruitment Marketeers know of the campaigns of their clients that wait on Pauze for their ads, one
+   * notification per person. list: [{ client, to, fns, isNew }]; isNew: the client is new to them (else new functions).
+   */
+  tellMarketeers(list) {
+    const au = this.author(), at = Date.now(), byTo = {};
+    list.filter(x => x.to && x.fns.length).forEach(x => { (byTo[x.to] = byTo[x.to] || []).push(x); });
+    const hint = n => `Hervat ${n === 1 ? 'hem' : 'ze'} onder Campagnes › Pauze zodra de ads live staan`;
+    const notes = Object.entries(byTo).map(([to, l]) => {
+      const x = l[0], n = l.reduce((s, y) => s + y.fns.length, 0);
+      return { id: at + Math.random(), to, from: au, at: stamp(), read: false, kind: 'assign',
+        ...(l.length === 1 ? { title: x.isNew ? `Nieuw bedrijf voor jou: ${x.client}` : `${n === 1 ? 'Nieuwe functie' : 'Nieuwe functies'} bij ${x.client}`,
+          items: [`Op Pauze tot de ads live staan: ${names(x.fns)}`, hint(n)] }
+          : { title: l.every(y => y.isNew) ? `${l.length} nieuwe bedrijven voor jou` : `Nieuwe campagnes bij ${l.length} klanten`,
+            items: [...l.map(y => `${y.client} · op Pauze: ${names(y.fns)}`), hint(n)] }) };
+    });
+    if (notes.length) this.setState(s => ({ inbox: [...notes, ...s.inbox] }));
   }
   waitText(wait) { return wait.length ? `${names(wait.map(x => x.name))} ${wait.length === 1 ? 'wordt' : 'worden'} nog geladen uit Trello; probeer het zo opnieuw` : ''; }
-  waitFlash(wait) { if (wait.length) this.flash(this.waitText(wait)); }
+  /** After assign: text, then how many new campaigns are on Pauze and which clients are still loading. */
+  assignFlash({ made, wait }, text = '') {
+    const t = [text, made ? pausedText(made) : '', this.waitText(wait)].filter(Boolean).join(' · ');
+    if (t) this.flash(t);
+  }
   /**
    * Trello links (campaigns) for functions fns of client x, or one for the whole board when it has no functions. A
-   * function with a label is linked by its label, one that is only an intake list by that list (see linkKey).
+   * function with a label is linked by its label, one that is only an intake list by that list (see linkKey). They
+   * start with halt: on Pauze until the ads are live (lib/halt.js), unless halt is null.
    */
-  newLinks(x, fns, rec) {
-    const b = x.board;
-    if (fns.length) return fns.map(f => ({ id: `t-${b.id}-${f.fnId}`, boardId: b.id, boardName: b.name, labelId: f.labelId, ...(f.labelId ? {} : { listId: f.fnId }), labelName: f.name, vac: f.name, rec }));
-    return x.linked ? [] : [{ id: 't-' + b.id + '-all', boardId: b.id, boardName: b.name, labelId: null, labelName: 'Hele bord', vac: 'Alle functies', rec }];
+  newLinks(x, fns, rec, halt = startHalt(this.author(), CUR)) {
+    const b = x.board, h = halt ? { halt } : {};
+    if (fns.length) return fns.map(f => ({ id: `t-${b.id}-${f.fnId}`, boardId: b.id, boardName: b.name, labelId: f.labelId, ...(f.labelId ? {} : { listId: f.fnId }), labelName: f.name, vac: f.name, rec, ...h }));
+    return x.linked ? [] : [{ id: 't-' + b.id + '-all', boardId: b.id, boardName: b.name, labelId: null, labelName: 'Hele bord', vac: 'Alle functies', rec, ...h }];
   }
-  /** Demo campaigns for functions fns of client x, or one for all functions when it has none. off: on Niet actief. */
+  /** Demo campaigns for functions fns of client x, or one for all functions when it has none, on Pauze. off: on Niet actief. */
   newCampaigns(x, fns, rec, off = false) {
-    const now = Date.now(), list = fns.length ? fns : x.linked ? [] : [{ name: 'Alle functies', cards: 0 }];
-    return list.map((f, i) => ({ id: `n${now}-${i}`, client: x.name, vac: f.name, rec, start: CUR, ended: false, inactive: off, actions: [],
+    const now = Date.now(), list = fns.length ? fns : x.linked ? [] : [{ name: 'Alle functies', cards: 0 }], halt = startHalt(this.author(), CUR);
+    return list.map((f, i) => ({ id: `n${now}-${i}`, client: x.name, vac: f.name, rec, start: CUR, ended: false, inactive: off, halt, actions: [],
       weeks: [{ w: CUR, leads: f.cards, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: f.cards, gescreend: 0, voorgesteld: 0, gesprek: 0, geplaatst: 0, reasons: {} } }] }));
   }
-  /** New functions of an assigned client get a campaign, with the client's recruiter (none on Niet actief). */
+  /**
+   * New functions of an assigned client get a campaign, with the client's recruiter (none on Niet actief), on Pauze.
+   * The marketeer hears of them now, the recruiter once they're resumed (server/announce.js).
+   */
   addFunctions(x, fns) {
     const off = x.rec === '__inactive', rec = off ? '' : x.rec;
-    this.logAssigns([{ client: x.name, from: rec, to: rec, fns: fns.map(f => f.name) }]);
+    this.tellMarketeers([{ client: x.name, to: x.mkt, fns: fns.map(f => f.name), isNew: false }]);
     if (this.state.source === 'trello') this.setState(s => ({ live: { ...s.live, links: [...s.live.links, ...this.newLinks(x, fns, rec)] } }), () => this.rebuildLive());
     else this.setState(s => ({ campaigns: [...s.campaigns, ...this.newCampaigns(x, fns, rec, off)] }));
-    this.flash(`${x.name}: ${names(fns.map(f => f.name))} toegevoegd · ${off ? 'Niet actief' : rec}`);
+    this.flash(`${x.name}: ${names(fns.map(f => f.name))} toegevoegd · ${off ? 'Niet actief' : rec} · op Pauze tot de ads live staan`);
   }
   /** The row in Toewijzing of function f of client x that has a campaign: Stoppen, or Hervatten / Opnieuw activeren. */
   linkedRow(x, f, cards) {
@@ -597,22 +635,25 @@ export default class App extends React.Component {
     else this.setState(s => ({ trIgnored: upd(s.trIgnored) }));
     this.flash(on ? `${f.name} bij ${x.name}: geen functie` : `${f.name} bij ${x.name} hersteld`);
   }
-  /** A board linked as one campaign earlier gets a campaign per function instead. */
+  /** A board linked as one campaign earlier gets a campaign per function instead; they keep its Pauze, if any. */
   splitBoard(x) {
     if (!window.confirm(`${x.name} splitsen in ${x.split.length} campagnes (${names(x.split.map(f => f.name))})? De campagne ‘Alle functies’ stopt; eerdere feedback daarop blijft bewaard, maar is niet meer te zien.`)) return;
-    const off = x.rec === '__inactive', rec = off ? '' : x.rec;
-    this.setState(s => ({ live: { ...s.live, links: [...s.live.links.filter(k => !(k.boardId === x.key && linkKey(k) === '*')), ...this.newLinks(x, x.split, rec)] } }), () => this.rebuildLive());
+    const off = x.rec === '__inactive', rec = off ? '' : x.rec, isWhole = k => k.boardId === x.key && linkKey(k) === '*';
+    this.setState(s => {
+      const whole = s.live.links.find(isWhole);
+      return { live: { ...s.live, links: [...s.live.links.filter(k => !isWhole(k)), ...this.newLinks(x, x.split, rec, (whole && whole.halt) || null)] } };
+    }, () => this.rebuildLive());
     this.flash(`${x.name} gesplitst in ${x.split.length} campagnes · ${off ? 'Niet actief' : rec}`);
   }
   /** The button in the bar for ticked clients: the chosen recruiter and/or marketeer for all of them. */
   assignPicked(list) {
     const { rec, mkt } = this.state.asg;
     if (!rec && !mkt) { this.flash('Kies eerst een recruiter of Recruitment Marketeer'); return; }
-    const wait = this.assign(list, { rec, mkt }), done = list.length - wait.length;
+    const res = this.assign(list, { rec, mkt }), done = list.length - res.wait.length;
     this.setState(s => ({ asg: { ...s.asg, sel: {}, rec: '', mkt: '' } }));
     const n = `${done} ${done === 1 ? 'klant' : 'klanten'}`;
     const text = rec === '__inactive' ? `${n} op Niet actief gezet${mkt ? ` · marketeer ${mkt}` : ''}` : `${n} toegewezen aan ${names([rec, mkt].filter(Boolean))}`;
-    this.flash([done ? text : '', this.waitText(wait)].filter(Boolean).join(' · '));
+    this.assignFlash(res, done ? text : '');
   }
   /** "Geen klant": a board that isn't a client leaves the list (Herstel brings it back). */
   ignoreClients(list, on) {
@@ -688,16 +729,18 @@ export default class App extends React.Component {
     };
   }
   /**
-   * Logs assignments [{ client, from, to, fns }] and lets each recruiter know, with one notification per person.
+   * Logs assignments [{ client, from, to, fns, wacht }] and lets each recruiter know, with one notification per person.
    * fns: new functions (campaigns) of the client; for a client the recruiter already had, only those are announced.
+   * wacht: all the client's campaigns wait for their ads; logged, but the recruiter hears of it once one is resumed
+   * (server/announce.js), and Live campagnes skips it.
    */
   logAssigns(list) {
     const au = this.author(), at = Date.now();
     const es = list.filter(x => x.to && (x.to !== x.from || (x.fns || []).length))
-      .map(x => ({ id: at + Math.random(), mode: this.state.source, client: x.client, from: x.from || '', to: x.to, at, by: au, fns: x.fns || [] }));
+      .map(x => ({ id: at + Math.random(), mode: this.state.source, client: x.client, from: x.from || '', to: x.to, at, by: au, fns: x.fns || [], ...(x.wacht ? { wacht: true } : {}) }));
     if (!es.length) return;
     const moved = es.filter(e => e.to !== e.from), fnsText = e => `${e.fns.length === 1 ? 'nieuwe functie' : 'nieuwe functies'}: ${e.fns.join(', ')}`;
-    const byTo = {}; es.forEach(e => { (byTo[e.to] = byTo[e.to] || []).push(e); });
+    const byTo = {}; es.filter(e => !e.wacht).forEach(e => { (byTo[e.to] = byTo[e.to] || []).push(e); });
     const notes = Object.entries(byTo).map(([to, l]) => {
       const e = l[0], kept = e.to === e.from;
       return { id: e.id, to, from: au, at: stamp(), read: false, kind: 'assign',
@@ -998,7 +1041,7 @@ export default class App extends React.Component {
     const lastFb = [...ws].reverse().find(w => w.q != null);
     return {
       id: c.id, client: c.client, vac: c.vac, rec: ina ? 'Niet actief' : c.rec, inactive: ina, start: c.start, startLabel: wl(c.start), cur, lvl: h.lvl,
-      ms: m.s, msRank: H ? -1 : S.rank, monBy: m.by, statusLabel: S.label, sFg: S.fg, sBg: S.bg, halt: c.halt || null, haltTag: H ? H.label : '',
+      ms: m.s, msRank: H ? -1 : S.rank, monBy: m.by, statusLabel: H ? haltLabel(c.halt) : S.label, sFg: S.fg, sBg: S.bg, halt: c.halt || null, haltTag: H ? haltLabel(c.halt) : '',
       monText: H ? haltLine(c.halt) : m.s === 'klant' ? `Sinds week ${wl(m.w)}${m.by ? ` · ${m.by}` : ''}` : m.s === 'check' ? `Gecheckt${m.by ? ` door ${m.by}` : ''}`
         : m.s === 'goed' ? 'Geen signalen deze week' : m.stale ? `Nieuw signaal na de check van ${cur.monBy || 'de marketeer'}` : '',
       href: '#campagne=' + encodeURIComponent(c.id),
@@ -1157,11 +1200,13 @@ export default class App extends React.Component {
     // variant: of components/Button.jsx; Stopzetten is red.
     const haltBtn = (label, onClick, variant = 'ghost') => ({ label, onClick, variant });
     const d = {
-      ...dd, mkt: this.mktOf(selC) || 'nog niet toegewezen',
+      // The line next to the label already says a new campaign is new.
+      ...dd, mkt: this.mktOf(selC) || 'nog niet toegewezen', statusLabel: halt ? HALT[halt.kind].label : dd.statusLabel,
       haltActs: canHalt && !halt ? [haltBtn('Pauzeren', () => this.askHalt(selC, 'pauze')), haltBtn('Stopzetten', () => this.askHalt(selC, 'stop'), 'danger')] : [],
       halt: !halt ? { has: false } : {
         has: true, title: HALT[halt.kind].label, line: haltLine(halt),
-        text: `Staat niet in het weekoverzicht en vraagt geen wekelijkse feedback. De recruiter ziet hem tot alle kandidaten gebeld zijn.${halt.kind === 'stop' && !can('assign') ? ' Alleen de teamlead kan hem weer activeren.' : ''}`,
+        text: waitsForAds(halt) ? 'Nieuwe campagne: hervat hem zodra de ads live staan. Tot dan staat hij niet in het weekoverzicht, vraagt hij geen wekelijkse feedback en ziet de recruiter hem nog niet. Bij Hervatten krijgt de recruiter een melding.'
+          : `Staat niet in het weekoverzicht en vraagt geen wekelijkse feedback. De recruiter ziet hem tot alle kandidaten gebeld zijn.${halt.kind === 'stop' && !can('assign') ? ' Alleen de teamlead kan hem weer activeren.' : ''}`,
         acts: halt.kind === 'pauze' ? (canHalt ? [haltBtn('Hervatten', () => this.setHalt(selC, null), 'accent'), haltBtn('Stopzetten', () => this.askHalt(selC, 'stop'), 'danger')] : [])
           : can('assign') ? [haltBtn('Opnieuw activeren', () => this.setHalt(selC, null), 'accent')] : []
       },
@@ -1423,10 +1468,13 @@ export default class App extends React.Component {
   }
   liveData(me) {
     const R = this.state.rules;
-    // A campaign on Pauze or stopped stays here, tagged, until all its candidates are called.
+    // A campaign on Pauze or stopped stays here, tagged, until all its candidates are called. A new one waiting for its
+    // ads only shows up once it's resumed.
     const mine = this.state.campaigns.filter(c => !c.ended && c.rec === me.rec && recruiterSees(c));
     const now = Date.now(), recent = {}, S = this.state.seen[me.id] || {}, since = S.prev ?? now - 864e5, dis = S.dismissed || 0;
-    this.state.assignLog.filter(e => e.mode === this.state.source && e.at > dis && (e.at > since || now - e.at < 864e5)).sort((a, b) => b.at - a.at).forEach(e => { if (!recent[e.client]) recent[e.client] = e; });
+    // An assignment while all its campaigns waited for their ads (wacht) counts from when one was resumed.
+    const log = this.state.assignLog.filter(e => e.mode === this.state.source && !e.wacht);
+    log.filter(e => e.at > dis && (e.at > since || now - e.at < 864e5)).sort((a, b) => b.at - a.at).forEach(e => { if (!recent[e.client]) recent[e.client] = e; });
     const hhmm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     const mineNew = Object.values(recent).filter(e => e.to === me.rec), gone = Object.values(recent).filter(e => e.from === me.rec && e.to !== me.rec);
     const changes = [
@@ -1437,13 +1485,13 @@ export default class App extends React.Component {
     const chTitle = [nN ? `${nN} ${nN === 1 ? 'nieuw bedrijf' : 'nieuwe bedrijven'}` : '', nO ? `${nO} overgenomen` : '', gone.length ? `${gone.length} overgedragen` : ''].filter(Boolean).join(' · ');
     // Added: when the client was last assigned to me; without that in the log, when its Trello board was made (that's earlier).
     const added = {};
-    this.state.assignLog.forEach(e => { if (e.mode === this.state.source && e.to === me.rec && e.at > (added[e.client] || 0)) added[e.client] = e.at; });
+    log.forEach(e => { if (e.to === me.rec && e.at > (added[e.client] || 0)) added[e.client] = e.at; });
     // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
     const sort = this.state.liveSort, groups = groupByClient(mine.map(c => {
       // Wekelijkse controle is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
       const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c);
       return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open: openWeeks(c).length > 0,
-        rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? HALT[c.halt.kind].label : '', added: added[c.client] || trelloCreated(c.boardId) };
+        rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? haltLabel(c.halt) : '', added: added[c.client] || trelloCreated(c.boardId) };
     }), sort);
     const mx = Math.max(...groups.map(g => g.total), 1), exp = this.state.liveExp;
     const dotOf = rank => MONITOR[MONITOR_KEYS.find(k => MONITOR[k].rank === rank)].fg;
