@@ -14,7 +14,7 @@ import { RANK, MON_FIELDS, stageOf, intakeName, cardTs } from './constants.js';
 
 /** How many weeks a campaign shows, up to and including the feedback week. */
 export const LIVE_WEEKS = 12;
-const emptyTr = () => ({ nieuw: 0, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, reasons: {} });
+const emptyTr = () => ({ nieuw: 0, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, gebeld: 0, reasons: {} });
 const norm = s => (s || '').trim().toLowerCase();
 /** The key of a Trello link (a campaign) in boardStats: its label or intake list, or '*' for the whole board. */
 export const linkKey = k => k.labelId || k.listId || '*';
@@ -56,9 +56,10 @@ export function withoutFunction(bd) {
 
 /**
  * Per campaign key ('*', or a function: a label or intake list id): minW, the earliest week with a card; weeks, per week the new candidates,
- * how far they got (gescreend … geplaatst) and why they were rejected; live, the open cards in Nieuw and
- * Contactpoging now, and gebeld: those of them that got a ‘Geen gehoor’ today (geenGehoor, from the server), which
- * are off today's call list until midnight. A label without cards has no key.
+ * how far they got (gescreend … geplaatst), why they were rejected, and gebeld: the cards called that week (calls,
+ * from the server: a ‘Geen gehoor’ or ‘TBA afspraak’, or moved on from Nieuw or Contactpoging), whatever week they
+ * applied in; live, the open cards in Nieuw and Contactpoging now, and gebeld: those of them that got a ‘Geen gehoor’
+ * or ‘TBA afspraak’ today (geenGehoor, from the server), which are off today's call list until midnight. A label without cards has no key.
  */
 export function boardStats(bd, now = Date.now()) {
   const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
@@ -83,6 +84,7 @@ export function boardStats(bd, now = Date.now()) {
       if (r >= 3) t.voorgesteld++;
       if (r >= 4) t.geplaatst++;
       if (reason) t.reasons[reason] = (t.reasons[reason] || 0) + 1;
+      for (const cw of new Set(c.calls || [])) (s.weeks[cw] || (s.weeks[cw] = emptyTr())).gebeld++;
       if (!c.closed && (stage === 'nieuw' || stage === 'contact')) s.live[calledToday(c) ? 'gebeld' : stage]++;
     }
   }
@@ -90,14 +92,15 @@ export function boardStats(bd, now = Date.now()) {
 }
 
 /**
- * Only what the home screens need (Weekoverzicht, Campagnes, Mijn campagnes, Live campagnes): new candidates per
- * week from week `from` on, and today's call list. No pipeline and no rejection reasons.
+ * Only what the home screens need (Weekoverzicht, Campagnes, Mijn campagnes, Live campagnes): new candidates and
+ * cards called per week from week `from` on (whether a week asks feedback, see checkin.js), and today's call list.
+ * No pipeline and no rejection reasons.
  */
 export function quickStats(stats, from) {
   const out = {};
   for (const [key, s] of Object.entries(stats)) {
     const weeks = {};
-    for (const [w, t] of Object.entries(s.weeks)) if (+w >= from && t.nieuw) weeks[w] = { nieuw: t.nieuw };
+    for (const [w, t] of Object.entries(s.weeks)) if (+w >= from && (t.nieuw || t.gebeld)) weeks[w] = { nieuw: t.nieuw, ...(t.gebeld ? { gebeld: t.gebeld } : {}) };
     out[key] = { minW: s.minW, weeks, live: { ...s.live } };
   }
   return out;

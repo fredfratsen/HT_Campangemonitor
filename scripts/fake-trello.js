@@ -2,18 +2,20 @@
 // service. Never in production.
 //
 // Load it before the server, with FAKE_TRELLO=1: node --import ./scripts/fake-trello.js server/index.js. Every call
-// to api.trello.com is then answered here, with six demo clients, each with a few functions and candidates over the
-// last weeks. Some clients have their functions as labels, some as intake lists ("Nieuwe Sollicitant | Kok"), one
-// both; a board's history (with made-up candidate names, as Trello's has real ones) says which intake list each
-// card came in through, and which candidates got ‘Geen gehoor’ today (a comment, as the Trello button makes). Trello
-// keys are filled in when none are set. Each board takes FAKE_TRELLO_DELAY ms to load (default 2000), so you can see
+// to api.trello.com is then answered here, with seven demo clients, each with a few functions and candidates over the
+// last weeks (one with quiet functions: no new candidates lately, called or not). Some clients have their functions
+// as labels, some as intake lists ("Nieuwe Sollicitant | Kok"), one both; a board's history (with made-up candidate names, as Trello's has real ones) says which intake list each
+// card came in through, and which candidates got ‘Geen gehoor’ or a ‘TBA afspraak’ today (a comment, as the Trello
+// button and automation make). Trello keys are filled in when none are set. Each board takes FAKE_TRELLO_DELAY ms to load (default 2000), so you can see
 // the app show the snapshot first and update it after. Every minute the first function of
 // each client gets one more candidate (in Nieuw, applied this week), so the numbers move: up to 4 more, then back.
 //
 // Without FAKE_TRELLO=1 this file does nothing, and the real Trello is used.
 import { feedbackWeek, mondayOf } from '../src/lib/weeks.js';
 
-// [name, functions, how: 'labels', 'kolommen' (intake lists) or 'beide']
+// [name, functions, how: 'labels', 'kolommen' (intake lists) or 'beide', quiet functions]. A quiet function has no new
+// candidates this week or last: 'stil' nobody called either (asks no weekly feedback), 'gebeld' one candidate from
+// earlier got ‘Geen gehoor’ on Monday at 10:00 (asks feedback).
 const CLIENTS = [
   ['Hotel Zeezicht', ['Kok', 'Bediening', 'Receptionist'], 'labels'],
   ['Restaurant De Haven', ['Bediening', 'Afwas'], 'kolommen'],
@@ -21,10 +23,12 @@ const CLIENTS = [
   ['Grand Café Het Plein', ['Kok', 'Barista'], 'beide'],
   ['Hotel Bergzicht', ['Receptionist', 'Housekeeping'], 'labels'],
   ['Bistro Tafel 8', ['Kok', 'Sous-chef'], 'kolommen'],
+  ['Lunchroom De Kade', ['Bediening', 'Kok', 'Afwas'], 'kolommen', { Kok: 'stil', Afwas: 'gebeld' }],
 ];
 const STAGES = ['Contactpoging', 'Gescreend', 'Gesprek', 'Voorstel', 'Aangenomen', 'Afgewezen'];
 const NAMES = ['Sanne de Vries', 'Mohammed El Amrani', 'Lisa Jansen', 'Kevin Bakker', 'Anouk Visser', 'Daan Smit', 'Fatima Yilmaz', 'Tom de Boer'];
 const REASONS = ['Te weinig ervaring', 'Afstand', 'Geen reactie', 'No show', 'Ander aanbod'];
+const TBA = ['morgen na 16:00', 'vrijdagochtend, staat nu achter de bar', 'na de lunch terugbellen'];
 const COLORS = ['green', 'blue', 'orange', 'purple'];
 const MOVE = 5; // minutes in one round of extra candidates
 
@@ -44,7 +48,7 @@ function rnd(...key) {
  * (actions: where each card was made and where it moved, newest first).
  */
 function board(b, now) {
-  const [name, fns, how] = CLIENTS[b], cur = feedbackWeek(now), cols = how !== 'labels' && fns.length > 0;
+  const [name, fns, how, quiet = {}] = CLIENTS[b], cur = feedbackWeek(now), cols = how !== 'labels' && fns.length > 0;
   const intakeOf = fn => (cols && fn ? `Nieuwe Sollicitant | ${fn.name}` : 'Nieuw');
   const LISTS = cols ? ['Informatie voor de recruiter', ...fns.map(n => `Nieuwe Sollicitant | ${n}`), ...STAGES] : ['Nieuw', ...STAGES, 'Informatie kandidaten'];
   const L = Object.fromEntries(LISTS.map((n, i) => [n, id('1157', b * 16 + i)]));
@@ -58,25 +62,30 @@ function board(b, now) {
   const at = t => hex(Math.floor(t / 1000), 8) + hex(n++, 16);
   const today = new Date(now).setHours(0, 0, 0, 0), dmy = t => new Date(t).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');
   // A candidate comes in on the intake list of their function (or Nieuw) and, unless still new, moves on a few hours
-  // later. About a third of those still to call got the Trello button ‘Geen gehoor’ today, between 9:00 and 13:00.
-  const card = (created, list, fn, extra = {}) => {
+  // later. About a third of those still to call got the Trello button ‘Geen gehoor’ today, between 9:00 and 13:00
+  // (or at `call`, when given); a third of those picked up and got the automation ‘TBA afspraak’ instead, with the
+  // recruiter's own text after it. Not on a function where nobody calls ('stil').
+  const geenGehoor = (cid, who, list, called) => {
+    const r = rnd(cid, 'tba'), text = r < 1 / 3 ? `📲 TBA\nTBA afspraak: ${TBA[Math.floor(r * 3 * TBA.length)]}` : `📵 Geen gehoor ${dmy(called)}`;
+    // Not with at(): whether it happened yet changes over the day, and the ids of the cards after it must not.
+    actions.push({ id: hex(Math.floor(called / 1000), 8) + 'cc' + hex(n, 14), type: 'commentCard', date: new Date(called).toISOString(),
+      data: { text, card: { id: cid, name: who }, list: ref(list) } });
+  };
+  const card = (created, list, fn, extra = {}, call = null) => {
     const cid = at(created), from = intakeOf(fn), to = list === 'Nieuw' ? from : list, who = NAMES[n % NAMES.length];
     cards.push({ id: cid, idList: L[to], idLabels: fn && how !== 'kolommen' ? [fn.id] : [], closed: false, customFieldItems: [], ...extra });
     actions.push({ id: at(created), type: 'createCard', date: new Date(created).toISOString(), data: { card: { id: cid, name: who }, list: ref(from) } });
     const moved = Math.min(created + 3 * 36e5, (created + now) / 2);
     if (to !== from) actions.push({ id: at(moved), type: 'updateCard', date: new Date(moved).toISOString(), data: { card: { id: cid, name: who }, listBefore: ref(from), listAfter: ref(to) } });
-    const called = Math.max(created + 6e4, today + 9 * 36e5) + Math.floor(rnd(cid, 'tijd') * 4 * 36e5);
-    // Not with at(): whether it happened yet changes over the day, and the ids of the cards after it must not.
-    if ((list === 'Nieuw' || list === 'Contactpoging') && rnd(cid, 'geen gehoor') < 0.35 && called < now) {
-      actions.push({ id: hex(Math.floor(called / 1000), 8) + 'cc' + hex(n, 14), type: 'commentCard', date: new Date(called).toISOString(),
-        data: { text: `📵 Geen gehoor ${dmy(called)}`, card: { id: cid, name: who }, list: ref(to) } });
-    }
+    const called = call ?? Math.max(created + 6e4, today + 9 * 36e5) + Math.floor(rnd(cid, 'tijd') * 4 * 36e5);
+    if ((list === 'Nieuw' || list === 'Contactpoging') && !(fn && quiet[fn.name] === 'stil') && (call != null || rnd(cid, 'geen gehoor') < 0.35) && called < now) geenGehoor(cid, who, to, called);
   };
 
   // Candidates per function per week, from 7 weeks before the feedback week up to today. Recent ones are still in
   // Nieuw or Contactpoging; older ones got further, or were rejected (with a reason). The first one of the feedback
   // week comes in at the very start of it, so every function has new candidates there, even on Monday morning.
   for (let w = cur - 7; w <= cur; w++) for (const lb of groups) {
+    if (lb && quiet[lb.name] && w >= cur - 1) continue;
     const key = [b, lb ? lb.name : '*', w], recent = w >= cur, mon = mondayOf(w);
     for (let i = 0, count = 1 + Math.floor(rnd(...key) * 7); i < count; i++) {
       const created = recent && i === 0 ? mon.getTime()
@@ -90,9 +99,16 @@ function board(b, now) {
         customFieldItems: [{ id: id('cf17', n), idCustomField: rf, idValue: reason.id }] });
     }
   }
+  // A quiet function that was called: a candidate from two weeks ago, still in Contactpoging, got ‘Geen gehoor’ on
+  // Monday at 10:00.
+  const m = mondayOf(cur);
+  for (const lb of groups.filter(g => g && quiet[g.name] === 'gebeld')) {
+    const t = mondayOf(cur - 2);
+    card(new Date(t.getFullYear(), t.getMonth(), t.getDate(), 11).getTime(), 'Contactpoging', lb, {}, new Date(m.getFullYear(), m.getMonth(), m.getDate(), 10).getTime());
+  }
   // The first function gets one more candidate per minute, in Nieuw, who applied this week, so the feedback week and
   // the call list move. At most MOVE - 1, then back to none.
-  const m = mondayOf(cur), applied = new Date(m.getFullYear(), m.getMonth(), m.getDate(), 12).toISOString();
+  const applied = new Date(m.getFullYear(), m.getMonth(), m.getDate(), 12).toISOString();
   for (let i = 0; i < Math.floor(now / 6e4) % MOVE; i++) {
     card(now - i * 6e4, 'Nieuw', groups[0], { customFieldItems: [{ id: id('cf17', n), idCustomField: sd, value: { date: applied } }] });
   }

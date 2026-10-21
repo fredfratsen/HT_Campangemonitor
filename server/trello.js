@@ -4,10 +4,10 @@
 // Data minimisation: the server decides which fields are fetched, not the browser. Only list names, labels, and
 // per card its list, labels and the two custom fields the monitor uses (Sollicitatiedatum, Reden afgewezen)
 // come through. Candidate names, descriptions and other custom fields (phone numbers, ...) are never fetched with
-// a board. A board's history (which list each card went to, and the ‘Geen gehoor’ comments, for trelloIntake.js)
-// always comes with the card's title, the candidate's name: of each move only the card and list ids are kept, of a
-// comment only the card id and the time, the rest (the comment's text too) is dropped right away, so the name is
-// never stored or sent on.
+// a board. A board's history (which list each card went to, and the ‘Geen gehoor’ and ‘TBA afspraak’ comments, for
+// trelloIntake.js) always comes with the card's title, the candidate's name: of each move only the card and list ids
+// are kept, of a comment only the card id and the time, the rest (the comment's text too) is dropped right away, so
+// the name is never stored or sent on.
 //
 // Boards (a long-running server): the last load of every board stays in memory, not on disk, with Trello's last
 // activity on the board as the list of boards said *before* that load. While the list says the same, the board
@@ -20,9 +20,12 @@ import express from 'express';
 const BOARD_Q = 'fields=name&lists=all&list_fields=name,closed&labels=all&label_fields=name,color&cards=all&card_fields=idList,idLabels,closed&card_customFieldItems=true&customFields=true';
 const PAGE = 1000, MAX_PAGES = 20;
 // Every way a card gets into a list: made there, copied, made from a checklist item, moved from another board, moved.
-// And comments, for the Trello button ‘Geen gehoor’ (it comments “📵 Geen gehoor 19-10-2026 14:32”).
+// And comments, for the Trello button ‘Geen gehoor’ (it comments “📵 Geen gehoor 19-10-2026 14:32”) and the automation
+// ‘TBA afspraak’ (picked up, wants to be called back later: it comments “📲 TBA\nTBA afspraak: ” and the recruiter's
+// own text follows). Any comment with TBA in it counts, as a word (not the ‘tba’ in ‘uitbater’). Both take the card
+// off today's call list.
 const HISTORY_Q = `filter=createCard,copyCard,convertToCardFromCheckItem,moveCardToBoard,updateCard:idList,commentCard&fields=date,type,data&limit=${PAGE}`;
-const GEEN_GEHOOR = /geen\s*gehoor/i;
+const GEEN_GEHOOR = /geen\s*gehoor/i, TBA = /\bTBA\b/i;
 const ENDPOINTS = [
   { re: /^\/members\/me$/, q: 'fields=fullName,username' },
   { re: /^\/members\/me\/boards$/, q: 'filter=open&fields=name,dateLastActivity', boards: true },
@@ -117,8 +120,9 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
   }
 
   /**
-   * The moves in a board's history since intake.since(), as [{ date, card, list }], and the ‘Geen gehoor’ comments as
-   * [{ date, card, geenGehoor: true }]; null when Trello didn't give them.
+   * The moves in a board's history since intake.since(), as [{ date, card, list, from }] (from: the list it left, for a
+   * move between lists), and the ‘Geen gehoor’ and ‘TBA afspraak’ comments as [{ date, card, geenGehoor: true }]; null
+   * when Trello didn't give them.
    */
   async function history(id) {
     const since = encodeURIComponent(intake.since(id, now())), moves = [];
@@ -131,8 +135,8 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
         // Only the ids: the card's name in a.data.card.name and a comment's text in a.data.text are dropped here.
         for (const a of got) {
           const d = a.data || {}, card = d.card && d.card.id;
-          if (a.type !== 'commentCard') moves.push({ date: a.date, card, list: (d.listAfter || d.list || {}).id });
-          else if (GEEN_GEHOOR.test(d.text || '')) moves.push({ date: a.date, card, geenGehoor: true });
+          if (a.type !== 'commentCard') moves.push({ date: a.date, card, list: (d.listAfter || d.list || {}).id, from: (d.listBefore || {}).id });
+          else if (GEEN_GEHOOR.test(d.text || '') || TBA.test(d.text || '')) moves.push({ date: a.date, card, geenGehoor: true });
         }
         if (got.length < PAGE) break;
         before = got[got.length - 1].id;

@@ -2,7 +2,7 @@
 // views show; the views in ./views are plain markup. Shared data is kept in sync with the server by ./lib/sync.js.
 import React from 'react';
 import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, isoDate, mondayOf, feedbackWeek, fbOpenWeek, fbLastDay } from './lib/weeks.js';
-import { checkinQueue, openWeeks } from './lib/checkin.js';
+import { checkinQueue, openWeeks, needsFeedback } from './lib/checkin.js';
 import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, HALT, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
@@ -1046,8 +1046,9 @@ export default class App extends React.Component {
   deco(c) {
     const R = this.state.rules, h = health(c, R), m = monitor(c, h), ws = c.weeks, cur = ws[ws.length - 1], prev = ws[ws.length - 2] || null;
     // On Niet actief there is no recruiter, so no feedback is missing; on Pauze or stopped none is asked. Those show
-    // their halt instead of the monitor status.
-    const H = c.halt && HALT[c.halt.kind], S = H || MONITOR[m.s], ina = !!c.inactive, noQ = cur.q == null, missing = noQ && !ina && !H;
+    // their halt instead of the monitor status. A week without new candidates and without calls asks none either (noFb).
+    const H = c.halt && HALT[c.halt.kind], S = H || MONITOR[m.s], ina = !!c.inactive, noQ = cur.q == null;
+    const noFb = noQ && !ina && !H && !needsFeedback(cur), missing = noQ && !ina && !H && !noFb;
     const qd = (!noQ && prev && prev.q != null) ? cur.q - prev.q : null;
     const ld = prev ? cur.leads - prev.leads : null;
     const l8 = ws.slice(-8), pts = [];
@@ -1061,8 +1062,8 @@ export default class App extends React.Component {
         : m.s === 'goed' ? 'Geen signalen deze week' : m.stale ? `Nieuw signaal na de check van ${cur.monBy || 'de marketeer'}` : '',
       href: '#campagne=' + encodeURIComponent(c.id),
       reasons: H ? [] : h.reasons.map(r => ({ t: r.t, fg: STAT[r.l].fg, bg: STAT[r.l].bg })),
-      missing, qText: noQ ? '—' : cur.q + '/10', qFg: qc(cur.q),
-      qdText: noQ ? (ina ? 'geen recruiter' : 'nog niet beoordeeld') : qd == null ? 'eerste week' : qd === 0 ? 'gelijk aan vorige week' : `${qd > 0 ? '▲' : '▼'} ${Math.abs(qd)} t.o.v. vorige week`,
+      missing, noFb, qText: noQ ? '—' : cur.q + '/10', qFg: qc(cur.q),
+      qdText: noQ ? (ina ? 'geen recruiter' : noFb ? 'geen feedback nodig' : 'nog niet beoordeeld') : qd == null ? 'eerste week' : qd === 0 ? 'gelijk aan vorige week' : `${qd > 0 ? '▲' : '▼'} ${Math.abs(qd)} t.o.v. vorige week`,
       qdShort: qd == null || qd === 0 ? '' : `${qd > 0 ? '▲' : '▼'}${Math.abs(qd)}`,
       qdColor: qd == null || qd === 0 ? '#8C8C8A' : qd > 0 ? '#1A7A4A' : '#D32F2F',
       prevQText: prev && prev.q != null ? prev.q + '/10' : '—',
@@ -1071,8 +1072,8 @@ export default class App extends React.Component {
       spark: pts.join(' '),
       ...(() => { const qv = ws.filter(w => w.q != null).map(w => w.q), a = avgOf(qv); return { avgQ: a == null ? '—' : nl(a), avgFg: qc(a == null ? null : Math.round(a)), avgSub: qv.length ? `over ${qv.length} ${qv.length === 1 ? 'week' : 'weken'}` : '' }; })(),
       bars: l6.map(w => ({ h: Math.max(3, Math.round(w.leads / mx * 24)) + 'px', bg: w === cur ? '#FB8915' : 'rgba(27,27,99,.28)' })),
-      lastAt: H ? 'Niet nodig' : ina ? 'Niet actief' : missing ? 'Ontbreekt' : (cur.at || 'Week ' + wl(cur.w)), atColor: missing ? '#D32F2F' : '#3C3C3A', atWeight: missing ? 600 : 400,
-      quote: ina ? 'Niet actief: geen recruiter, dus geen recruiterfeedback' : missing ? (lastFb ? `Nog geen feedback. Week ${wl(lastFb.w)}: ${lastFb.rec}` : 'Nog geen feedback') : (cur.rec || 'Geen toelichting'),
+      lastAt: H || noFb ? 'Niet nodig' : ina ? 'Niet actief' : missing ? 'Ontbreekt' : (cur.at || 'Week ' + wl(cur.w)), atColor: missing ? '#D32F2F' : noFb ? '#8C8C8A' : '#3C3C3A', atWeight: missing ? 600 : 400,
+      quote: ina ? 'Niet actief: geen recruiter, dus geen recruiterfeedback' : noFb ? 'Geen nieuwe kandidaten en niet gebeld: geen feedback nodig' : missing ? (lastFb ? `Nog geen feedback. Week ${wl(lastFb.w)}: ${lastFb.rec}` : 'Nog geen feedback') : (cur.rec || 'Geen toelichting'),
       hasQuote: true,
       open: () => this.open(c.id), check: () => this.setMon(c, 'check')
     };
@@ -1086,9 +1087,9 @@ export default class App extends React.Component {
     const ownOnly = can('campaigns.own') && !can('campaigns.all'), overview = can('campaigns.all') || can('campaigns.own');
     const D = shown.map(c => this.deco(c));
     const cnt = {}; MONITOR_KEYS.forEach(k => { cnt[k] = D.filter(d => d.ms === k).length; });
-    // Feedback recruiter: only campaigns with a recruiter (not Niet actief) count.
+    // Feedback recruiter: only campaigns with a recruiter (not Niet actief) that ask feedback this week count.
     const missingD = D.filter(d => d.missing), ri = this.remindInfo(missingD);
-    const fbTotal = D.filter(d => !d.inactive).length, done = fbTotal - missingD.length;
+    const fbTotal = D.filter(d => !d.inactive && !d.noFb).length, done = fbTotal - missingD.length;
     const setF = p => this.setState(s => ({ f: { ...s.f, ...p } }));
 
     const klantOpen = shown.filter(c => !c.weeks[c.weeks.length - 1].klant).length;
@@ -1179,6 +1180,7 @@ export default class App extends React.Component {
       fc = {
         client: fcC.client, vac: fcC.vac, wl: wl(fw.w), hasUpd: !!upd, upd: upd || {},
         late, lateText: `Je vult de feedback over week ${wl(fw.w)} (${rangeLong(fw.w)}) nog in. Dat kan tot en met ${dueTxt(fw.w)}.`,
+        noNeed: !needsFeedback(fw), noNeedText: `Geen feedback nodig: ${late ? `in week ${wl(fw.w)}` : 'deze week'} zijn er geen nieuwe kandidaten binnengekomen en is er niet gebeld. Invullen mag wel.`,
         leadsLabel: late ? `Nieuwe kandidaten week ${wl(fw.w)}` : 'Nieuwe kandidaten deze week', rejLabel: late ? `Afgewezen week ${wl(fw.w)} · uit Trello` : 'Afgewezen deze week · uit Trello',
         prevLabel: late ? `Week ${wl(fw.w - 1)}` : 'Vorige week',
         prevLine: prev ? `${prev.leads} kandidaten · kwaliteit ${prev.q ?? '—'}/10${prev.rec ? ` · “${prev.rec}”` : ''}` : 'eerste week van deze campagne',
@@ -1187,8 +1189,8 @@ export default class App extends React.Component {
         rej, hasRej: rej.length > 0
       };
     }
-    // The counts are about this week; last week's open feedback is counted separately.
-    const nowQ = queue.filter(i => !i.late), qOpen = nowQ.filter(i => i.open).length, lateOpen = queue.filter(i => i.late && i.open).length;
+    // The counts are about this week, without the campaigns that need no feedback; last week's open feedback is counted separately.
+    const nowQ = queue.filter(i => !i.late && i.needed), qOpen = nowQ.filter(i => i.open).length, lateOpen = queue.filter(i => i.late && i.open).length;
     const isForm = i => !!f && i.c.id === f.id && i.w === f.w;
     const scoreBtns = Array.from({ length: 10 }, (_, i) => {
       const n = i + 1, on = f && f.q === n;
@@ -1235,9 +1237,12 @@ export default class App extends React.Component {
       qPoints: ws.map((w, i) => w.q == null ? null : `${((i + 0.5) / n * 100).toFixed(2)},${100 - w.q * 10}`).filter(Boolean).join(' '),
       qDots: ws.map((w, i) => w.q == null ? null : { x: ((i + 0.5) / n * 100) + '%', y: (w.q * 10) + '%', q: w.q, fg: qc(w.q) }).filter(Boolean),
       story: ws.slice().reverse().map(w => ({
-        w: w.w, wl: wl(w.w), range: range(w.w), leads: w.leads, qText: w.q != null ? `Kwaliteit ${w.q}/10` : w.w < FB_START ? 'Voor start monitor' : 'Geen score', qBg: qb(w.q), qFg: qc(w.q),
-        // Missing feedback can still be given until the end of the week after; older weeks have expired.
-        missing: w.q == null && w.w >= FB_START && !selC.inactive && !halt && fbOpenWeek(w.w), expired: w.q == null && w.w >= FB_START && !selC.inactive && !fbOpenWeek(w.w),
+        w: w.w, wl: wl(w.w), range: range(w.w), leads: w.leads, qBg: qb(w.q), qFg: qc(w.q),
+        qText: w.q != null ? `Kwaliteit ${w.q}/10` : w.w < FB_START ? 'Voor start monitor' : !needsFeedback(w) ? 'Geen feedback nodig' : 'Geen score',
+        // Missing feedback can still be given until the end of the week after; older weeks have expired. A week without
+        // new candidates and without calls asks none.
+        missing: w.q == null && w.w >= FB_START && !selC.inactive && !halt && fbOpenWeek(w.w) && needsFeedback(w),
+        expired: w.q == null && w.w >= FB_START && !selC.inactive && !fbOpenWeek(w.w) && needsFeedback(w),
         missText: `Recruiter heeft voor deze week nog geen feedback ingevuld.${w.w < CUR ? ` Dat kan nog tot en met ${dueTxt(w.w)}.` : ''}`, hasFb: w.q != null, rec: w.rec || '—',
         klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A',
         canFill: canFb && fbOpenWeek(w.w) && !off, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !off, addKlant: () => this.startKlant(selC.id),
@@ -1401,14 +1406,19 @@ export default class App extends React.Component {
       ci: st.ci, ciRecOptions: [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: 'Ingevuld door ' + r }))],
       setCiRec: e => { const v = tv(e); this.setState(s => ({ ci: { ...s.ci, rec: v } }), () => this.enterCheckin()); },
       ciQ: st.ciQ, setCiQ: e => this.setState({ ciQ: tv(e) }), ciNone: queue.length && !shownQ.length ? noneFor(st.ciQ) : '',
-      // Last week's items come first, under their own heading, when there are any (among the search results).
+      // Last week's items come first, under their own heading, when there are any (among the search results). Campaigns
+      // that need no feedback this week come last, greyed, under their own heading; they can still be filled in.
       queue: shownQ.map((i, k) => {
-        const wk = i.c.weeks.find(x => x.w === i.w), doneQ = !i.open, sel = isForm(i), first = k === 0 || shownQ[k - 1].late !== i.late;
-        return { sel, client: i.c.client, vac: i.late ? `${i.c.vac} · week ${wl(i.w)}` : i.c.vac, vacFg: i.late ? '#B45309' : '#5C5C5A',
-          head: shownQ[0].late && first ? (i.late ? `Nog open van week ${wl(i.w)} · vervalt ${dueTxt(i.w)}` : `Week ${wl(CUR)}`) : '',
-          qText: doneQ ? wk.q + '/10' : '', qFg: qc(wk.q), bg: sel ? '#FFF8E0' : '#FFFFFF', mark: doneQ ? '✓' : '', markBg: doneQ ? '#E6F4ED' : '#FFFFFF', markFg: '#1A7A4A', markBorder: doneQ ? '0' : `1.5px solid ${i.late ? '#F9A800' : '#C0BDB9'}`, onClick: () => this.loadForm(i.c.id, i.w) };
+        const part = x => x.late ? 'late' : x.needed ? 'now' : 'none';
+        const wk = i.c.weeks.find(x => x.w === i.w), filled = wk.q != null, doneQ = !i.open, sel = isForm(i), first = k === 0 || part(shownQ[k - 1]) !== part(i);
+        const head = !first ? '' : i.late ? `Nog open van week ${wl(i.w)} · vervalt ${dueTxt(i.w)}` : !i.needed ? 'Geen feedback nodig · geen nieuwe kandidaten, niet gebeld' : shownQ[0].late ? `Week ${wl(CUR)}` : '';
+        return { sel, client: i.c.client, vac: i.late ? `${i.c.vac} · week ${wl(i.w)}` : i.c.vac, vacFg: i.late ? '#B45309' : !i.needed ? '#8C8C8A' : '#5C5C5A', head,
+          qText: filled ? wk.q + '/10' : '', qFg: qc(wk.q), bg: sel ? '#FFF8E0' : '#FFFFFF',
+          mark: filled ? '✓' : !i.needed ? '–' : '', markBg: filled ? '#E6F4ED' : !i.needed ? '#F5F2ED' : '#FFFFFF', markFg: filled ? '#1A7A4A' : '#8C8C8A',
+          markBorder: doneQ ? '0' : `1.5px solid ${i.late ? '#F9A800' : '#C0BDB9'}`, onClick: () => this.loadForm(i.c.id, i.w) };
       }),
-      queueTotal: nowQ.length, queueOpen: qOpen, queueDone: nowQ.length - qOpen, queuePct: ((nowQ.length - qOpen) / Math.max(nowQ.length, 1) * 100) + '%', queueComplete: nowQ.length > 0 && qOpen === 0 && lateOpen === 0,
+      queueTotal: nowQ.length, queueOpen: qOpen, queueDone: nowQ.length - qOpen, queuePct: ((nowQ.length - qOpen) / Math.max(nowQ.length, 1) * 100) + '%',
+      queueComplete: queue.length > 0 && qOpen === 0 && lateOpen === 0, queueDoneTitle: nowQ.length ? `Alles ingevuld voor week ${wl(CUR)}` : `Geen feedback nodig voor week ${wl(CUR)}`,
       hasLate: lateOpen > 0, lateText: `+ ${lateOpen} van week ${wl(CUR - 1)} · vervalt ${dueTxt(CUR - 1)}`,
       hasForm: !!fcC, form: f || {}, fc, scoreBtns,
       saveLabel: shownQ.some(i => i.open && !isForm(i)) ? 'Opslaan & volgende' : 'Feedback opslaan',
@@ -1509,13 +1519,16 @@ export default class App extends React.Component {
     // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
     const sort = this.state.liveSort, groups = groupByClient(mine.map(c => {
       // Wekelijkse controle is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
-      const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c);
-      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open: openWeeks(c).length > 0,
+      // noFb: nothing open and this week needs no feedback (no new candidates, not called).
+      const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c), cw = c.weeks[c.weeks.length - 1], open = openWeeks(c).length > 0;
+      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open,
+        noFb: !c.halt && !open && cw.q == null && !needsFeedback(cw),
         rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? haltLabel(c.halt) : '', added: added[c.client] || trelloCreated(c.boardId) };
     }), sort);
     const mx = Math.max(...groups.map(g => g.total), 1), exp = this.state.liveExp;
     const dotOf = rank => MONITOR[MONITOR_KEYS.find(k => MONITOR[k].rank === rank)].fg;
-    // Feedback: open ones link to Wekelijkse feedback recruiter, on the first open function. off: all on Pauze or stopped.
+    // Feedback: open ones link to Wekelijkse feedback recruiter, on the first open function. off: all on Pauze or stopped,
+    // or needing no feedback; n: the functions that do.
     const cells = (x, n, openN, openId, off) => ({
       dot: dotOf(x.rank), nieuw: x.nieuw, contact: x.contact, total: x.total, nPct: (x.nieuw / mx * 100) + '%', cPct: (x.contact / mx * 100) + '%',
       nFg: x.nieuw ? '#1B1B63' : '#C0BDB9', cFg: x.contact ? '#B45309' : '#C0BDB9',
@@ -1527,10 +1540,11 @@ export default class App extends React.Component {
     const rows = groups.map(g => {
       const ev = recent[g.client], mineEv = ev && ev.to === me.rec, multi = g.fns.length > 1, on = multi && !!exp[g.key];
       const e = status[g.key], st = statusToday(e, now);
-      return { ...cells(g, g.fns.length, g.open, g.firstOpen, g.fns.every(f => f.tag)), key: g.key, client: g.client, vac: multi ? `${g.fns.length} functies` : g.fns[0].vac, mkt: g.fns[0].mkt || '—',
+      const asks = g.fns.filter(f => !f.tag && !f.noFb).length;
+      return { ...cells(g, asks, g.open, g.firstOpen, !asks), key: g.key, client: g.client, vac: multi ? `${g.fns.length} functies` : g.fns[0].vac, mkt: g.fns[0].mkt || '—',
         st, stBy: st ? e.by : '', stAt: st ? hhmm(e.at) : '', setSt: x => { x.stopPropagation(); this.setLiveStatus(g.key, nextStatus(st)); },
         tag: multi ? '' : g.fns[0].tag, multi, expanded: on, open: multi ? () => this.setState(s => ({ liveExp: { ...s.liveExp, [g.key]: !on } })) : () => this.open(g.fns[0].id),
-        fns: on ? g.fns.map(f => ({ ...cells(f, 1, f.open ? 1 : 0, f.id, !!f.tag), vac: f.vac, tag: f.tag, open: () => this.open(f.id) })) : [],
+        fns: on ? g.fns.map(f => ({ ...cells(f, 1, f.open ? 1 : 0, f.id, !!f.tag || f.noFb), vac: f.vac, tag: f.tag, open: () => this.open(f.id) })) : [],
         hasBadge: !!mineEv, badge: mineEv ? (ev.from ? `Overgenomen van ${ev.from}` : 'Nieuw') : '', bBg: mineEv && ev.from ? '#E7E7F0' : '#FFF8E0', bFg: mineEv && ev.from ? '#1B1B63' : '#B45309' };
     });
     // Open feedback: last week's (catching up, expires on Sunday) first, then this week's.

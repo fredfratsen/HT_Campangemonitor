@@ -3,8 +3,8 @@ import { rnd } from './helpers.js';
 import { waitsForAds } from './halt.js';
 
 /**
- * Today's call list of campaign c: nieuw (not called yet), contact (call again) and gebeld (got ‘Geen gehoor’ today,
- * so off the list until midnight). From Trello; demo campaigns get made-up numbers.
+ * Today's call list of campaign c: nieuw (not called yet), contact (call again) and gebeld (got ‘Geen gehoor’ or a
+ * ‘TBA afspraak’ today, so off the list until midnight). From Trello; demo campaigns get made-up numbers.
  */
 export function callList(c) {
   if (c.live) return { nieuw: c.live.nieuw, contact: c.live.contact, gebeld: c.live.gebeld || 0 };

@@ -7,7 +7,7 @@ import { intakeName, stageOf } from '../src/lib/constants.js';
 import { CUR } from '../src/lib/weeks.js';
 import { board, intakeBoard, dayOf, BOARD_ID, KOK, BEDIENING, IN, INTAKE_CARD, CARD } from './trello-fixture.js';
 
-const tr = (nieuw, o = {}) => ({ nieuw, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, reasons: {}, ...o });
+const tr = (nieuw, o = {}) => ({ nieuw, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, gebeld: 0, reasons: {}, ...o });
 
 test('a board counts per campaign: the whole board and each function, by application week', () => {
   const s = boardStats(board());
@@ -32,6 +32,21 @@ test('a card with a ‘Geen gehoor’ from today is off today\'s call list until
   card(CARD.kokNew).geenGehoor = new Date(at(2, 8)).toISOString();
   assert.deepEqual(boardStats(bd, at(2, 23))['*'].live, { nieuw: 0, contact: 0, gebeld: 2 }, 'from Nieuw too');
   assert.deepEqual(quickStats(boardStats(bd, at(2, 23)), CUR)['*'].live, { nieuw: 0, contact: 0, gebeld: 2 }, 'the snapshot counts the same');
+});
+
+test('a card called in a week (calls, from the server) counts as called in that week, also without new candidates', () => {
+  const bd = board(), card = id => bd.cards.find(c => c.id === id);
+  card(CARD.kokContact).calls = [CUR];
+  card(CARD.bedGesprek).calls = [CUR - 1, CUR];
+  card(CARD.kokInfo).calls = [CUR];
+  const s = boardStats(bd);
+  assert.equal(s['*'].weeks[CUR].gebeld, 2, 'Informatie does not count');
+  assert.equal(s['*'].weeks[CUR - 1].gebeld, 1);
+  assert.deepEqual(s[BEDIENING].weeks[CUR], tr(0, { gebeld: 1 }), 'Bediening had no new candidates this week, but was called');
+  assert.deepEqual(quickStats(s, CUR - 1)[BEDIENING].weeks, { [CUR - 1]: { nieuw: 1, gebeld: 1 }, [CUR]: { nieuw: 0, gebeld: 1 } }, 'the snapshot keeps the calls');
+  const link = { id: 'x', boardId: BOARD_ID, boardName: 'Hotel Zee', labelId: BEDIENING, vac: 'Bediening', rec: 'Kim' };
+  const quick = liveCampaign(link, JSON.parse(JSON.stringify(quickStats(s, CUR - 11)))[BEDIENING], {}, [], true);
+  assert.deepEqual(quick.weeks.map(w => [w.w, w.tr.nieuw, w.tr.gebeld]), [[CUR - 2, 1, 0], [CUR - 1, 1, 1], [CUR, 0, 1]]);
 });
 
 test('the snapshot keeps only new candidates per week and today\'s call list', () => {

@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import useCenterCurrent from '../lib/useCenterCurrent.js';
 
 export default function CheckinView({ v }) {
-  const { ciNone, ciQ, decLeads, fc, form, goMine, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setCiQ, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
+  const { ciNone, ciQ, decLeads, fc, form, goMine, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueDoneTitle, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setCiQ, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
   const listRef = useCenterCurrent(form.id + '|' + form.w);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -46,6 +46,7 @@ export default function CheckinView({ v }) {
               <div className="f-pad" style={{ padding: '24px 28px', borderBottom: '1px solid #E4E1DE' }}>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', lineHeight: '1.3' }}>Week {fc.wl} – {fc.client} – {fc.vac}</div>
                 {fc.late ? <div style={{ marginTop: '10px', background: '#FEF3C7', color: '#B45309', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', textWrap: 'pretty' }}>{fc.lateText}</div> : null}
+                {fc.noNeed ? <div style={{ marginTop: '10px', background: '#F5F2ED', color: '#5C5C5A', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '600', textWrap: 'pretty' }}>{fc.noNeedText}</div> : null}
                 <div style={{ marginTop: '6px', fontSize: '13px', color: '#5C5C5A', textWrap: 'pretty' }}>{fc.prevLabel}: {fc.prevLine}</div>
                 {fc.hasUpd ? <div style={{ marginTop: '12px', background: '#FFF8E0', borderRadius: '8px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     <span style={{ fontSize: '12px', fontWeight: '600', color: '#B45309' }}>{fc.upd.meta}</span>
@@ -98,7 +99,7 @@ export default function CheckinView({ v }) {
             </div> : null}
           {queueComplete ? <div style={{ background: '#E6F4ED', borderRadius: '12px', padding: '20px 24px', marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
               <div>
-                <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px', color: '#1A7A4A' }}>Alles ingevuld voor week {wk.n}</div>
+                <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px', color: '#1A7A4A' }}>{queueDoneTitle}</div>
                 <div style={{ fontSize: '13px', color: '#3C3C3A' }}>Je kunt eerdere check-ins nog aanpassen in de lijst.</div>
               </div>
               <Button variant="accent" onClick={goMine}>Naar mijn campagnes</Button>

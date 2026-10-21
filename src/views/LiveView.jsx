@@ -154,7 +154,7 @@ export default function LiveView({ v }) {
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: '#5C5C5A' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#1B1B63' }} />Nieuw: kaarten in ‘Nieuw’ of ‘Nieuwe Sollicitant | …’, nog niet gebeld</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#FB8915' }} />Contactpogingen: kaarten in lijst ‘Contactpoging’, opnieuw bellen</span>
-        <span>📵 Kreeg een kaart vandaag ‘Geen gehoor’ in Trello, dan telt hij pas morgen weer mee</span>
+        <span>📵 📲 Kreeg een kaart vandaag ‘Geen gehoor’ of een ‘TBA afspraak’ in Trello, dan telt hij pas morgen weer mee</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span className="live-swatch live-swatch-bezig" />Ermee bezig</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span className="live-swatch live-swatch-done" />Done vandaag · om middernacht begint iedereen weer blanco</span>
       </div>

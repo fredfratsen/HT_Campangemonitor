@@ -269,7 +269,7 @@ test('after midnight a ‘Geen gehoor’ is forgotten and the card is back on th
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'trello-intake.json'), 'utf8')).boards[b.id].geenGehoor, {}, 'forgotten on disk too');
 });
 
-test('a memory from before ‘Geen gehoor’ was read catches up from midnight, so this morning\'s calls count', async () => {
+test('a memory from before ‘Geen gehoor’ was read catches up, so this morning\'s calls count', async () => {
   clock = afternoon();
   const b = fakeBoard('Hotel Zee'); boards = [b];
   const jan = arrive(b, 'kok', clock - 3 * DAY); move(b, jan, 'contact', clock - 2 * DAY);
@@ -281,12 +281,88 @@ test('a memory from before ‘Geen gehoor’ was read catches up from midnight, 
   b.down = true;
   assert.deepEqual(calledOf(await a.load(b)), {}, 'the history can\'t be read just then');
   b.down = false; touch(b, clock); clock += 5 * MIN;
-  assert.deepEqual(calledOf(await a.load(b)), { [jan]: iso(morning) }, 'and is read from midnight the next time');
+  assert.deepEqual(calledOf(await a.load(b)), { [jan]: iso(morning) }, 'and is read the next time');
   clock += 5 * MIN; arrive(b, 'bed'); clock += MIN;
   await a.load(b);
   const next = calls.filter(c => c.includes('/actions')).at(-1);
   assert.ok(sinceOf(next) > clock - 30 * MIN, 'after that, only what is new again');
   await a.stop();
+});
+
+// ── ‘TBA afspraak’: picked up, wants a call back later; the same as ‘Geen gehoor’ ──
+
+const callsOf = bd => Object.fromEntries(bd.cards.filter(c => c.calls).map(c => [c.id, c.calls]));
+/** The comment the Trello automation ‘TBA afspraak’ makes; the recruiter's own text follows. */
+const tba = rest => `📲 TBA\nTBA afspraak: ${rest}`;
+
+test('a card that got a comment with TBA in it today is off the call list, wherever it says TBA', async () => {
+  clock = afternoon();
+  const W = feedbackWeek(clock);
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const [jan, piet, sara] = ['Jan', 'Piet', 'Sara'].map(n => { const id = arrive(b, 'kok', clock - 3 * DAY, n); move(b, id, 'contact', clock - 2 * DAY); return id; });
+  const kees = arrive(b, 'kok', clock - 5 * HOUR, 'Kees');
+  const janAt = clock - HOUR, keesAt = clock - 2 * HOUR, pietAt = clock - 3 * HOUR;
+  comment(b, jan, tba('do 23-10 14:00, na zijn dienst'), janAt);
+  comment(b, kees, tba('morgen'), keesAt);
+  comment(b, piet, 'Opgenomen, tba morgen 10:00', pietAt);
+  comment(b, sara, 'Werkt nu bij een andere uitbater', clock - HOUR);
+  const a = await serve(tmp());
+  const bd = await a.load(b);
+  assert.deepEqual(calledOf(bd), { [jan]: iso(janAt), [kees]: iso(keesAt), [piet]: iso(pietAt) }, 'not TBA inside a word');
+  assert.deepEqual(callsOf(bd)[kees], [W], 'a call this week, so the week asks feedback');
+  assert.deepEqual((await a.get('/snapshot')).boards[b.id].stats[b.lists.kok.id].live, { nieuw: 0, contact: 1, gebeld: 3 });
+  await a.stop();
+});
+
+test('a memory from before ‘TBA afspraak’ was read catches up from last Monday once', async () => {
+  clock = afternoon();
+  const lastMon = mondayOf(feedbackWeek(clock) - 1).getTime();
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const jan = arrive(b, 'kok', clock - 7 * HOUR);
+  const morning = clock - 6 * HOUR; comment(b, jan, tba('vrijdag'), morning);
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, 'trello-intake.json'), JSON.stringify({ boards: { [b.id]: { since: iso(clock - 10 * MIN), cards: { [jan]: b.lists.kok.id }, geenGehoor: {}, calls: {} } } }));
+  const a = await serve(dir);
+  assert.deepEqual(calledOf(await a.load(b)), { [jan]: iso(morning) });
+  assert.equal(sinceOf(calls.filter(c => c.includes('/actions')).at(-1)), lastMon, 'read from last Monday');
+  clock += 5 * MIN; arrive(b, 'bed'); clock += MIN;
+  await a.load(b);
+  assert.ok(sinceOf(calls.filter(c => c.includes('/actions')).at(-1)) > clock - 30 * MIN, 'after that, only what is new again');
+  await a.stop();
+});
+
+// ── Called this week or last: whether a week asks feedback ───────────────
+
+test('a card called this week or last carries those weeks: a ‘Geen gehoor’, or moved on from Nieuw or Contactpoging', async () => {
+  clock = afternoon();
+  const W = feedbackWeek(clock), lastMon = mondayOf(W - 1).getTime();
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const jan = arrive(b, 'kok', lastMon - 3 * DAY); move(b, jan, 'contact', lastMon + DAY); comment(b, jan, geenGehoor(clock - HOUR), clock - HOUR);
+  const piet = arrive(b, 'kok', lastMon + 2 * DAY); move(b, piet, 'bed', lastMon + 3 * DAY);
+  const sara = arrive(b, 'kok', lastMon - 10 * DAY); move(b, sara, 'contact', lastMon - 8 * DAY); move(b, sara, 'gescreend', clock - 2 * HOUR);
+  const kees = arrive(b, 'kok', lastMon + DAY); comment(b, kees, 'Belt zelf terug', clock - HOUR);
+  const a = await serve(tmp());
+  assert.deepEqual(callsOf(await a.load(b)), { [jan]: [W - 1, W], [sara]: [W] }, 'Piet only went to another intake list; Sara\'s first call was too long ago; Kees just got a comment');
+  const weeks = (await a.get('/snapshot')).boards[b.id].stats[b.lists.kok.id].weeks;
+  assert.equal(weeks[W].gebeld, 2, 'the snapshot counts them per week');
+  assert.equal(weeks[W - 1].gebeld, 1);
+  await a.stop();
+});
+
+test('calls older than last week are forgotten; a memory from before calls were read catches up from last Monday', async () => {
+  clock = afternoon();
+  const W = feedbackWeek(clock), lastMon = mondayOf(W - 1).getTime();
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const jan = arrive(b, 'kok', lastMon - 3 * DAY); move(b, jan, 'contact', lastMon + DAY); comment(b, jan, geenGehoor(clock - HOUR), clock - HOUR);
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, 'trello-intake.json'), JSON.stringify({ boards: { [b.id]: { since: iso(clock - 10 * MIN), cards: { [jan]: b.lists.kok.id }, geenGehoor: {} } } }));
+  const a = await serve(dir);
+  assert.deepEqual(callsOf(await a.load(b)), { [jan]: [W - 1, W] });
+  assert.equal(sinceOf(calls.filter(c => c.includes('/actions')).at(-1)), lastMon, 'read from last Monday once');
+  clock += 7 * DAY; touch(b, clock - MIN);
+  assert.deepEqual(callsOf(await a.load(b)), { [jan]: [W] }, 'a week later, two weeks ago no longer counts');
+  await a.stop();
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'trello-intake.json'), 'utf8')).boards[b.id].calls, { [jan]: [W] }, 'forgotten on disk too');
 });
 
 // ── Loading boards: from memory when unchanged, and every 5 minutes ──────

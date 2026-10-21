@@ -9,7 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import { boardStats, boardFunctions } from '../src/lib/boardStats.js';
-import { feedbackWeek } from '../src/lib/weeks.js';
+import { feedbackWeek, mondayOf } from '../src/lib/weeks.js';
+import { needsFeedback } from '../src/lib/checkin.js';
 import { trelloRouter } from '../server/trello.js';
 import { createTrelloIntake } from '../server/trelloIntake.js';
 import { fileDocs } from '../server/jsonfile.js';
@@ -32,7 +33,10 @@ test('with FAKE_TRELLO=1 the server talks to the fake, with keys filled in', () 
   assert.equal(out.trim(), 'nep-trello true');
 });
 
-test('through the proxy, every function on every demo board has new candidates in the feedback week', async () => {
+// Functions of a demo client without new candidates this week or last (see the next tests).
+const QUIET = { 'Lunchroom De Kade': ['Kok', 'Afwas'] };
+
+test('through the proxy, every function on every demo board has new candidates in the feedback week, but the quiet ones', async () => {
   const now = Date.now(), cur = feedbackWeek(now), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'htcm-fake-'));
   globalThis.fetch = async (url, opts) => answer(url, now) || before(url, opts);
   const docs = fileDocs(dir), router = trelloRouter(() => ({ key: 'k', token: 't' }), { intake: createTrelloIntake(docs) });
@@ -44,7 +48,8 @@ test('through the proxy, every function on every demo board has new candidates i
     let rejected = 0, interviews = 0;
     for (const b of boards) {
       const bd = await get(`/boards/${b.id}`), s = boardStats(bd), fns = boardFunctions(bd);
-      for (const key of fns.length ? fns.map(f => f.id) : ['*']) assert.ok(s[key].weeks[cur].nieuw > 0, `${bd.name} ${key}`);
+      const loud = fns.filter(f => !(QUIET[bd.name] || []).includes(f.name));
+      for (const key of fns.length ? loud.map(f => f.id) : ['*']) assert.ok(s[key].weeks[cur].nieuw > 0, `${bd.name} ${key}`);
       for (const f of fns) how.add(f.listId && f.labelId ? 'beide' : f.listId ? 'kolom' : 'label');
       for (const t of Object.values(s['*'].weeks)) { rejected += Object.values(t.reasons).reduce((a, n) => a + n, 0); interviews += t.gesprek; }
     }
@@ -84,6 +89,16 @@ test('in the afternoon some candidates got ‘Geen gehoor’ today, read through
   }
 });
 
+test('of the candidates called today, some got ‘Geen gehoor’ and some a ‘TBA afspraak’ with text after it', async () => {
+  const t = new Date().setHours(15, 0, 0, 0), texts = [];
+  for (const b of await json(`${T}/members/me/boards`, t)) {
+    const actions = await json(`${T}/boards/${b.id}/actions?since=${new Date(new Date(t).setHours(0, 0, 0, 0)).toISOString()}&limit=1000`, t);
+    texts.push(...actions.filter(a => a.type === 'commentCard').map(a => a.data.text));
+  }
+  assert.ok(texts.some(s => s.startsWith('📵 Geen gehoor')), 'Geen gehoor');
+  assert.ok(texts.some(s => /^📲 TBA\nTBA afspraak: \S/.test(s)), 'TBA afspraak, with the recruiter\'s text');
+});
+
 test('a minute later the first function has one more new candidate, in the feedback week and on the call list', async () => {
   // Minutes 10–15 of this hour: a round of 5 starts at 10, and no demo card comes in on the hour in between.
   const hour = Math.floor(Date.now() / 36e5) * 36e5, t = hour + 11 * 6e4, cur = feedbackWeek(t);
@@ -97,4 +112,29 @@ test('a minute later the first function has one more new candidate, in the feedb
   const last = hour + 14 * 6e4, b0 = (await json(`${T}/members/me/boards`, last))[0].id;
   const top = boardStats(await json(`${T}/boards/${b0}`, last))['*'], reset = boardStats(await json(`${T}/boards/${b0}`, last + 6e4))['*'];
   assert.equal(reset.live.nieuw, top.live.nieuw - 4, 'after 4 extra it starts over');
+});
+
+test('one demo client has a function without candidates or calls, which asks no feedback, and one only called, which does', async () => {
+  // Wednesday afternoon of this week: the ‘Geen gehoor’ on Monday has happened.
+  const cur = feedbackWeek(Date.now()), wed = mondayOf(cur), at = new Date(wed.getFullYear(), wed.getMonth(), wed.getDate() + 2, 15).getTime();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'htcm-fake-'));
+  globalThis.fetch = async (url, opts) => answer(url, at) || before(url, opts);
+  const docs = fileDocs(dir), router = trelloRouter(() => ({ key: 'k', token: 't' }), { intake: createTrelloIntake(docs), now: () => at });
+  const server = await new Promise(ok => { const s = express().use(router).listen(0, () => ok(s)); });
+  const get = async p => (await before(`http://127.0.0.1:${server.address().port}${p}`)).json();
+  try {
+    const b = (await get('/members/me/boards')).find(x => x.name === 'Lunchroom De Kade');
+    const bd = await get(`/boards/${b.id}`), s = boardStats(bd, at), fn = name => boardFunctions(bd).find(f => f.name === name).id;
+    const week = (name, w) => ({ w, tr: { nieuw: 0, gebeld: 0, ...(s[fn(name)].weeks[w] || {}) } });
+    assert.ok(s[fn('Bediening')].weeks[cur].nieuw > 0, 'Bediening has new candidates');
+    for (const w of [cur - 1, cur]) assert.equal(needsFeedback(week('Kok', w)), false, `Kok, week ${w}: nothing to give`);
+    assert.equal(week('Afwas', cur).tr.nieuw, 0);
+    assert.ok(week('Afwas', cur).tr.gebeld > 0, 'Afwas: a candidate from earlier was called this week');
+    assert.equal(needsFeedback(week('Afwas', cur)), true);
+  } finally {
+    globalThis.fetch = before;
+    await new Promise(ok => { server.close(ok); server.closeAllConnections(); });
+    docs.flushAll();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

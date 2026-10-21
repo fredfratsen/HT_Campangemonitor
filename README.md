@@ -25,8 +25,9 @@ Everyone logs in with a personal account. What you see and can do depends on you
   blank again. Stored per Trello board in `live.status`.
   One row per client (Trello board) with its Recruitment Marketeer and how much feedback is still open; a client
   with several functions folds open to one row per function. Open feedback links straight to the check-in. A card
-  that got the Trello button *Geen gehoor* today is off the list until midnight, so the numbers count down as you
-  call; the *Contactpogingen* block says how many were called today (see [Geen gehoor](#geen-gehoor)).
+  that got the Trello button *Geen gehoor* or a *TBA afspraak* today is off the list until midnight, so the numbers
+  count down as you call; the *Contactpogingen* block says how many were called today (see
+  [Geen gehoor](#geen-gehoor)).
 - **Wekelijkse feedback recruiter**: the weekly check-in per campaign, headed with the week it is about (for
   example *Feedback week 39*). It covers new candidates, a quality score (1–10), written feedback, an optional
   action, and a **Bijsturing nodig** (needs adjusting) flag. That flag puts the campaign on *Actie nodig* even when
@@ -34,6 +35,12 @@ Everyone logs in with a personal account. What you see and can do depends on you
   Marketeer on that campaign is shown above the form. Feedback missed last week can still be filled in: those
   campaigns are listed first under *Nog open van week …*, with the Sunday it expires. They also count in the menu
   badge and on Live campagnes. After that Sunday the feedback on that week has expired and can no longer be given.
+  A week without new candidates and without calls asks no feedback: there is nothing to give. Such a campaign is
+  listed last, greyed, under *Geen feedback nodig* (it can still be filled in), and counts nowhere as open or
+  missing (menu badge, Live campagnes, the *Feedback ontbreekt* signal, reminders). Called means a card of the
+  campaign got [Geen gehoor or a TBA afspraak](#geen-gehoor) that week, or was moved on from *Nieuw* or *Contactpoging*; then
+  feedback is asked even without new candidates. The current week can still change: once a candidate comes in or
+  someone calls, the feedback is asked (`needsFeedback` in `src/lib/checkin.js`).
 - **Mijn campagnes**: your own campaigns with this week's candidates, quality, feedback and signals (no status,
   recruiter or average-quality columns). Sorted by most new candidates; you can also sort by fewest or by client.
 
@@ -59,7 +66,7 @@ have *Eigen klanten bekijken* instead, see the last point)
   where you resume it. A stopped one leaves all those screens; only *Toewijzing beheren* activates it again, in
   Toewijzing (where *Stoppen* does the same since this change, instead of setting the function to *Geen functie*).
   Either way the recruiter keeps the campaign in Live campagnes and Mijn campagnes, tagged, until its call list
-  (new candidates plus contact attempts, also those that got *Geen gehoor* today) is 0, and is asked no weekly
+  (new candidates plus contact attempts, also those that got *Geen gehoor* or a *TBA afspraak* today) is 0, and is asked no weekly
   feedback for it. The campaign stays linked and keeps its feedback: the link (or demo campaign) gets
   `halt: { kind: 'pauze' | 'stop', by, w }`, with `by` stamped by the server, and every change goes into the audit
   log.
@@ -143,7 +150,7 @@ nodig*. Anyone with the right *Health-regels aanpassen* can switch each rule on 
 | Signal | Rules |
 |---|---|
 | **Red** | quality is 4 or lower · quality has dropped 2 weeks in a row · 2 or fewer new candidates last week · recruiter ticked *Bijsturing nodig* |
-| **Orange** | quality is 6 or lower · new candidates last week 30% or more below the average of the 3 weeks before · no feedback yet this week |
+| **Orange** | quality is 6 or lower · new candidates last week 30% or more below the average of the 3 weeks before · no feedback yet this week (from Thursday, or right away when last week's is missing too; only weeks that ask feedback) |
 
 The two inflow rules look at last week, because the current week is still filling up with candidates. Everything
 else, including the feedback round, is about the current week.
@@ -239,11 +246,11 @@ variable afterwards.
   a card came in through, the server also reads each board's history; Trello always sends the card's title (the
   candidate's name) with it. The server keeps only the card and list ids of each move and drops the rest right away,
   so names are never stored or sent to the browser (`server/trello.js`). The same goes for comments, read for
-  [Geen gehoor](#geen-gehoor): their text is dropped right away, only the card id and the time are kept, until
-  midnight. The privacy notice says so.
-  The server only stores counts (the [Trello snapshot](#trello-snapshot)) and, per card, the id of its intake list
-  and today's ‘Geen gehoor’ time (the [intake memory](#functions-from-intake-lists)), never cards, names, comments or
-  rejection reasons.
+  [Geen gehoor and TBA afspraak](#geen-gehoor): their text is dropped right away, only the card id and the time are
+  kept, until midnight. The privacy notice says so.
+  The server only stores counts (the [Trello snapshot](#trello-snapshot)) and, per card, the id of its intake list,
+  today's ‘Geen gehoor’ or ‘TBA afspraak’ time and the weeks (this one and last) it was called in (the
+  [intake memory](#functions-from-intake-lists)), never cards, names, comments or rejection reasons.
 - **The blacklist is the exception**: the only place the app stores candidates' personal data, typed in by the
   team. It is its own document (`DATA_DIR/blacklist.json`), only reachable through `/api/blacklist` with a
   blacklist right, and never part of `/api/state`, so people without the right never receive it. Notifications
@@ -280,7 +287,8 @@ variable afterwards.
   | Blacklist proposals nobody decided on | 30 days |
   | Trello snapshot (counts per campaign) | Until the next load of that board; boards gone from Trello are removed |
   | Trello intake memory (card id → intake list id) | While the card is on the board; boards gone from Trello are removed |
-  | *Geen gehoor* time per card (in the intake memory) | Only today's: removed at the board's first load after midnight |
+  | *Geen gehoor* / *TBA afspraak* time per card (in the intake memory) | Only today's: removed at the board's first load after midnight |
+  | Weeks a card was called in (in the intake memory) | Only this week and last: older weeks are removed at the board's next load |
 
 - **Privacy notice** at `/privacy`, linked from the login page. It is a draft: have it checked and fill in the
   contact person in `server/pages.js`.
@@ -321,10 +329,12 @@ NODE_ENV=production SECRETS_KEY=something-long-and-random npm start   # http://l
 
 ### Fake Trello
 
-To try the Trello side without a Trello account, `scripts/fake-trello.js` stands in for the Trello API: six demo
+To try the Trello side without a Trello account, `scripts/fake-trello.js` stands in for the Trello API: seven demo
 clients with a few functions each and candidates over the last weeks: some with their functions as labels, some as
 intake lists (*Nieuwe Sollicitant | …*, with a history that has made-up candidate names, as Trello's has real ones),
-one with both. Each board takes 2 seconds to load
+one with both. *Lunchroom De Kade* has two quiet functions without new candidates this week or last: *Kok*, which
+nobody called (asks no weekly feedback), and *Afwas*, where a candidate from earlier got *Geen gehoor* on Monday at
+10:00 (asks feedback). Each board takes 2 seconds to load
 (`FAKE_TRELLO_DELAY`, in ms), so you can see the app show the [Trello snapshot](#trello-snapshot) first and update
 it after. Every minute the first function of each client gets one more new candidate (up to 4, then back), so the
 numbers move between logins. It only works with `FAKE_TRELLO=1`, fills in Trello keys when none are set, and says
@@ -493,7 +503,7 @@ A candidate keeps the function of the intake list they came in through, also aft
 
 - The server reads each board's history (`server/trello.js`) and remembers per card which intake list it came in
   through, in `DATA_DIR/trello-intake.json` (`server/trelloIntake.js`): only card and list ids (plus today's
-  [Geen gehoor](#geen-gehoor) times). The first time it reads the 12 weeks the monitor shows; after that only what is
+  [Geen gehoor / TBA afspraak](#geen-gehoor) times). The first time it reads the 12 weeks the monitor shows; after that only what is
   new, starting 5 minutes before the newest move it read, so a move Trello shows late is still picked up. Reading a
   move twice changes nothing.
 - The app gets each card with `idIntake` and counts it for that function (`src/lib/boardStats.js`). The intake list
@@ -506,19 +516,30 @@ A candidate keeps the function of the intake list they came in through, also aft
 
 ### Geen gehoor
 
-The recruiters have a Trello card button *Geen gehoor* that comments `📵 Geen gehoor 19-10-2026 14:32` on the card.
-Live campagnes leaves a card with such a comment from today off the call list until midnight:
+The recruiters have a Trello card button *Geen gehoor* that comments `📵 Geen gehoor 19-10-2026 14:32` on the card,
+and an automation *TBA afspraak* for a candidate who picked up but wants to be called back later, which comments
+`📲 TBA` and `TBA afspraak: ` on the next line, followed by whatever the recruiter types. Both work the same: Live
+campagnes leaves a card with such a comment from today off the call list until midnight (below, *Geen gehoor* means
+either):
 
 - The server reads comments in the same history read as the moves (`server/trello.js`). A comment with *Geen gehoor*
-  in it (any case) counts, at the time Trello logged it, not the date in the text. Other comments are ignored. The
-  text and the card's title are dropped right away.
+  or *TBA* in it (any case; *TBA* as a word, so not the *tba* in *uitbater*) counts, also when the recruiter typed it
+  themselves, at the time Trello logged it, not the date in the text. Other comments are ignored. The text and the
+  card's title are dropped right away.
 - The intake memory keeps per card only the time of its last *Geen gehoor*, and only today's (`geenGehoor` in
-  `DATA_DIR/trello-intake.json`); the app gets it on the card. A memory from before this was read catches up from
-  midnight once, so the morning's calls count on the day of the update.
+  `DATA_DIR/trello-intake.json`); the app gets it on the card. `version` in the memory says what its reads picked up
+  (1: calls and *Geen gehoor*, 2: also *TBA afspraak*); a board read by an older version catches up from last Monday
+  once, so on the day of the update the morning's calls and the week's calls count.
 - `boardStats` counts an open card in *Nieuw* (or an intake list) or *Contactpoging* with a *Geen gehoor* from today
   as `live.gebeld` instead of `nieuw`/`contact`, in the app and in the snapshot alike. After midnight it is back,
   at the latest within the hour, when the board is loaded again.
 - A paused or stopped campaign stays with the recruiter while it has cards called today: they aren't done yet.
+- The same read also gives the weeks a card was called in, for whether a week asks feedback (see
+  [Wekelijkse feedback recruiter](#features)): a *Geen gehoor*, or a move from *Nieuw* (or an intake list) or
+  *Contactpoging* to a list further on (not to another intake list or to *Informatie*), at the time Trello logged it.
+  Kept per card as `calls: [week]` in the intake memory, only this week and last, and sent with the card;
+  `boardStats` counts them per week as `tr.gebeld`, the snapshot too. When the history can't be read, only new
+  candidates count for those weeks.
 - Limits: it can take up to 5 minutes before the number drops. A *Geen gehoor* comment deleted after a mistaken click
   still counts until midnight.
 
@@ -550,7 +571,7 @@ did it, in `DATA_DIR/trello-snapshot.json`:
 - In the background the app loads the boards as before, and the numbers move to the live state (*Trello bijgewerkt
   09:14*). Until a campaign's board is in, its page shows *Laden uit Trello…* for the pipeline.
 - Only counts per campaign go in: new candidates per week (the 12 weeks a campaign shows) and today's call list
-  (open cards in *Nieuw* and *Contactpoging*, and how many of them got *Geen gehoor* today). No cards, no
+  (open cards in *Nieuw* and *Contactpoging*, and how many of them got *Geen gehoor* or a *TBA afspraak* today). No cards, no
   pipeline, no rejection reasons.
 - The server fills it from every board it loads from Trello (`server/trelloSnapshot.js`), also in its round every
   5 minutes (see [Every 5 minutes](#every-5-minutes)); the app never writes to it. Boards Trello no longer lists are removed, and a new Trello key starts it over. It has no daily copies: every

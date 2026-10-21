@@ -3,10 +3,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FB_START, fbOpenWeek, fbLastDay, mondayOf } from '../src/lib/weeks.js';
-import { checkinQueue, openWeeks } from '../src/lib/checkin.js';
+import { checkinQueue, openWeeks, needsFeedback } from '../src/lib/checkin.js';
 
 const W = FB_START + 1; // "this week" in these tests; W - 1 is the first feedback week
-const week = (w, q = null) => ({ w, leads: 5, q, rec: '', tr: { nieuw: 5 } });
+const week = (w, q = null, tr = { nieuw: 5 }) => ({ w, leads: tr.nieuw, q, rec: '', tr });
+const quiet = (w, q = null) => week(w, q, { nieuw: 0, gebeld: 0 });
 const camp = (id, qPrev, qCur, o = {}) => ({ id, client: 'Klant ' + id, vac: 'Kok', rec: 'Kim', weeks: [week(W - 2, 7), week(W - 1, qPrev), week(W, qCur)], ...o });
 const keys = q => q.map(i => `${i.c.id}|${i.w}${i.late ? ' late' : ''}`);
 
@@ -59,4 +60,27 @@ test('open weeks of a campaign: last week first, nothing expired', () => {
   assert.deepEqual(openWeeks(camp('c', null, 7), W), [W - 1]);
   assert.deepEqual(openWeeks({ ...camp('d', 8, 8), weeks: [week(W - 2), week(W - 1, 8), week(W, 8)] }, W), [], 'two weeks ago has expired');
   assert.deepEqual(openWeeks(camp('e', null, null, { inactive: true }), W), []);
+});
+
+test('a week with new candidates or calls asks feedback; without either, there is nothing to give', () => {
+  assert.equal(needsFeedback({ w: W, tr: { nieuw: 1, gebeld: 0 } }), true, 'a new candidate');
+  assert.equal(needsFeedback({ w: W, tr: { nieuw: 0, gebeld: 2 } }), true, 'no new candidates, but contact attempts called');
+  assert.equal(needsFeedback({ w: W, tr: { nieuw: 0, gebeld: 0 } }), false);
+  assert.equal(needsFeedback({ w: W, tr: { nieuw: 0 } }), false, 'numbers from before calls were counted');
+});
+
+test('a quiet week is not open: this week\'s goes last in the queue as not needed, last week\'s doesn\'t come up', () => {
+  const q = camp('q', null, null, { weeks: [week(W - 2, 7), quiet(W - 1), quiet(W)] }), a = camp('a', 8, null);
+  assert.deepEqual(openWeeks(q, W), []);
+  const items = checkinQueue([q, a], 'Kim', { cur: W });
+  assert.deepEqual(keys(items), ['a|' + W, 'q|' + W]);
+  assert.deepEqual(items.map(i => [i.open, i.needed]), [[true, true], [false, false]]);
+  const filled = camp('f', null, null, { weeks: [week(W - 1, 8), quiet(W, 6)] });
+  assert.deepEqual(checkinQueue([filled, a], 'Kim', { cur: W }).map(i => `${i.c.id} ${i.open} ${i.needed}`), ['a true true', 'f false false'], 'filled in anyway: still not needed');
+});
+
+test('calls alone make a week ask feedback', () => {
+  const c = camp('c', null, null, { weeks: [week(W - 2, 7), week(W - 1, null, { nieuw: 0, gebeld: 1 }), week(W, null, { nieuw: 0, gebeld: 3 })] });
+  assert.deepEqual(openWeeks(c, W), [W - 1, W]);
+  assert.deepEqual(keys(checkinQueue([c], 'Kim', { cur: W })), ['c|' + (W - 1) + ' late', 'c|' + W]);
 });
