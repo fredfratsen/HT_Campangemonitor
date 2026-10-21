@@ -11,6 +11,7 @@ import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardS
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
 import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
 import { startHalt, waitsForAds, haltLabel, haltLine } from './lib/halt.js';
+import { ofPeople, pickPerson, NOBODY } from './lib/assignFilter.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
@@ -73,7 +74,7 @@ export default class App extends React.Component {
       ci: { rec: 'all' }, ciKeep: [], form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
       act: { type: 'Advertentie', text: '', w: CUR }, ask: { to: '', text: '' }, reply: null, upd: null, missAll: false,
-      toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {} }, liveExp: {}, mktDemo: null, seen: null, panel: null,
+      toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {}, who: NOBODY }, liveExp: {}, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
       blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null
@@ -445,8 +446,10 @@ export default class App extends React.Component {
     const pendingOf = x => x.fns.filter(f => f.kind === 'pending');
     // Open: no recruiter or marketeer yet, or a function without a campaign. Niet actief counts as a recruiter choice.
     const isOpen = x => !x.rec || !x.mkt || pendingOf(x).length > 0, open = current.filter(isOpen).length;
-    const q = A.q.trim().toLowerCase();
-    const shown = (A.tab === 'ignored' ? ignored : A.tab === 'all' ? vis : vis.filter(isOpen)).filter(x => !q || x.name.toLowerCase().includes(q))
+    // A recruiter and/or marketeer picked in the pills (lib/assignFilter.js) narrows the tabs and their counts too.
+    const q = A.q.trim().toLowerCase(), who = A.who, mine = x => ofPeople(x, who), byWho = !!(who.rec || who.mkt), nMine = vis.filter(mine).length;
+    const nameOf = v => v === '__inactive' ? 'Niet actief' : v, whoText = [who.rec, who.mkt].filter(Boolean).map(nameOf).join(' + ');
+    const shown = (A.tab === 'ignored' ? ignored : A.tab === 'all' ? vis : vis.filter(isOpen)).filter(mine).filter(x => !q || x.name.toLowerCase().includes(q))
       .sort((a, b) => (isOpen(b) - isOpen(a)) || (!b.rec - !a.rec) || ((a.rec === '__inactive') - (b.rec === '__inactive')) || (b.ts - a.ts) || a.name.localeCompare(b.name));
     // Ticked clients stay ticked while you search or switch tabs, so you can gather them from several searches.
     const sel = A.sel, picked = items.filter(x => sel[x.key]), pickable = shown.filter(x => !x.ign), allOn = pickable.length > 0 && pickable.every(x => sel[x.key]);
@@ -457,18 +460,28 @@ export default class App extends React.Component {
       ...list.map(x => ({ v: x, l: x })), ...(extra ? [{ v: '__inactive', l: 'Niet actief' }] : [])];
     const cnt = (k, v) => current.filter(x => x[k] === v).length, nLinked = items.filter(x => x.linked).length;
     const tab = (k, label, n) => ({ label, n, bg: A.tab === k ? '#FFFFFF' : 'transparent', fg: A.tab === k ? '#1D1D1B' : '#5C5C5A', sh: A.tab === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => setA({ tab: k }) });
+    const chip = (k, v) => {
+      const on = who[k] === v;
+      return { name: nameOf(v), n: cnt(k, v), on, bg: on ? '#1B1B63' : '#F5F2ED', fg: on ? '#FFFFFF' : '#1D1D1B', nfg: on ? 'rgba(255,255,255,.75)' : '#5C5C5A',
+        title: on ? 'Filter uitzetten' : `Alleen de klanten van ${nameOf(v)}`, onClick: () => this.setState(s => ({ asg: { ...s.asg, ...pickPerson(s.asg, k, v) } })) };
+    };
     const kaarten = n => n ? ` · ${n} ${n === 1 ? 'kaart' : 'kaarten'}` : '';
     return {
       ...head, ready: true, open,
       hasNotice: live && (sync.state === 'loading' || sync.state === 'error'), noticeLink: false,
       notice: sync.state === 'error' ? sync.msg : `Borden laden uit Trello… ${sync.done || 0} van ${sync.total || '?'}`,
-      tabs: [tab('open', 'Niet volledig toegewezen', vis.filter(isOpen).length), tab('all', 'Alle klanten', vis.length), ...(ignored.length || A.tab === 'ignored' ? [tab('ignored', 'Geen klant', ignored.length)] : [])],
-      summary: live ? `${st.boardList.length} borden in Trello · ${nLinked} klanten gekoppeld` : `${nLinked} klanten gekoppeld`,
+      tabs: [tab('open', 'Niet volledig toegewezen', vis.filter(isOpen).filter(mine).length), tab('all', 'Alle klanten', nMine), ...(ignored.length || A.tab === 'ignored' ? [tab('ignored', 'Geen klant', ignored.filter(mine).length)] : [])],
+      summary: byWho ? `Gefilterd op ${whoText} · ${shown.length} ${shown.length === 1 ? 'klant' : 'klanten'}`
+        : live ? `${st.boardList.length} borden in Trello · ${nLinked} klanten gekoppeld` : `${nLinked} klanten gekoppeld`,
+      byWho, clearWho: () => setA({ who: NOBODY }),
       quietText: !quiet ? '' : st.trShowInactive ? 'Borden zonder activiteit verbergen' : `${quiet} ${quiet === 1 ? 'bord' : 'borden'} zonder activiteit in 30 dagen verborgen · tonen`,
       toggleQuiet: () => { const on = !st.trShowInactive; this.setState({ trShowInactive: on }); if (on && live) this.loadInactive(); },
-      recChips: [...this.recs().map(r => ({ name: r, n: cnt('rec', r) })), { name: 'Niet actief', n: cnt('rec', '__inactive') }], mktChips: this.mkts().map(m => ({ name: m, n: cnt('mkt', m) })),
+      recChips: [...this.recs().map(r => chip('rec', r)), chip('rec', '__inactive')], mktChips: this.mkts().map(m => chip('mkt', m)),
       empty: shown.length === 0,
-      emptyText: A.tab === 'ignored' ? 'Geen borden op Geen klant.' : q ? 'Geen klant gevonden.' : A.tab === 'open' ? 'Alle klanten en functies hebben een recruiter en marketeer.' : 'Nog geen klanten.',
+      emptyText: A.tab === 'ignored' ? 'Geen borden op Geen klant.' : q ? 'Geen klant gevonden.'
+        : byWho ? (nMine ? 'Alle gefilterde klanten hebben een recruiter en marketeer.' : who.rec === '__inactive' ? `Geen klanten op Niet actief${who.mkt ? ` bij ${who.mkt}` : ''}.`
+          : who.rec && who.mkt ? `${who.rec} en ${who.mkt} hebben geen klanten samen.` : `${whoText} heeft nog geen klanten.`)
+        : A.tab === 'open' ? 'Alle klanten en functies hebben een recruiter en marketeer.' : 'Nog geen klanten.',
       canPick: pickable.length > 0, allOn, someOn: !allOn && pickable.some(x => sel[x.key]), toggleAll: () => setSel(pickable, !allOn),
       rows: shown.map(x => {
         const ina = x.rec === '__inactive', on = !!sel[x.key], none = [{ v: '', l: 'Geen klant' }], exp = !!A.exp[x.key];

@@ -81,6 +81,9 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
 .tab-link{flex:none;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;color:#8C8C8A;transition:background 150ms,color 150ms}
 .tab-link:hover{background:#F5F2ED;color:#1B1B63}
 .tab-link:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:1px}
+/* Toewijzing: the name pills filter the list; the picked one turns navy */
+.asg-chip{font:inherit;transition:background-color 150ms,color 150ms,box-shadow 150ms}
+.asg-chip:hover{box-shadow:inset 0 0 0 1px #1B1B63}
 .app-aside-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 /* Phone-only pieces (top bar, menu backdrop, close button, extra menu items): shown in the media query below */
 .m-bar,.nav-backdrop,.nav-close,.nav-extra{display:none}

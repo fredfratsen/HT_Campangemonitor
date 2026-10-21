@@ -30,10 +30,10 @@ export default function AssignView({ v }) {
           {[['Recruiters · aantal klanten', asg.recChips], ['Recruitment Marketeers · aantal klanten', asg.mktChips]].map(([title, chips]) => <div key={title} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={eyebrow}>{title}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {chips.map((p, i) => <span key={i} style={{ display: 'flex', gap: '8px', alignItems: 'baseline', background: '#F5F2ED', borderRadius: '999px', padding: '6px 12px', fontSize: '13px' }}>
+                {chips.map((p, i) => <button key={i} className="asg-chip" onClick={p.onClick} aria-pressed={p.on} title={p.title} style={{ display: 'flex', gap: '8px', alignItems: 'baseline', border: '0', background: p.bg, color: p.fg, borderRadius: '999px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer' }}>
                     <span style={{ fontWeight: '600' }}>{p.name}</span>
-                    <span style={{ color: '#5C5C5A' }}>{p.n}</span>
-                  </span>)}
+                    <span style={{ color: p.nfg }}>{p.n}</span>
+                  </button>)}
               </div>
             </div>)}
         </div>
@@ -46,6 +46,7 @@ export default function AssignView({ v }) {
           </div>
           <div style={{ display: 'flex', gap: '6px 16px', flexWrap: 'wrap', alignItems: 'center', fontSize: '13px', color: '#5C5C5A' }}>
             <span>{asg.summary}</span>
+            {asg.byWho ? <button onClick={asg.clearWho} style={{ ...textBtn, color: '#1B1B63', fontWeight: '600' }}>Filter wissen</button> : null}
             {asg.quietText ? <button onClick={asg.toggleQuiet} style={{ ...textBtn, marginLeft: 'auto', color: '#1B1B63', whiteSpace: 'normal', textAlign: 'left' }}>{asg.quietText}</button> : null}
           </div>
         </div>
