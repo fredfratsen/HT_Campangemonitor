@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import useCenterCurrent from '../lib/useCenterCurrent.js';
 
 export default function KlantView({ v }) {
-  const { hasKform, kc, kform, kq, saveKlant, setKformText, skipKlant, wk } = v;
+  const { hasKform, kc, kform, kq, kQ, saveKlant, setKformText, setKQ, skipKlant, wk } = v;
   const listRef = useCenterCurrent(kform.id);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -16,8 +16,10 @@ export default function KlantView({ v }) {
         <div className="q-card" style={{ flex: '1 1 260px', maxWidth: '320px', background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 18px', borderBottom: '1px solid #E4E1DE', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ fontSize: '13px', color: '#5C5C5A' }}>{kq.doneText}</div>
+            <input type="search" value={kQ ?? ''} onChange={setKQ} placeholder="Zoek klant of vacature" aria-label="Zoek klant of vacature" autoComplete="off" style={{ width: '100%', height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 14px', fontSize: '14px', background: '#FFFFFF' }} />
           </div>
           <div className="q-list" ref={listRef} style={{ maxHeight: '640px', overflowY: 'auto' }}>
+            {kq.none ? <div style={{ padding: '14px 18px', fontSize: '13px', color: '#5C5C5A' }}>{kq.none}</div> : null}
             {kq.items.map((qi, i) => <button key={i} onClick={qi.onClick} aria-current={qi.sel ? 'true' : undefined} style={{ width: '100%', border: '0', borderBottom: '1px solid #F5F2ED', background: qi.bg, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left' }}>
                 <span style={{ width: '22px', height: '22px', flex: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', background: qi.markBg, color: '#1A7A4A', border: qi.markBorder }}>{qi.mark}</span>
                 <span style={{ minWidth: '0', flex: '1' }}>

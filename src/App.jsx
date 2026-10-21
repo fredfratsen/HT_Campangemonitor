@@ -12,7 +12,8 @@ import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } fro
 import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
 import { startHalt, waitsForAds, haltLabel, haltLine } from './lib/halt.js';
 import { ofPeople, pickPerson, NOBODY } from './lib/assignFilter.js';
-import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
+import { matchesQ } from './lib/queueSearch.js';
+import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, daysTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
 import { ROLES, LEVELS, RIGHT_KEYS, canViewAs, visibleCampaigns } from './lib/permissions.js';
@@ -68,10 +69,10 @@ export default class App extends React.Component {
     return {
       loaded: false, saveState: 'ok', config: { trello: false, auth: false },
       account: null, members: [], viewAs: null, settingsTab: 'account',
-      view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null, navOpen: false,
+      view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null, kQ: '', navOpen: false,
       campaigns: null, rules: { ...DEF_RULES },
       f: { q: '', status: 'all', sort: 'status', mineSort: 'leadsMost' },
-      ci: { rec: 'all' }, ciKeep: [], form: null,
+      ci: { rec: 'all' }, ciKeep: [], ciQ: '', form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
       act: { type: 'Advertentie', text: '', w: CUR }, ask: { to: '', text: '' }, reply: null, upd: null, missAll: false,
       toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {}, who: NOBODY }, liveExp: {}, mktDemo: null, seen: null, panel: null,
@@ -429,7 +430,7 @@ export default class App extends React.Component {
       const cs = by[name] || [], f = found[name] || { labels: [], days: 0 }, linked = cs.length > 0, recs = [...new Set(cs.map(c => c.rec))];
       const fns = [...cs.map(c => ({ key: c.id, name: c.vac, kind: 'linked', campaign: c, halt: c.halt })),
         ...f.labels.filter(l => !cs.some(c => c.vac === l.name)).map(l => ({ key: name + '|' + l.name, name: l.name, cards: l.cards, kind: st.trIgnored[name + '|' + l.name] ? 'ignored' : 'pending' }))];
-      return { key: name, name, ts: linked ? 0 : -f.days, last: linked ? `${cs.length} ${cs.length === 1 ? 'campagne' : 'campagnes'}` : f.days ? `${f.days} dagen geleden actief` : 'vandaag gevonden',
+      return { key: name, name, ts: linked ? 0 : -f.days, last: linked ? `${cs.length} ${cs.length === 1 ? 'campagne' : 'campagnes'}` : f.days ? daysTxt(f.days) : 'vandaag gevonden',
         linked, recs, ign: !linked && !!st.trIgnored[name], quiet: !linked && f.days > 30, loaded: true, whole: false, fns, split: [],
         rec: recOf(recs, cs.some(c => c.inactive)), mkt: linked ? this.mktOf(cs[0]) : st.mktDemo[name] || '' };
     });
@@ -833,7 +834,7 @@ export default class App extends React.Component {
   go(view) {
     if (!this.viewOk(view)) view = this.homeView();
     this._hashOpen = null;
-    this.setState({ view, navOpen: false, ...(view === 'checkin' ? { ciKeep: [] } : {}) }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0);
+    this.setState({ view, navOpen: false, ...(view === 'checkin' ? { ciKeep: [], ciQ: '' } : {}), ...(view === 'klant' ? { kQ: '' } : {}) }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0);
   }
   /** Campaign id from a link like #campagne=<id>, for example opened in a new tab from the Weekoverzicht. */
   hashId() { const m = /^#campagne=(.+)$/.exec(window.location.hash); return m ? decodeURIComponent(m[1]) : null; }
@@ -889,7 +890,7 @@ export default class App extends React.Component {
     api('POST', '/api/me/view-as', { id: id || null }).catch(() => {});
     this.setState({ viewAs: id || null }, () => {
       const me = this.me(), home = this.homeView(me);
-      this.setState(s => ({ ci: { rec: me.rec || 'all' }, ciKeep: [], f: { ...s.f, status: 'all' }, form: null, kform: null, view: home, back: home, panel: null, navOpen: false }));
+      this.setState(s => ({ ci: { rec: me.rec || 'all' }, ciKeep: [], ciQ: '', kQ: '', f: { ...s.f, status: 'all' }, form: null, kform: null, view: home, back: home, panel: null, navOpen: false }));
       window.scrollTo(0, 0);
     });
   }
@@ -916,10 +917,11 @@ export default class App extends React.Component {
   }
   skipKlant() {
     const k = this.state.kform; if (!k) return;
-    const q = this.klantQueue(), i = q.findIndex(c => c.id === k.id), next = q.slice(i + 1).find(c => !c.weeks[c.weeks.length - 1].klant);
+    // Next: within the search, when there is one.
+    const q = this.klantQueue(), i = q.findIndex(c => c.id === k.id), next = q.slice(i + 1).find(c => !c.weeks[c.weeks.length - 1].klant && matchesQ(c, this.state.kQ));
     if (next) this.loadKlant(next.id); else this.flash('Geen andere campagnes zonder klantfeedback');
   }
-  startKlant(id) { this.setState({ view: 'klant' }, () => this.loadKlant(id)); window.scrollTo(0, 0); }
+  startKlant(id) { this.setState({ view: 'klant', kQ: '' }, () => this.loadKlant(id)); window.scrollTo(0, 0); }
   loadKlant(id) { const c = this.state.campaigns.find(x => x.id === id); this.setState({ kform: { id, klant: c.weeks[c.weeks.length - 1].klant || '' } }); }
   saveKlant() {
     const k = this.state.kform; if (!k) return;
@@ -932,7 +934,7 @@ export default class App extends React.Component {
     const c = campaigns.find(x => x.id === k.id);
     this.setState({ campaigns }, () => {
       this.flash(`Klantfeedback opgeslagen · ${c.client}`);
-      const next = this.klantQueue().find(x => x.id !== k.id && !x.weeks[x.weeks.length - 1].klant);
+      const next = this.klantQueue().find(x => x.id !== k.id && !x.weeks[x.weeks.length - 1].klant && matchesQ(x, this.state.kQ));
       this.loadKlant(next ? next.id : k.id);
     });
   }
@@ -953,7 +955,7 @@ export default class App extends React.Component {
   /** Opens the form on campaign id, week w; without w on its first open week (last week's before this week's). */
   startCheckin(id, w) {
     const c = this.state.campaigns.find(x => x.id === id);
-    this.setState({ view: 'checkin' }, () => this.loadForm(id, w ?? (c && openWeeks(c)[0])));
+    this.setState({ view: 'checkin', ciQ: '' }, () => this.loadForm(id, w ?? (c && openWeeks(c)[0])));
     window.scrollTo(0, 0);
   }
   /** The form for week w of campaign id (its last week if w is not given). */
@@ -972,7 +974,7 @@ export default class App extends React.Component {
     const c = campaigns.find(x => x.id === f.id), late = f.w < c.weeks[c.weeks.length - 1].w, key = f.id + '|' + f.w;
     this.setState(s => ({ campaigns, ...(late && !s.ciKeep.includes(key) ? { ciKeep: [...s.ciKeep, key] } : {}) }), () => {
       this.flash(`Opgeslagen · ${late ? `week ${wl(f.w)} · ` : ''}${c.client} – ${c.vac}`);
-      const next = this.queue().find(i => i.open && !(i.c.id === f.id && i.w === f.w));
+      const next = this.queue().find(i => i.open && !(i.c.id === f.id && i.w === f.w) && matchesQ(i.c, this.state.ciQ));
       if (next) this.loadForm(next.c.id, next.w); else this.loadForm(f.id, f.w);
     });
   }
@@ -1167,7 +1169,7 @@ export default class App extends React.Component {
     const recNames = this.recs(), recOptions = [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: r }))];
 
     // check-in
-    const queue = this.queue();
+    const queue = this.queue(), shownQ = queue.filter(i => matchesQ(i.c, st.ciQ));
     const f = st.form;
     const fcC = f ? st.campaigns.find(c => c.id === f.id) : null;
     let fc = {};
@@ -1338,7 +1340,9 @@ export default class App extends React.Component {
     ];
 
     const tv = e => e.target.value;
-    const kq0 = this.klantQueue(), kOpen = kq0.filter(c => !c.weeks[c.weeks.length - 1].klant).length;
+    const kq0 = this.klantQueue(), kOpen = kq0.filter(c => !c.weeks[c.weeks.length - 1].klant).length, kShown = kq0.filter(c => matchesQ(c, st.kQ));
+    // The search filters the list only; the counts stay about the whole week.
+    const noneFor = q => `Geen campagnes voor “${q.trim()}”`;
     const kC = st.kform ? st.campaigns.find(c => c.id === st.kform.id) : null;
     let kc = {};
     if (kC) {
@@ -1373,8 +1377,10 @@ export default class App extends React.Component {
       setAsgQ: e => { const v = e.target.value; this.setState(s => ({ asg: { ...s.asg, q: v } })); },
       isLive: st.view === 'live', live: this.liveData(me), goCheckin: () => this.go('checkin'),
       kq: { doneText: `${kq0.length - kOpen} van ${kq0.length} klanten gaven feedback deze week`, total: kq0.length, open: kOpen, done: kq0.length - kOpen, pct: ((kq0.length - kOpen) / Math.max(kq0.length, 1) * 100) + '%',
-        items: kq0.map(c => { const has = !!c.weeks[c.weeks.length - 1].klant, sel = st.kform && st.kform.id === c.id;
+        none: kq0.length && !kShown.length ? noneFor(st.kQ) : '',
+        items: kShown.map(c => { const has = !!c.weeks[c.weeks.length - 1].klant, sel = st.kform && st.kform.id === c.id;
           return { sel, client: c.client, vac: c.vac, bg: sel ? '#FFF8E0' : '#FFFFFF', mark: has ? '✓' : '', markBg: has ? '#E6F4ED' : '#F5F2ED', markBorder: '0', onClick: () => this.loadKlant(c.id) }; }) },
+      kQ: st.kQ, setKQ: e => this.setState({ kQ: tv(e) }),
       setKformText: e => { const v = tv(e); this.setState(s => ({ kform: { ...s.kform, klant: v } })); },
       saveKlant: () => this.saveKlant(), kSaveLabel: kOpen > 1 ? 'Opslaan & volgende' : 'Feedback opslaan',
       sum, groups, list, listCount: list.length, listEmpty: list.length === 0, statusTabs, recOptions, f: st.f,
@@ -1394,17 +1400,18 @@ export default class App extends React.Component {
       setSearch: e => setF({ q: tv(e) }), setSort: e => setF(isMine ? { mineSort: tv(e) } : { sort: tv(e) }),
       ci: st.ci, ciRecOptions: [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: 'Ingevuld door ' + r }))],
       setCiRec: e => { const v = tv(e); this.setState(s => ({ ci: { ...s.ci, rec: v } }), () => this.enterCheckin()); },
-      // Last week's items come first, under their own heading, when there are any.
-      queue: queue.map((i, k) => {
-        const wk = i.c.weeks.find(x => x.w === i.w), doneQ = !i.open, sel = isForm(i), first = k === 0 || queue[k - 1].late !== i.late;
+      ciQ: st.ciQ, setCiQ: e => this.setState({ ciQ: tv(e) }), ciNone: queue.length && !shownQ.length ? noneFor(st.ciQ) : '',
+      // Last week's items come first, under their own heading, when there are any (among the search results).
+      queue: shownQ.map((i, k) => {
+        const wk = i.c.weeks.find(x => x.w === i.w), doneQ = !i.open, sel = isForm(i), first = k === 0 || shownQ[k - 1].late !== i.late;
         return { sel, client: i.c.client, vac: i.late ? `${i.c.vac} · week ${wl(i.w)}` : i.c.vac, vacFg: i.late ? '#B45309' : '#5C5C5A',
-          head: queue[0].late && first ? (i.late ? `Nog open van week ${wl(i.w)} · vervalt ${dueTxt(i.w)}` : `Week ${wl(CUR)}`) : '',
+          head: shownQ[0].late && first ? (i.late ? `Nog open van week ${wl(i.w)} · vervalt ${dueTxt(i.w)}` : `Week ${wl(CUR)}`) : '',
           qText: doneQ ? wk.q + '/10' : '', qFg: qc(wk.q), bg: sel ? '#FFF8E0' : '#FFFFFF', mark: doneQ ? '✓' : '', markBg: doneQ ? '#E6F4ED' : '#FFFFFF', markFg: '#1A7A4A', markBorder: doneQ ? '0' : `1.5px solid ${i.late ? '#F9A800' : '#C0BDB9'}`, onClick: () => this.loadForm(i.c.id, i.w) };
       }),
       queueTotal: nowQ.length, queueOpen: qOpen, queueDone: nowQ.length - qOpen, queuePct: ((nowQ.length - qOpen) / Math.max(nowQ.length, 1) * 100) + '%', queueComplete: nowQ.length > 0 && qOpen === 0 && lateOpen === 0,
       hasLate: lateOpen > 0, lateText: `+ ${lateOpen} van week ${wl(CUR - 1)} · vervalt ${dueTxt(CUR - 1)}`,
       hasForm: !!fcC, form: f || {}, fc, scoreBtns,
-      saveLabel: queue.some(i => i.open && !isForm(i)) ? 'Opslaan & volgende' : 'Feedback opslaan',
+      saveLabel: shownQ.some(i => i.open && !isForm(i)) ? 'Opslaan & volgende' : 'Feedback opslaan',
       setLeads: e => this.setForm({ leads: tv(e).replace(/\D/g, '') }), decLeads: () => this.setForm({ leads: Math.max(0, (+f.leads || 0) - 1) }), incLeads: () => this.setForm({ leads: (+f.leads || 0) + 1 }),
       setRecText: e => this.setForm({ rec: tv(e) }), setKlantText: e => this.setForm({ klant: tv(e) }), setNote: e => this.setForm({ note: tv(e) }),
       toggleNeeds: () => this.setForm({ needsAction: !f.needsAction }), needsBg: f && f.needsAction ? '#D32F2F' : '#C0BDB9', needsKnob: f && f.needsAction ? '18px' : '2px',

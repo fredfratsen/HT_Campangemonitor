@@ -7,7 +7,9 @@ export const nl = n => (Math.round(n * 10) / 10).toString().replace('.', ',');
 export const avgOf = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
 export const sgn = (n, unit = '') => n > 0 ? `+${nl(n)}${unit}` : n < 0 ? `−${nl(-n)}${unit}` : `±0${unit}`;
 export const reasonList = o => Object.entries(o || {}).sort((a, b) => b[1] - a[1]).map(([t, n]) => ({ t, n }));
-export function agoTxt(iso) { const d = Math.floor((Date.now() - new Date(iso).getTime()) / 864e5); return d <= 0 ? 'vandaag actief' : d === 1 ? 'gisteren actief' : `${d} dagen geleden actief`; }
+export function daysTxt(d) { return d <= 0 ? 'vandaag actief' : d === 1 ? 'gisteren actief' : d > 60 ? '> 60 dagen niet actief' : `${d} dagen geleden actief`; }
+/** A board that was never active (a new board has no dateLastActivity) counts as quiet for over 60 days. */
+export function agoTxt(iso, now = Date.now()) { const t = iso ? new Date(iso).getTime() : NaN; return daysTxt(isNaN(t) ? Infinity : Math.floor((now - t) / 864e5)); }
 export const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } };
 export const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } };
 

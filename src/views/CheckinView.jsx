@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import useCenterCurrent from '../lib/useCenterCurrent.js';
 
 export default function CheckinView({ v }) {
-  const { decLeads, fc, form, goMine, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
+  const { ciNone, ciQ, decLeads, fc, form, goMine, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setCiQ, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
   const listRef = useCenterCurrent(form.id + '|' + form.w);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -24,8 +24,10 @@ export default function CheckinView({ v }) {
               <div style={{ height: '100%', width: queuePct, background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)' }} />
             </div>
             {hasLate ? <div style={{ fontSize: '13px', fontWeight: '600', color: '#B45309' }}>{lateText}</div> : null}
+            <input type="search" value={ciQ ?? ''} onChange={setCiQ} placeholder="Zoek klant of vacature" aria-label="Zoek klant of vacature" autoComplete="off" style={{ width: '100%', height: '40px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 14px', fontSize: '14px', background: '#FFFFFF' }} />
           </div>
           <div className="q-list" ref={listRef}>
+            {ciNone ? <div style={{ padding: '14px 18px', fontSize: '13px', color: '#5C5C5A' }}>{ciNone}</div> : null}
             {queue.map((qi, i) => <React.Fragment key={i}>
               {qi.head ? <div className="q-head" style={{ padding: '10px 18px 6px', fontSize: '11px', fontWeight: '600', letterSpacing: '.06em', textTransform: 'uppercase', color: '#5C5C5A', background: '#FDFBF8', borderBottom: '1px solid #F5F2ED' }}>{qi.head}</div> : null}
               <button onClick={qi.onClick} aria-current={qi.sel ? 'true' : undefined} style={{ width: '100%', border: '0', borderBottom: '1px solid #F5F2ED', background: qi.bg, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left' }}>
