@@ -18,6 +18,24 @@ export function openWeeks(c, cur = CUR) {
 }
 
 /**
+ * Open feedback per recruiter, for the teamlead (Feedback recruiters in the Weekoverzicht): { rec, now, late, items }
+ * with `now` campaigns still open this week and `late` ones still open last week (overdue, catching up). Items
+ * { c, now, late } put last week's first; the recruiter with the most open comes first. Campaigns without a recruiter
+ * are left out.
+ */
+export function openByRecruiter(campaigns, cur = CUR) {
+  const by = {};
+  campaigns.forEach(c => {
+    const ws = openWeeks(c, cur);
+    if (!ws.length || !c.rec) return;
+    const r = by[c.rec] = by[c.rec] || { rec: c.rec, now: 0, late: 0, items: [] }, now = ws.includes(cur), late = ws.includes(cur - 1);
+    r.now += now; r.late += late; r.items.push({ c, now, late });
+  });
+  const byItem = (a, b) => b.late - a.late || a.c.client.localeCompare(b.c.client) || a.c.vac.localeCompare(b.c.vac);
+  return Object.values(by).map(r => ({ ...r, items: r.items.sort(byItem) })).sort((a, b) => b.now + b.late - a.now - a.late || a.rec.localeCompare(b.rec));
+}
+
+/**
  * The list on Wekelijkse feedback recruiter for recruiter rec ('all' for everyone): an item { c, w, late, open, needed }
  * per campaign for this week (its last week), after one per campaign whose feedback on last week is still open (late).
  * A campaign that needs no feedback this week (needed: false) comes last; last week's is left out then.

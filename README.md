@@ -37,7 +37,7 @@ Everyone logs in with a personal account. What you see and can do depends on you
   badge and on Live campagnes. After that Sunday the feedback on that week has expired and can no longer be given.
   A week without new candidates and without calls asks no feedback: there is nothing to give. Such a campaign is
   listed last, greyed, under *Geen feedback nodig* (it can still be filled in), and counts nowhere as open or
-  missing (menu badge, Live campagnes, the *Feedback ontbreekt* signal, reminders). Called means a card of the
+  missing (menu badge, Live campagnes, *Feedback recruiters* in the Weekoverzicht, reminders). Called means a card of the
   campaign got [Geen gehoor or a TBA afspraak](#geen-gehoor) that week, or was moved on from *Nieuw* or *Contactpoging*; then
   feedback is asked even without new candidates. The current week can still change: once a candidate comes in or
   someone calls, the feedback is asked (`needsFeedback` in `src/lib/checkin.js`).
@@ -51,8 +51,15 @@ have *Eigen klanten bekijken* instead, see the last point)
   grouped per status. Each campaign opens on click, or in a new browser tab with the icon (or Cmd/Ctrl-click).
   *Actie nodig* shows cards or, with the *Kaarten | Lijst* switch, a compact list with one line per campaign; the
   choice is remembered in the browser.
-  The **Feedback recruiter** card lists the first 3 campaigns without feedback (*Alle campagnes* shows the rest)
-  and has a button to send reminders. A recruiter gets at most one reminder per 48 hours; the server checks this.
+- **Missing recruiter feedback** (right: *Ontbrekende feedback opvolgen*, key `reminders.send`; Teamlead and Dev)
+  is no signal on a campaign. Only with this right do you see it: a closed bar **Feedback recruiters** under the
+  monitor status (*18 van 22 ingevuld deze week · 2 recruiters met open feedback*; open or closed is remembered in
+  the browser). Opened, it lists per recruiter the campaigns still open this week and, overdue, last week
+  (`openByRecruiter` in `src/lib/checkin.js`), with a button to send reminders. A recruiter gets at most one reminder
+  per 48 hours; the server checks this. Also only with this right: the *Geen feedback* tab in Campagnes, *Ontbreekt*
+  in its Feedback column, and *nog geen feedback ingevuld* on a campaign. Without it (Recruitment Marketeers,
+  Account Managers) you only see the feedback that was given: an open week shows the last feedback given, or *—*.
+  The recruiter still sees their own open feedback.
 - **Campagnes**: all active campaigns with status, client and vacancy, recruiter, candidates, quality and average
   quality. Filter by status; sort by priority, lowest quality, fewest candidates or client.
 - **Campaign detail**: candidates and quality per week, the Trello pipeline, rejection reasons, and a log of
@@ -76,7 +83,7 @@ have *Eigen klanten bekijken* instead, see the last point)
 - **Historie & analyse**: totals, averages and changes over past weeks.
 - **Health-regels**: the rules that put a campaign on *Actie nodig*.
 - **Own clients** (right: *Eigen klanten bekijken*): the same screens, but Weekoverzicht, Campagnes and Feedback klant
-  (and so the reminders) only show the clients you are the Recruitment Marketeer of in Toewijzing. A client without
+  only show the clients you are the Recruitment Marketeer of in Toewijzing. A client without
   a Recruitment Marketeer shows up for no marketeer. Add *Alle campagnes bekijken* to show all clients again, for
   example while covering for a colleague. Like a recruiter's own campaigns, this is a filter in the app, not a
   server check.
@@ -155,10 +162,11 @@ nodig*. Anyone with the right *Health-regels aanpassen* can switch each rule on 
 | Signal | Rules |
 |---|---|
 | **Red** | quality is 4 or lower · quality has dropped 2 weeks in a row · 2 or fewer new candidates last week · recruiter ticked *Bijsturing nodig* |
-| **Orange** | quality is 6 or lower · new candidates last week 30% or more below the average of the 3 weeks before · no feedback yet this week (from Thursday, or right away when last week's is missing too; only weeks that ask feedback) |
+| **Orange** | quality is 6 or lower · new candidates last week 30% or more below the average of the 3 weeks before |
 
 The two inflow rules look at last week, because the current week is still filling up with candidates. Everything
-else, including the feedback round, is about the current week.
+else is about the current week. Missing recruiter feedback is no signal; the teamlead follows it up under
+*Feedback recruiters* in the Weekoverzicht (team rules saved with the old `missingOn` are ignored).
 
 The status is stored on the week (`mon`: `check`, `klant`, or `open` to hand it back to the rules; with `monBy`
 and, for a check, the signals seen at that moment in `monSig`). The update for the recruiter is `upd` / `updBy`.
@@ -173,7 +181,7 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 |---|---|---|
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset, the Bugs & ideeën board) |
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, the status of bugs and ideas, managing the blacklist, Tijdwinst |
-| **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, pausing and stopping campaigns, client feedback, logging campaign changes, reminders |
+| **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, pausing and stopping campaigns, client feedback, logging campaign changes |
 | **Account Manager** | Lid (member) | Campaign overview of all clients and asking questions about campaigns; changes nothing except the status toggle on Live campagnes |
 | **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
 

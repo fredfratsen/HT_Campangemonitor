@@ -160,7 +160,7 @@ test('rules, seen, meta, inbox and ideas', () => {
   assert.equal(a('inbox', '1', note, { ...note, read: true }), '', 'marking your own notification read');
   assert.equal(a('inbox', '1', { ...note, to: 'Juul' }, { ...note, to: 'Juul', read: true }), NO_RIGHT);
   assert.equal(a('inbox', '2', undefined, { ...note, id: 2 }), NO_RIGHT, 'reminders need reminders.send');
-  assert.equal(makeAuthorizer(mkt, {})('inbox', '2', undefined, { ...note, id: 2 }).value.from, 'Danielle');
+  assert.equal(makeAuthorizer(lead2, {})('inbox', '2', undefined, { ...note, id: 2 }).value.from, 'Lead Twee');
   const idea = { id: 5, type: 'bug', text: 'x', by: 'Robbin', status: 'opgelost', voters: ['Robbin', 'Kim'] };
   assert.deepEqual(a('ideas', '5', undefined, idea).value, { ...idea, by: 'Kim', status: 'nieuw', voters: ['Kim'] });
   const saved = { ...idea, by: 'Robbin', status: 'nieuw', voters: [] };
@@ -262,12 +262,18 @@ test('monitor status and the update for the recruiter need campaigns.monitor, au
   assert.equal(makeAuthorizer(am, {})('inbox', '9', undefined, { ...note, from: 'Anouk' }), NO_RIGHT);
 });
 
+test('missing feedback is followed up by the teamlead: Recruitment Marketeers and account managers send no reminders', () => {
+  const rem = { id: 'n1', to: 'Kim', from: 'x', read: false, kind: 'reminder', title: 't', items: [] };
+  assert.equal(makeAuthorizer(lead, {})('inbox', 'n1', undefined, rem).value.from, 'Robbin');
+  for (const who of [mkt, am, kim]) assert.equal(makeAuthorizer(who, {})('inbox', 'n1', undefined, rem), NO_RIGHT, who.role);
+});
+
 test('a recruiter gets at most one reminder per 48 hours', () => {
-  const now = Date.now(), rem = (id, to, o = {}) => ({ id, to, from: 'Danielle', read: false, kind: 'reminder', title: 't', items: [], ...o });
-  const fresh = makeAuthorizer(mkt, {})('inbox', 'n1', undefined, rem('n1', 'Kim', { ts: 1 }));
+  const now = Date.now(), rem = (id, to, o = {}) => ({ id, to, from: 'Robbin', read: false, kind: 'reminder', title: 't', items: [], ...o });
+  const fresh = makeAuthorizer(lead, {})('inbox', 'n1', undefined, rem('n1', 'Kim', { ts: 1 }));
   assert.ok(Math.abs(fresh.value.ts - now) < 5000, 'sent time comes from the server clock');
   const docs = { inbox: { old: rem('old', 'Kim', { ts: now - 47 * 36e5 }), juul: rem('juul', 'Juul', { ts: now - 49 * 36e5 }), legacy: rem(`${now - 36e5}Robin`, 'Robin') } };
-  const a = makeAuthorizer(mkt, docs);
+  const a = makeAuthorizer(lead, docs);
   assert.equal(a('inbox', 'n2', undefined, rem('n2', 'Kim')), REMINDED);
   assert.equal(a('inbox', 'n3', undefined, rem('n3', 'Juul')).value.to, 'Juul', 'more than 48 hours ago');
   assert.equal(a('inbox', 'n4', undefined, rem('n4', 'Robin')), REMINDED, 'older reminders: time from the id');

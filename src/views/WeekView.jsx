@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import NewTabLink, { cardClick } from '../components/NewTabLink.jsx';
 
 export default function WeekView({ v }) {
-  const { canAssign, canRemind, canSendRemind, emptyHint, emptyTitle, goAssign, goCampaigns, groups, liveEmpty, remind, remindLabel, remindNote, sum, wk } = v;
+  const { canAssign, canRemind, canSendRemind, emptyHint, emptyTitle, fbBar, goAssign, goCampaigns, groups, liveEmpty, remind, remindLabel, remindNote, sum, wk } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '36px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
@@ -16,8 +16,8 @@ export default function WeekView({ v }) {
           <Button variant="outline" onClick={goCampaigns}>Alle campagnes</Button>
         </div>
       </header>
-      <div className="m-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '16px' }}>
-        <div className="span-2" style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px', gridColumn: 'span 2', minWidth: '0' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px', minWidth: '0' }}>
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Monitorstatus</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: '16px' }}>
             {sum.levels.map((l, i) => <button key={i} onClick={l.onClick} style={{ border: '0', background: 'none', padding: '0', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -29,25 +29,32 @@ export default function WeekView({ v }) {
             {sum.levels.map((l, i) => <div key={i} style={{ width: l.pct, background: l.fg }} />)}
           </div>
         </div>
-        <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Feedback recruiter</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1' }}>{sum.done}</span>
-            <span style={{ fontSize: '18px', color: '#8C8C8A' }}>/ {sum.fbTotal}</span>
-          </div>
-          <div style={{ height: '8px', borderRadius: '999px', background: '#F5F2ED', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: sum.donePct, background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)' }} />
-          </div>
-          {sum.hasMissing ? <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
-              {sum.missingList.map((m, i) => <button key={i} onClick={m.fill} style={{ border: '0', background: 'none', padding: '0', display: 'flex', justifyContent: 'space-between', gap: '8px', cursor: 'pointer', textAlign: 'left', fontSize: '13px' }}>
-                  <span style={{ color: '#1D1D1B' }}>{m.client} – {m.vac}</span>
-                  <span style={{ color: '#8C8C8A', flex: 'none' }}>{m.rec}</span>
-                </button>)}
-              {sum.hasMoreMissing ? <button onClick={sum.toggleMissing} className="link-btn" aria-expanded={sum.missAll}>{sum.moreMissingLabel}</button> : null}
-              {canRemind ? <button onClick={remind} disabled={!canSendRemind} style={{ marginTop: '6px', alignSelf: 'flex-start', border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: '500', cursor: canSendRemind ? 'pointer' : 'default', color: canSendRemind ? '#1D1D1B' : '#8C8C8A' }}>{remindLabel}</button> : null}
-              {canRemind && remindNote ? <div style={{ fontSize: '12px', color: '#8C8C8A', lineHeight: '1.45' }}>{remindNote}</div> : null}
-            </div> : null}
-        </div>
+        {fbBar ? <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', minWidth: '0' }}>
+            <button onClick={fbBar.toggle} aria-expanded={fbBar.open} style={{ width: '100%', border: '0', background: 'none', padding: '12px 20px 12px 24px', display: 'flex', alignItems: 'center', gap: '8px 16px', flexWrap: 'wrap', cursor: 'pointer', textAlign: 'left', fontSize: '14px', color: '#3C3C3A' }}>
+              <span style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Feedback recruiters</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {fbBar.doneText}
+                <span style={{ width: '64px', height: '6px', borderRadius: '999px', background: '#F5F2ED', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: fbBar.donePct, background: 'linear-gradient(135deg,#F9CE00 0%,#FB8915 100%)' }} /></span>
+              </span>
+              <span style={{ color: fbBar.hasOpen ? '#5C5C5A' : '#1A7A4A' }}>{fbBar.openText}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', marginLeft: 'auto', transform: fbBar.open ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            {fbBar.open && fbBar.hasOpen ? <div style={{ borderTop: '1px solid #F5F2ED', padding: '14px 20px 16px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {fbBar.recs.map((r, i) => <div key={i} className="m-stack" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,220px) minmax(0,1fr)', gap: '4px 16px', fontSize: '13px' }}>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '14px', color: '#1D1D1B' }}>{r.rec}</div>
+                      <div style={{ color: '#8C8C8A' }}>{r.counts}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '0' }}>
+                      {r.items.map((m, j) => <button key={j} onClick={m.open} style={{ border: '0', background: 'none', padding: '0', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#1D1D1B' }}>
+                          {m.label}{m.tag ? <span style={{ color: '#B45309' }}> · {m.tag}</span> : null}
+                        </button>)}
+                    </div>
+                  </div>)}
+                {canRemind ? <button onClick={remind} disabled={!canSendRemind} style={{ alignSelf: 'flex-start', border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: '500', cursor: canSendRemind ? 'pointer' : 'default', color: canSendRemind ? '#1D1D1B' : '#8C8C8A' }}>{remindLabel}</button> : null}
+                {canRemind && remindNote ? <div style={{ fontSize: '12px', color: '#8C8C8A', lineHeight: '1.45' }}>{remindNote}</div> : null}
+              </div> : null}
+          </div> : null}
       </div>
       {liveEmpty ? <div style={{ background: '#FFFFFF', border: '1px dashed #C0BDB9', borderRadius: '12px', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div>

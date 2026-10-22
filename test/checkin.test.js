@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FB_START, fbOpenWeek, fbLastDay, mondayOf } from '../src/lib/weeks.js';
-import { checkinQueue, openWeeks, needsFeedback } from '../src/lib/checkin.js';
+import { checkinQueue, openWeeks, needsFeedback, openByRecruiter } from '../src/lib/checkin.js';
 
 const W = FB_START + 1; // "this week" in these tests; W - 1 is the first feedback week
 const week = (w, q = null, tr = { nieuw: 5 }) => ({ w, leads: tr.nieuw, q, rec: '', tr });
@@ -83,4 +83,19 @@ test('calls alone make a week ask feedback', () => {
   const c = camp('c', null, null, { weeks: [week(W - 2, 7), week(W - 1, null, { nieuw: 0, gebeld: 1 }), week(W, null, { nieuw: 0, gebeld: 3 })] });
   assert.deepEqual(openWeeks(c, W), [W - 1, W]);
   assert.deepEqual(keys(checkinQueue([c], 'Kim', { cur: W })), ['c|' + (W - 1) + ' late', 'c|' + W]);
+});
+
+test('open feedback per recruiter, for the teamlead: this week and last week apart, most open first', () => {
+  const cs = [
+    camp('b', 8, null), camp('c', null, 7), camp('a', null, null), camp('d', 8, 8),
+    camp('q', 8, null, { weeks: [week(W - 2, 7), week(W - 1, 8), quiet(W)] }),
+    camp('e', 8, null, { rec: 'Robin' }),
+    camp('p', null, null, { rec: 'Juul', halt: { kind: 'pauze' } }), camp('i', null, null, { rec: '', inactive: true })
+  ];
+  const got = openByRecruiter(cs, W).map(r => ({ rec: r.rec, now: r.now, late: r.late, items: r.items.map(i => `${i.c.id}${i.now ? ' now' : ''}${i.late ? ' late' : ''}`) }));
+  assert.deepEqual(got, [
+    { rec: 'Kim', now: 2, late: 2, items: ['a now late', 'c late', 'b now'] },
+    { rec: 'Robin', now: 1, late: 0, items: ['e now'] }
+  ], 'last week\'s (overdue) first; quiet weeks, Pauze and Niet actief ask none');
+  assert.deepEqual(openByRecruiter([camp('d', 8, 8)], W), [], 'everything in');
 });
