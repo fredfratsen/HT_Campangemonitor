@@ -79,9 +79,11 @@ test('a recruiter keeps a paused or stopped campaign until all its candidates ar
   assert.equal(recruiterSees(c(null, 0, 0)), true, 'a running campaign always');
   assert.equal(recruiterSees(c('pauze', 2, 0)), true);
   assert.equal(recruiterSees(c('stop', 0, 1)), true, 'contact attempts count too');
-  assert.equal(recruiterSees(c('pauze', 0, 0, 1)), true, 'a ‘Geen gehoor’ today is not yet called');
   assert.equal(recruiterSees(c('pauze', 0, 0)), false);
   assert.equal(recruiterSees(c('stop', 0, 0)), false);
+  assert.equal(recruiterSees(c('stop', 0, 0, 2)), false, 'a ‘Geen gehoor’ today is off the call list, so it goes too');
+  assert.equal(recruiterSees(c('pauze', 0, 0, 1)), false);
+  assert.equal(recruiterSees(c(null, 0, 0, 1)), true, 'a running one stays');
 });
 
 test('a new campaign waiting for its ads stays out of sight of the recruiter, candidates or not', () => {

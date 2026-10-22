@@ -66,8 +66,8 @@ have *Eigen klanten bekijken* instead, see the last point)
   where you resume it. A stopped one leaves all those screens; only *Toewijzing beheren* activates it again, in
   Toewijzing (where *Stoppen* does the same since this change, instead of setting the function to *Geen functie*).
   Either way the recruiter keeps the campaign in Live campagnes and Mijn campagnes, tagged, until its call list
-  (new candidates plus contact attempts, also those that got *Geen gehoor* or a *TBA afspraak* today) is 0, and is asked no weekly
-  feedback for it. The campaign stays linked and keeps its feedback: the link (or demo campaign) gets
+  (new candidates plus contact attempts) is 0, and is asked no weekly feedback for it. Cards that got *Geen gehoor* or
+  a *TBA afspraak* today don't keep it there; when such a card is back on the list after midnight, so is the campaign. The campaign stays linked and keeps its feedback: the link (or demo campaign) gets
   `halt: { kind: 'pauze' | 'stop', by, w }`, with `by` stamped by the server, and every change goes into the audit
   log.
 - **Vraag stellen** on a campaign (right: *Vragen stellen over campagnes*): send a question to the campaign's
