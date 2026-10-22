@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey } from '../src/lib/boardStats.js';
 import { intakeName, stageOf } from '../src/lib/constants.js';
 import { CUR } from '../src/lib/weeks.js';
-import { board, intakeBoard, dayOf, BOARD_ID, KOK, BEDIENING, IN, INTAKE_CARD, CARD } from './trello-fixture.js';
+import { board, intakeBoard, dayOf, BOARD_ID, KOK, BEDIENING, SPOED, IN, INTAKE_CARD, CARD } from './trello-fixture.js';
 
 const tr = (nieuw, o = {}) => ({ nieuw, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, gebeld: 0, reasons: {}, ...o });
 
@@ -125,6 +125,42 @@ test('a new intake list with the name of an archived one continues its function'
   assert.deepEqual(boardStats(bd)[IN.barista].weeks[CUR], tr(2), 'the old card and the one in the new list');
   assert.equal(boardStats(bd)[NEW], undefined);
   assert.deepEqual(boardFunctions(bd).find(f => f.name === 'Barista'), { id: IN.barista, name: 'Barista', labelId: null, listId: NEW, cards: 2 });
+});
+
+/** intakeBoard with an older card that only has the label Spoed, and a new card in Nieuwe Sollicitant: Afwas. */
+function spoedBoard() {
+  const bd = intakeBoard(), card = (n, list, labels) => ({ id: INTAKE_CARD.none.replace(/.$/, n), idList: IN[list], idLabels: labels, closed: false, customFieldItems: [] });
+  bd.cards.push(card('e', 'gescreend', [SPOED]), card('f', 'afwas', []));
+  return bd;
+}
+
+test('on a board with intake lists a label is no function of its own, only together with an intake list of its name', () => {
+  const bd = spoedBoard(), s = boardStats(bd);
+  assert.equal(s[SPOED], undefined, 'the card with only Spoed counts for the client as a whole');
+  assert.equal(s['*'].weeks[CUR].nieuw, 9);
+  assert.equal(boardFunctions(bd).some(f => f.id === SPOED), false, 'and Spoed is no function in Toewijzing');
+  assert.equal(withoutFunction(bd), 2, 'the cards "none" and the one with only Spoed');
+  assert.deepEqual(s[KOK].weeks[CUR], tr(3), 'the label Kok still counts: it has Nieuwe Sollicitant | Kok');
+});
+
+test('a label with a campaign still counts on a board with intake lists, until it is moved to one or stopped', () => {
+  const bd = spoedBoard(), links = [{ id: 't-s', boardId: BOARD_ID, labelId: SPOED, vac: 'Spoed', rec: 'Kim' }];
+  assert.deepEqual(boardStats(bd, Date.now(), links)[SPOED].weeks[CUR], tr(1, { gescreend: 1 }));
+  assert.deepEqual(boardFunctions(bd, links).find(f => f.id === SPOED), { id: SPOED, name: 'Spoed', labelId: SPOED, listId: null, cards: 1 });
+});
+
+test('a campaign moved to an intake list (Overzetten) counts it under its own key, with the cards of its old label', () => {
+  const bd = spoedBoard(), links = [{ id: 't-s', boardId: BOARD_ID, labelId: SPOED, joinList: IN.afwas, vac: 'Afwas', rec: 'Kim' }];
+  const s = boardStats(bd, Date.now(), links);
+  assert.deepEqual(s[SPOED].weeks[CUR], tr(2, { gescreend: 1 }), 'the card in Nieuwe Sollicitant: Afwas and the old one with only Spoed');
+  assert.equal(s[IN.afwas], undefined);
+  assert.deepEqual(boardFunctions(bd, links).find(f => f.name === 'Afwas'), { id: SPOED, name: 'Afwas', labelId: SPOED, listId: IN.afwas, cards: 2 });
+});
+
+test('a campaign of an archived intake list moved to a new one keeps the cards of both', () => {
+  const bd = spoedBoard(), links = [{ id: 't-b', boardId: BOARD_ID, labelId: null, listId: IN.barista, joinList: IN.afwas, vac: 'Afwas', rec: 'Kim' }];
+  assert.deepEqual(boardStats(bd, Date.now(), links)[IN.barista].weeks[CUR], tr(2));
+  assert.deepEqual(boardFunctions(bd, links).find(f => f.name === 'Afwas'), { id: IN.barista, name: 'Afwas', labelId: null, listId: IN.afwas, cards: 2 });
 });
 
 test('a campaign linked to an intake list, a label or the whole board gets those numbers', () => {

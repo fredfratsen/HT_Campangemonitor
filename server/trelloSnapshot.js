@@ -16,9 +16,9 @@ export function createTrelloSnapshot(docs) {
   return {
     /** All boards: { [boardId]: { at, stats } }. */
     get: () => boards(),
-    /** A board just loaded from Trello (as the proxy sends it to the app). */
-    board(id, bd, now = Date.now()) {
-      boards()[id] = { at: now, stats: quickStats(boardStats(bd, now), feedbackWeek(now) - LIVE_WEEKS + 1) };
+    /** A board just loaded from Trello (as the proxy sends it to the app), with its Trello links (see boardStats). */
+    board(id, bd, now = Date.now(), links = []) {
+      boards()[id] = { at: now, stats: quickStats(boardStats(bd, now, links), feedbackWeek(now) - LIVE_WEEKS + 1) };
       f.save();
     },
     /** The open boards Trello lists now: the others are closed or no longer shared, and are forgotten. */

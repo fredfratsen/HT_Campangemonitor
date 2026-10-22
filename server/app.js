@@ -49,8 +49,9 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   const privacy = createPrivacy({ accounts, store, audit, blacklist });
   const auth = createAuth({ accounts, audit, secure, hosting });
   const mailer = createMailer({ secrets, audit, deferred: deferMail });
-  const linked = () => new Set(Object.values(store.docs['live.links'] || {}).map(k => k.boardId));
-  const trello = trelloRouter(() => secrets.get('trello'), trelloMemory ? { snapshot: createTrelloSnapshot(docs), intake: createTrelloIntake(docs), linked } : {});
+  const allLinks = () => Object.values(store.docs['live.links'] || {});
+  const linked = () => new Set(allLinks().map(k => k.boardId)), links = id => allLinks().filter(k => k.boardId === id);
+  const trello = trelloRouter(() => secrets.get('trello'), trelloMemory ? { snapshot: createTrelloSnapshot(docs), intake: createTrelloIntake(docs), linked, links } : {});
 
   const app = express();
   app.set('trust proxy', 1); // Render and Netlify sit behind a proxy

@@ -9,6 +9,11 @@
 // list it is in or came in through (idIntake: the server adds it from Trello's history), so it keeps its function
 // after moving on to Contactpoging or Gescreend; the intake list goes before its labels. Only a card without one
 // follows its labels. An intake list and a label with the same name are one function, under the label's id.
+//
+// On a board with open intake lists, a label is no function of its own any more: only together with an intake list
+// (of its name, or one its campaign was moved to), or while it still has a campaign, until that is moved to an
+// intake list or stopped. A campaign moved to an intake list (Overzetten in Toewijzing: joinList on the link) counts
+// that list under its own key, so it keeps its feedback and the cards of its old label or archived list.
 import { CUR, weekOf } from './weeks.js';
 import { RANK, MON_FIELDS, stageOf, intakeName, cardTs } from './constants.js';
 
@@ -19,35 +24,43 @@ const norm = s => (s || '').trim().toLowerCase();
 /** The key of a Trello link (a campaign) in boardStats: its label or intake list, or '*' for the whole board. */
 export const linkKey = k => k.labelId || k.listId || '*';
 
-/** of(card): the function keys a card counts for. fns: the functions of the open intake lists, one per name. */
-function functions(bd) {
-  const labelOf = {}, byName = {}, key = {}, fns = [];
-  for (const l of bd.labels || []) if (l.name && !labelOf[norm(l.name)]) labelOf[norm(l.name)] = l.id;
+/**
+ * of(card): the function keys a card counts for. fns: the functions of the open intake lists, one per name. links:
+ * the board's Trello links (campaigns), for the ones moved to an intake list and the labels that still have one.
+ */
+function functions(bd, links = []) {
+  const labelOf = {}, isLabel = new Set(), byName = {}, key = {}, fns = [], join = {};
+  for (const l of bd.labels || []) { isLabel.add(l.id); if (l.name && !labelOf[norm(l.name)]) labelOf[norm(l.name)] = l.id; }
+  for (const k of links) if (k.joinList && linkKey(k) !== '*') join[k.joinList] = linkKey(k);
   for (const l of bd.lists || []) {
-    const name = intakeName(l.name);
+    const name = intakeName(l.name), n = norm(name);
     if (!name) continue;
-    const label = labelOf[norm(name)] || null;
-    key[l.id] = byName[norm(name)] || (byName[norm(name)] = label || l.id);
-    if (!l.closed && !fns.some(f => f.id === key[l.id])) fns.push({ id: key[l.id], name, labelId: label, listId: l.id });
+    key[l.id] = join[l.id] || byName[n] || (byName[n] = labelOf[n] || l.id);
+    if (!l.closed && !fns.some(f => f.id === key[l.id])) fns.push({ id: key[l.id], name, labelId: isLabel.has(key[l.id]) ? key[l.id] : null, listId: l.id });
   }
-  const of = c => { const via = key[c.idList] ? c.idList : c.idIntake; return via ? [key[via] || via] : c.idLabels || []; };
+  const fnLabel = fns.length ? new Set([...Object.values(key), ...links.map(linkKey)]) : null;
+  const of = c => { const via = key[c.idList] ? c.idList : c.idIntake; return via ? [key[via] || via] : (c.idLabels || []).filter(id => !fnLabel || fnLabel.has(id)); };
   return { of, fns };
 }
 
 /**
  * The functions on a board, for Toewijzing: its open intake lists (also while still empty) and its named labels
- * that have cards, each with the number of cards (Informatie not counted).
+ * that have cards (on a board with intake lists only those that still have a campaign), each with the number of
+ * cards (Informatie not counted). links: the board's Trello links.
  */
-export function boardFunctions(bd) {
+export function boardFunctions(bd, links = []) {
   const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
-  const { of, fns } = functions(bd), n = {};
+  const { of, fns } = functions(bd, links), n = {};
   for (const c of bd.cards || []) if (stg[c.idList] !== 'info') for (const k of new Set(of(c))) n[k] = (n[k] || 0) + 1;
   const out = fns.map(f => ({ ...f, cards: n[f.id] || 0 }));
   for (const l of bd.labels || []) if (l.name && n[l.id] && !out.some(f => f.id === l.id)) out.push({ id: l.id, name: l.name, labelId: l.id, listId: null, cards: n[l.id] });
   return out;
 }
 
-/** How many candidates (Informatie not counted) have no function: no intake list and no label. Trello test page. */
+/**
+ * How many candidates (Informatie not counted) have no function: no intake list and no label (on a board with intake
+ * lists: no intake list, and no label of one). Trello test page.
+ */
 export function withoutFunction(bd) {
   const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
   const { of } = functions(bd);
@@ -60,11 +73,12 @@ export function withoutFunction(bd) {
  * from the server: a ‘Geen gehoor’ or ‘TBA afspraak’, or moved on from Nieuw or Contactpoging), whatever week they
  * applied in; live, the open cards in Nieuw and Contactpoging now, and gebeld: those of them that got a ‘Geen gehoor’
  * or ‘TBA afspraak’ today (geenGehoor, from the server), which are off today's call list until midnight. A label without cards has no key.
+ * links: the board's Trello links (see functions).
  */
-export function boardStats(bd, now = Date.now()) {
+export function boardStats(bd, now = Date.now(), links = []) {
   const stg = {}; (bd.lists || []).forEach(l => { stg[l.id] = stageOf(l.name); });
   const today = new Date(now).setHours(0, 0, 0, 0), calledToday = c => !!c.geenGehoor && Date.parse(c.geenGehoor) >= today;
-  const fnsOf = functions(bd).of;
+  const fnsOf = functions(bd, links).of;
   const cfs = bd.customFields || [], rf = cfs.find(f => /reden\s*afgewezen/i.test(f.name)), sd = cfs.find(f => /sollicitatiedatum/i.test(f.name)), ropt = {};
   ((rf && rf.options) || []).forEach(o => { ropt[o.id] = o.value && o.value.text; });
   const out = {};

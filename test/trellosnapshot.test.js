@@ -10,9 +10,9 @@ import { trelloRouter } from '../server/trello.js';
 import { createTrelloSnapshot } from '../server/trelloSnapshot.js';
 import { fileDocs } from '../server/jsonfile.js';
 import { CUR } from '../src/lib/weeks.js';
-import { board, BOARD_ID, CARD } from './trello-fixture.js';
+import { board, intakeBoard, BOARD_ID, CARD, SPOED, IN, INTAKE_CARD } from './trello-fixture.js';
 
-const OTHER_BOARD = 'b0a4d0000000000000000002';
+const OTHER_BOARD = 'b0a4d0000000000000000002', INTAKE_BOARD = 'b0a4d0000000000000000003';
 const realFetch = globalThis.fetch;
 let openBoards = [{ id: BOARD_ID, name: 'Hotel Zee', dateLastActivity: new Date().toISOString() }];
 globalThis.fetch = async (url, opts) => {
@@ -20,6 +20,10 @@ globalThis.fetch = async (url, opts) => {
   if (u.host !== 'api.trello.com') return realFetch(url, opts);
   if (u.pathname === '/1/members/me/boards') return Response.json(openBoards);
   if (u.pathname === `/1/boards/${BOARD_ID}`) return Response.json(board());
+  if (u.pathname === `/1/boards/${INTAKE_BOARD}`) {
+    const bd = intakeBoard(), afwas = { id: INTAKE_CARD.inKok.replace(/.$/, 'a'), idList: IN.afwas, idLabels: [], closed: false, customFieldItems: [] };
+    return Response.json({ ...bd, id: INTAKE_BOARD, cards: [...bd.cards, afwas] });
+  }
   return new Response('not found', { status: 404 });
 };
 
@@ -32,9 +36,9 @@ after(async () => {
 });
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'htcm-snapshot-')); dirs.push(d); return d; };
 
-/** The Trello proxy with a snapshot in dir, as server/app.js sets it up on Render. */
-async function serve(dir) {
-  const docs = fileDocs(dir), router = trelloRouter(() => ({ key: 'k', token: 't' }), { snapshot: createTrelloSnapshot(docs) });
+/** The Trello proxy with a snapshot in dir, as server/app.js sets it up on Render. links: the campaigns of a board. */
+async function serve(dir, links = () => []) {
+  const docs = fileDocs(dir), router = trelloRouter(() => ({ key: 'k', token: 't' }), { snapshot: createTrelloSnapshot(docs), links });
   const server = await new Promise(ok => { const s = express().use('/api/trello', router).listen(0, () => ok(s)); });
   servers.add(server);
   const base = `http://127.0.0.1:${server.address().port}/api/trello`;
@@ -55,6 +59,16 @@ test('a board loaded through the proxy is there for the next login, also after a
   const b = await serve(dir);
   assert.deepEqual((await b.get('/snapshot')).boards, snap);
   await b.stop();
+});
+
+test('the snapshot counts a campaign moved to an intake list as the app does: under its own key', async () => {
+  const moved = { id: 't-s', boardId: INTAKE_BOARD, labelId: SPOED, joinList: IN.afwas, vac: 'Afwas', rec: 'Kim' };
+  const a = await serve(tmp(), id => (id === INTAKE_BOARD ? [moved] : []));
+  await a.get(`/boards/${INTAKE_BOARD}`);
+  const stats = (await a.get('/snapshot')).boards[INTAKE_BOARD].stats;
+  assert.ok(stats[SPOED], 'the campaign\'s key');
+  assert.equal(stats[IN.afwas], undefined, 'not the intake list\'s own');
+  await a.stop();
 });
 
 test('the stored snapshot has no cards, pipeline or rejection reasons, and no daily backups', async () => {

@@ -112,8 +112,8 @@ export default function TrelloTestView({ v, tget }) {
               <Check ok={an.has('contact')} warn>Lijst “Contactpoging”</Check>
               <Check ok={!!an.sd} warn sub={an.sd ? 'week van sollicitatie' : 'ontbreekt: de aanmaakdatum van de kaart wordt gebruikt'}>Veld “Sollicitatiedatum”</Check>
               <Check ok={!!an.rf} warn sub={an.rf ? `${(an.rf.options || []).length} redenen` : 'ontbreekt: geen afwijsredenen in de monitor'}>Veld “Reden afgewezen”</Check>
-              <Check ok={an.fns.length > 0} warn sub={an.fns.length ? `${[an.nCol && `${an.nCol} uit kolommen “Nieuwe Sollicitant | …”`, an.nLab && `${an.nLab} uit labels`].filter(Boolean).join(', ')}; elk een eigen campagne` : 'geen kolommen “Nieuwe Sollicitant | …” en geen labels: het hele bord wordt één campagne'}>Functies</Check>
-              {an.fns.length ? <Check ok={!an.loose} warn sub={an.loose ? 'niet binnengekomen via een kolom “Nieuwe Sollicitant | …” en zonder label: ze tellen alleen mee voor de klant als geheel' : 'elke kandidaat hoort bij een functie'}>{an.loose ? `${an.loose} ${an.loose === 1 ? 'kandidaat' : 'kandidaten'} zonder functie` : 'Kandidaten zonder functie'}</Check> : null}
+              <Check ok={an.fns.length > 0} warn sub={an.fns.length ? `${[an.nCol && `${an.nCol} uit kolommen “Nieuwe Sollicitant | …”`, an.nLab && `${an.nLab} uit labels`].filter(Boolean).join(', ')}; elk een eigen campagne${an.nCol ? '; labels tellen op dit bord alleen mee als er een kolom met dezelfde naam is' : ''}` : 'geen kolommen “Nieuwe Sollicitant | …” en geen labels: het hele bord wordt één campagne'}>Functies</Check>
+              {an.fns.length ? <Check ok={!an.loose} warn sub={an.loose ? `niet binnengekomen via een kolom “Nieuwe Sollicitant | …”${an.nCol ? '' : ' en zonder label'}: ze tellen alleen mee voor de klant als geheel` : 'elke kandidaat hoort bij een functie'}>{an.loose ? `${an.loose} ${an.loose === 1 ? 'kandidaat' : 'kandidaten'} zonder functie` : 'Kandidaten zonder functie'}</Check> : null}
             </div>
             <div>
               <div style={{ ...eyebrow, marginBottom: '6px' }}>Lijsten · {an.total} kandidaten</div>

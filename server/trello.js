@@ -70,9 +70,10 @@ export async function testTrello(creds) {
  * @param o.snapshot  createTrelloSnapshot (trelloSnapshot.js): the home-screen numbers of every board loaded
  * @param o.intake    createTrelloIntake (trelloIntake.js): the intake list every card came in through
  * @param o.linked    () => Set of the board ids linked in Toewijzing, for refresh()
+ * @param o.links     id => the Trello links (campaigns) of a board, so the snapshot counts its functions as the app does
  * @param o.now       the clock (tests)
  */
-export function trelloRouter(getCreds, { snapshot = null, intake = null, linked = () => new Set(), now = Date.now } = {}) {
+export function trelloRouter(getCreds, { snapshot = null, intake = null, linked = () => new Set(), links = () => [], now = Date.now } = {}) {
   const cache = new Map(); // url -> { at, body } or { pending }: /members/me and the list of boards
   const boards = new Map(); // board id -> { at, activity, body }: its last load
   const loading = new Map(); // board id -> the load from Trello under way
@@ -156,7 +157,7 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
       if (r.status !== 200) return r;
       const bd = minimise(JSON.parse(r.body));
       if (intake) { const moves = await history(id); if (g === gen) keep('kolomgeheugen', () => intake.update(id, bd, moves, t)); }
-      if (snapshot && g === gen) keep('snapshot', () => snapshot.board(id, bd, t));
+      if (snapshot && g === gen) keep('snapshot', () => snapshot.board(id, bd, t, links(id)));
       const body = JSON.stringify(bd);
       if (g === gen) boards.set(id, { at: t, activity: seen, body });
       return { status: 200, body, fresh: true };

@@ -17,7 +17,7 @@ export default function AssignView({ v }) {
         <div>
           <div style={eyebrow}>Beheer</div>
           <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Toewijzing</h1>
-          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '640px', textWrap: 'pretty' }}>Elk Trello-bord is een klant. Elke kolom ‘Nieuwe Sollicitant | functie’ en elk label is een functie, met een eigen campagne voor de feedback van recruiter en klant. Wijs per klant een recruiter en een Recruitment Marketeer toe: zij volgen alle functies. Nieuwe borden en functies verschijnen hier vanzelf. Vink meerdere klanten aan om ze in één keer toe te wijzen.</div>
+          <div style={{ marginTop: '8px', color: '#5C5C5A', fontSize: '15px', maxWidth: '640px', textWrap: 'pretty' }}>Elk Trello-bord is een klant. Elke kolom ‘Nieuwe Sollicitant | functie’ is een functie (op een bord zonder zulke kolommen: elk label), met een eigen campagne voor de feedback van recruiter en klant. Wijs per klant een recruiter en een Recruitment Marketeer toe: zij volgen alle functies. Nieuwe borden en functies verschijnen hier vanzelf. Vink meerdere klanten aan om ze in één keer toe te wijzen.</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#5C5C5A' }}><span style={{ width: '7px', height: '7px', borderRadius: '50%', background: asg.syncDot }} />{asg.syncText}</div>
       </header>
@@ -77,7 +77,7 @@ export default function AssignView({ v }) {
                   <select value={r.mkt ?? ''} onChange={r.onMkt} disabled={r.ign} aria-label={`Recruitment Marketeer voor ${r.name}`} style={{ ...sel, border: `1px solid ${r.mktBorder}` }}>
                     {r.mktOpts.map((o, j) => <option key={j} value={o.v}>{o.l}</option>)}
                   </select>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>{r.addText ? <button onClick={r.add} title="Nieuwe functies toevoegen, met dezelfde recruiter" style={{ ...textBtn, color: '#1B1B63', fontWeight: '600' }}>{r.addText}</button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>{r.addText ? <button onClick={r.add} title={r.addTitle} style={{ ...textBtn, color: '#1B1B63', fontWeight: '600' }}>{r.addText}</button>
                     : r.canIgnore ? <button onClick={r.ignore} title="Dit bord is geen klant" style={{ ...textBtn, color: '#5C5C5A' }}>Geen klant</button>
                     : r.ign ? <button onClick={r.restore} style={{ ...textBtn, color: '#1B1B63' }}>Herstel</button> : null}</div>
                 </div>
@@ -86,7 +86,7 @@ export default function AssignView({ v }) {
                     {r.fnRows.map((f, j) => <div key={j} style={{ display: 'flex', alignItems: 'baseline', gap: '6px 12px', flexWrap: 'wrap', padding: '7px 0', borderTop: '1px solid #EEEAE5' }}>
                         <span style={{ fontWeight: '600', color: f.fg }}>{f.name}</span>
                         <span style={{ color: '#8C8C8A' }}>{f.meta}</span>
-                        <span style={{ marginLeft: 'auto', display: 'flex', gap: '16px' }}>{f.acts.map((a, k) => <button key={k} onClick={a.onClick} style={{ ...textBtn, color: a.strong ? '#1B1B63' : '#5C5C5A', fontWeight: a.strong ? '600' : '500' }}>{a.label}</button>)}</span>
+                        <span style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '6px 16px' }}>{f.acts.map((a, k) => <button key={k} onClick={a.onClick} style={{ ...textBtn, color: a.strong ? '#1B1B63' : '#5C5C5A', fontWeight: a.strong ? '600' : '500' }}>{a.label}</button>)}</span>
                       </div>)}
                     {r.split ? <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px 12px', flexWrap: 'wrap', padding: '7px 0', borderTop: '1px solid #EEEAE5' }}>
                         <span style={{ color: '#5C5C5A' }}>{r.split.text}</span>

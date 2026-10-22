@@ -100,7 +100,12 @@ have *Eigen klanten bekijken* instead, see the last point)
   feedback). Assign a recruiter and a Recruitment Marketeer per client; they cover all its functions. New boards and
   functions show up here by themselves, a new intake list even while it is still empty. Tick several clients to
   assign them at once, mark a client inactive, set a board that isn't a client to *Geen klant* or a label or list that
-  isn't a function to *Geen functie*.
+  isn't a function to *Geen functie*. A client with several recruiters adds a new function with either of them. A
+  client linked as one campaign for the whole board shows its intake lists as *Nieuw*, with *Splitsen*. A
+  campaign whose function has no intake list any more (an older label on a board that has intake lists now, or an
+  archived list) shows *Geen kolom*: *Overzetten* moves it to one of the board's new intake lists (it keeps its
+  feedback, recruiter and Pauze, and takes the list's name), or stop it. Until then it keeps counting its label's
+  cards. Each of these puts the client under *Niet volledig toegewezen*.
 - **Trello-koppeling testen**: check the Trello setup against the conventions below.
 - Editing the health rules.
 - Setting the status of bugs and ideas (*Nieuw*, *Opgepakt*, *Opgelost*, *Doen we niet*) in the *Bug of idee
@@ -488,7 +493,9 @@ The monitor reads every board the Trello account can see. Each board is one clie
   - An **intake list** is where new candidates of one function come in: `Nieuwe Sollicitant | Kok` (also with `-`,
     `–` or `:`, and in any case). It counts as *Nieuw*. Clients add these themselves for a new function; see
     [Functions from intake lists](#functions-from-intake-lists).
-  - A **label** is a function too, for cards that didn't come in through an intake list.
+  - A **label** is a function too, for cards that didn't come in through an intake list. On a board with open
+    intake lists only together with an intake list of the same name, or while a campaign is still linked to it
+    (until it is moved to an intake list or stopped, see *Toewijzing*): other labels count for the client as a whole.
   - A board without either can be linked as a whole.
 - **Custom fields** (optional): `Sollicitatiedatum` (date; otherwise the card's creation date is used) and
   `Reden afgewezen` (dropdown). Other custom fields are dropped by the server.
@@ -511,6 +518,9 @@ A candidate keeps the function of the intake list they came in through, also aft
   last one counts.
 - An intake list and a label with the same name are one function, under the label (so a campaign linked to the label
   earlier keeps its feedback). A new intake list with the name of an archived one continues its function.
+- A campaign moved to an intake list in Toewijzing (*Overzetten*, `joinList` on the link) counts that list under its
+  own key, its label or archived list, so its feedback stays and the cards of its old label or list keep counting.
+  The app and the server snapshot both count with the board's links (`boardStats(bd, now, links)`).
 - When the history can't be read, the board still loads with what the server remembers, and catches up next time.
 - Older than the 12 weeks: a card that had already moved on and has no label counts only for the client as a whole.
 

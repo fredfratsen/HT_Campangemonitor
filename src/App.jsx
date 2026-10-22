@@ -12,6 +12,7 @@ import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } fro
 import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
 import { startHalt, waitsForAds, haltLabel, haltLine } from './lib/halt.js';
 import { ofPeople, pickPerson, NOBODY } from './lib/assignFilter.js';
+import { clientFunctions, isOpen, newFns, addWith } from './lib/assignFunctions.js';
 import { matchesQ } from './lib/queueSearch.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, daysTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
@@ -286,7 +287,7 @@ export default class App extends React.Component {
       while (i < list.length) {
         if (this._run !== run) return;
         const b = list[i++];
-        try { const bd = await this.tget(`/boards/${b.id}`); this._bd[b.id] = bd; this._st[b.id] = boardStats(bd); this._seen[b.id] = { activity: b.dateLastActivity, at: Date.now() }; }
+        try { const bd = await this.tget(`/boards/${b.id}`); this._bd[b.id] = bd; this._seen[b.id] = { activity: b.dateLastActivity, at: Date.now() }; }
         catch (e) { if (!quiet || !this._bd[b.id] || this._bd[b.id].error) this._bd[b.id] = { error: e.message }; }
         n++;
         if (n % 6 === 0 || n === total) this.setState({ boardData: { ...this._bd }, ...(quiet ? {} : { sync: { state: 'loading', done: n, total } }) }, () => this.rebuildLive());
@@ -325,7 +326,21 @@ export default class App extends React.Component {
     if (this._run === run) this.setState({ sync: { state: 'ok', at: new Date() } });
   }
   /** The campaigns of the Trello links, from the full boards or the snapshot (lib/boardStats.js). */
-  liveCampaigns(L = this.state.live) { return liveCampaigns(L, this._st || {}, this._quick || {}); }
+  liveCampaigns(L = this.state.live) { return liveCampaigns(L, this.boardNumbers(L), this._quick || {}); }
+  /**
+   * boardStats of every loaded board, counted with its Trello links (they decide which campaigns were moved to an
+   * intake list and which labels still count). Counted again when the board or those links change.
+   */
+  boardNumbers(L) {
+    const st = this._st || (this._st = {}), by = {}, out = {};
+    L.links.forEach(k => { (by[k.boardId] = by[k.boardId] || []).push(k); });
+    for (const [id, bd] of Object.entries(this._bd || {})) {
+      const links = by[id] || [], sig = links.map(k => `${linkKey(k)}>${k.joinList || ''}`).sort().join();
+      if (bd.cards && (!st[id] || st[id].bd !== bd || st[id].sig !== sig)) st[id] = { bd, sig, s: boardStats(bd, Date.now(), links) };
+      if (st[id]) out[id] = st[id].s;
+    }
+    return out;
+  }
   rebuildLive() {
     if (this.state.source !== 'trello') return;
     this._skipSync = true;
@@ -394,14 +409,15 @@ export default class App extends React.Component {
   mktOf(c) { const M = this.mkts(); return this.state.source === 'trello' ? ((this.state.live.mkt || {})[c.boardId] || '') : (this.state.mktDemo[c.client] ?? (M[Math.floor(rnd(c.client) * M.length)] || '')); }
   /** The campaigns of cs in Weekoverzicht, Campagnes and Feedback klant: a Recruitment Marketeer only sees their own clients. */
   visible(cs, me = this.me()) { return visibleCampaigns(cs, me, c => this.mktOf(c)); }
-  /** The functions on a loaded Trello board (lib/boardStats.js). null while the board is loading. */
-  boardFns(bd) { return bd && bd.cards ? boardFunctions(bd) : null; }
+  /** The functions on a loaded Trello board with its links (lib/boardStats.js). null while the board is loading. */
+  boardFns(bd, links) { return bd && bd.cards ? boardFunctions(bd, links) : null; }
   /**
-   * The clients in Toewijzing, each with its functions (fns): a campaign ('linked'), a function that has no campaign
-   * yet ('pending': it gets one with the client's recruiter) or one set to Geen functie ('ignored'). rec is a
-   * recruiter, '' (none yet), '__multi' (older links with different recruiters) or '__inactive'. whole: one campaign
-   * for the whole board (a board without functions, or linked that way earlier), with split: the functions it could be
-   * split into. Quiet: not linked and no activity in 30 days, only shown on request.
+   * The clients in Toewijzing, each with its functions (fns, see lib/assignFunctions.js): a campaign ('linked'; noCol
+   * when it misses its intake list), a function that has no campaign yet ('pending': it gets one with the client's
+   * recruiter) or one set to Geen functie ('ignored'). rec is a recruiter, '' (none yet), '__multi' (older links with
+   * different recruiters) or '__inactive'. whole: one campaign for the whole board (a board without functions, or
+   * linked that way earlier), with split: the functions it could be split into. cols: the board has intake lists,
+   * moveTo: the ones a campaign can be moved to. Quiet: not linked and no activity in 30 days, only shown on request.
    */
   assignItems() {
     const st = this.state, lim = Date.now() - 30 * 864e5;
@@ -411,13 +427,9 @@ export default class App extends React.Component {
       L.links.forEach(k => { (by[k.boardId] = by[k.boardId] || []).push(k); });
       return st.boardList.map(b => {
         const links = by[b.id] || [], recs = [...new Set(links.map(k => k.rec))], ts = new Date(b.dateLastActivity).getTime(), linked = links.length > 0;
-        const fns = this.boardFns(st.boardData[b.id]), whole = links.some(k => linkKey(k) === '*'), cardsOf = id => ((fns || []).find(f => f.id === id) || {}).cards;
-        // The whole-board campaign only gets a row of its own when it's on Pauze or stopped, to resume or activate it.
-        const own = links.filter(k => linkKey(k) !== '*' || k.halt).map(k => ({ key: k.id, name: k.vac, kind: 'linked', link: k, halt: k.halt, cards: cardsOf(linkKey(k)) }));
-        const free = (fns || []).filter(f => !links.some(k => linkKey(k) === f.id))
-          .map(f => ({ key: b.id + '|' + f.id, name: f.name, fnId: f.id, labelId: f.labelId, cards: f.cards, kind: L.ignored[b.id + '|' + f.id] ? 'ignored' : 'pending' }));
+        const fns = this.boardFns(st.boardData[b.id], links);
         return { key: b.id, board: b, name: b.name, ts, last: agoTxt(b.dateLastActivity), linked, recs, ign: !!L.ignored[b.id], quiet: !linked && ts < lim, loaded: !!fns,
-          whole, fns: whole ? own : [...own, ...free], split: whole ? free.filter(f => f.kind === 'pending') : [], rec: recOf(recs, ina[b.id]), mkt: mk[b.id] || '' };
+          ...clientFunctions(b.id, links, fns, L.ignored), rec: recOf(recs, ina[b.id]), mkt: mk[b.id] || '' };
       });
     }
     // Demo: the clients of the demo campaigns, plus labels "found in Trello": new functions, new boards and boards
@@ -445,8 +457,9 @@ export default class App extends React.Component {
     const all = this.assignItems(), items = all.filter(x => !x.ign), current = items.filter(x => !x.quiet), ignored = all.filter(x => x.ign);
     const vis = st.trShowInactive ? items : current, quiet = items.length - current.length;
     const pendingOf = x => x.fns.filter(f => f.kind === 'pending');
-    // Open: no recruiter or marketeer yet, or a function without a campaign. Niet actief counts as a recruiter choice.
-    const isOpen = x => !x.rec || !x.mkt || pendingOf(x).length > 0, open = current.filter(isOpen).length;
+    // Open (lib/assignFunctions.js): no recruiter or marketeer yet, a function without a campaign, or a campaign that
+    // misses its intake list. Niet actief counts as a recruiter choice.
+    const open = current.filter(isOpen).length;
     // A recruiter and/or marketeer picked in the pills (lib/assignFilter.js) narrows the tabs and their counts too.
     const q = A.q.trim().toLowerCase(), who = A.who, mine = x => ofPeople(x, who), byWho = !!(who.rec || who.mkt), nMine = vis.filter(mine).length;
     const nameOf = v => v === '__inactive' ? 'Niet actief' : v, whoText = [who.rec, who.mkt].filter(Boolean).map(nameOf).join(' + ');
@@ -487,23 +500,31 @@ export default class App extends React.Component {
       rows: shown.map(x => {
         const ina = x.rec === '__inactive', on = !!sel[x.key], none = [{ v: '', l: 'Geen klant' }], exp = !!A.exp[x.key];
         const pend = pendingOf(x), linkedFns = x.fns.filter(f => f.kind === 'linked'), oneRec = x.linked && !!x.rec && x.rec !== '__multi';
+        const fresh = newFns(x), lost = x.fns.filter(f => f.noCol), withRec = addWith(x), expand = () => setA({ exp: { ...A.exp, [x.key]: true } });
         const list = fs => fs.map(f => f.name + (f.halt ? ` (${HALT[f.halt.kind].done})` : '')).join(', ');
+        const nFns = n => `+ ${n} ${n === 1 ? 'functie' : 'functies'}`;
+        // The button in the row: first the campaigns that miss their intake list (Overzetten or Stoppen, in the
+        // functions below), then splitting a whole-board campaign into the intake lists, then the new functions.
+        const btn = lost.length ? { text: 'Overzetten', title: 'Een campagne heeft geen kolom meer in Trello: zet hem over naar een kolom of stop hem', onClick: expand }
+          : x.whole && x.cols && x.split.length && oneRec ? { text: 'Splitsen', title: 'Per functie splitsen: één campagne per kolom, met dezelfde recruiter', onClick: () => this.splitBoard(x) }
+          : pend.length && oneRec ? { text: nFns(pend.length), title: 'Nieuwe functies toevoegen, met dezelfde recruiter', onClick: () => this.addFunctions(x, pend) }
+          : pend.length && withRec.length ? { text: nFns(pend.length), title: 'Kies per functie met welke recruiter', onClick: expand } : null;
         return { key: x.key, name: x.name, last: x.last, op: x.ign ? 0.55 : 1, bg: on ? '#FFF8E0' : 'transparent',
           funcs: ina ? 'Niet actief · alleen Recruitment Marketeer' : x.whole ? 'Alle functies · één campagne' : x.linked ? list(linkedFns)
             : ['Nog niet gekoppeld', x.loaded ? list(pend) : 'laden…'].filter(Boolean).join(' · '),
-          newText: x.linked && pend.length ? `Nieuw: ${list(pend)}` : '',
+          newText: [x.linked && fresh.length ? `Nieuw: ${list(fresh)}` : '', lost.length ? `Geen kolom: ${list(lost)}` : ''].filter(Boolean).join(' · '),
           canExpand: !x.ign && (x.fns.length > 0 || x.split.length > 0), expanded: exp, toggleExp: () => setA({ exp: { ...A.exp, [x.key]: !exp } }),
           note: x.linked ? '' : 'Kies een recruiter: elke functie wordt een eigen campagne, met dezelfde recruiter.',
-          fnRows: x.fns.map(f => f.kind === 'linked' ? this.linkedRow(x, f, kaarten(f.cards))
+          fnRows: x.fns.map(f => f.kind === 'linked' ? (f.noCol ? this.lostRow(x, f, kaarten(f.cards)) : this.linkedRow(x, f, kaarten(f.cards)))
             : f.kind === 'pending' ? { name: f.name, meta: `Nog geen campagne${kaarten(f.cards)}`, fg: '#B45309',
-              acts: [...(oneRec ? [{ label: `Toevoegen · ${ina ? 'Niet actief' : x.rec}`, strong: true, onClick: () => this.addFunctions(x, [f]) }] : []), { label: 'Geen functie', onClick: () => this.ignoreFunction(x, f, true) }] }
+              acts: [...withRec.map(r => ({ label: `Toevoegen · ${r === '__inactive' ? 'Niet actief' : r}`, strong: true, onClick: () => this.addFunctions(x, [f], r) })), { label: 'Geen functie', onClick: () => this.ignoreFunction(x, f, true) }] }
             : { name: f.name, meta: 'Geen functie, geen campagne', fg: '#8C8C8A', acts: [{ label: 'Herstel', onClick: () => this.ignoreFunction(x, f, false) }] }),
           split: x.split.length && oneRec ? { text: `Eén campagne voor het hele bord. In Trello staan de functies ${list(x.split)}.`, onClick: () => this.splitBoard(x) } : null,
           canPick: !x.ign, picked: on, togglePick: () => setSel([x], !on),
           ign: x.ign, rec: x.ign ? '' : x.rec, mkt: x.ign ? '' : x.mkt, recOpts: x.ign ? none : opt(this.recs(), x.rec, true), mktOpts: x.ign ? none : opt(this.mkts(), x.mkt),
           recBorder: x.rec || x.ign ? '#E4E1DE' : '#F9A800', mktBorder: x.mkt || x.ign ? '#E4E1DE' : '#F9A800',
           onRec: e => this.assignFlash(this.assign([x], { rec: e.target.value })), onMkt: e => this.assign([x], { mkt: e.target.value }),
-          addText: oneRec && pend.length ? `+ ${pend.length} ${pend.length === 1 ? 'functie' : 'functies'}` : '', add: () => this.addFunctions(x, pend),
+          addText: btn ? btn.text : '', addTitle: btn ? btn.title : '', add: btn ? btn.onClick : null,
           canIgnore: !x.ign && !x.linked, ignore: () => this.ignoreClients([x], true), restore: () => this.ignoreClients([x], false) };
       }),
       bulk: {
@@ -604,11 +625,12 @@ export default class App extends React.Component {
       weeks: [{ w: CUR, leads: f.cards, q: null, rec: '', klant: '', note: '', needsAction: false, at: '', tr: { nieuw: f.cards, gescreend: 0, voorgesteld: 0, gesprek: 0, geplaatst: 0, reasons: {} } }] }));
   }
   /**
-   * New functions of an assigned client get a campaign, with the client's recruiter (none on Niet actief), on Pauze.
-   * The marketeer hears of them now, the recruiter once they're resumed (server/announce.js).
+   * New functions of an assigned client get a campaign, with the client's recruiter (none on Niet actief), or with
+   * recruiter withRec when it has several, on Pauze. The marketeer hears of them now, the recruiter once they're
+   * resumed (server/announce.js).
    */
-  addFunctions(x, fns) {
-    const off = x.rec === '__inactive', rec = off ? '' : x.rec;
+  addFunctions(x, fns, withRec = x.rec) {
+    const off = withRec === '__inactive', rec = off ? '' : withRec;
     this.tellMarketeers([{ client: x.name, to: x.mkt, fns: fns.map(f => f.name), isNew: false }]);
     if (this.state.source === 'trello') this.setState(s => ({ live: { ...s.live, links: [...s.live.links, ...this.newLinks(x, fns, rec)] } }), () => this.rebuildLive());
     else this.setState(s => ({ campaigns: [...s.campaigns, ...this.newCampaigns(x, fns, rec, off)] }));
@@ -620,6 +642,33 @@ export default class App extends React.Component {
     if (!f.halt) return { name: f.name, meta: `Campagne${cards}`, fg: '#1D1D1B', acts: [stop] };
     return { name: f.name, meta: haltLine(f.halt) + cards, fg: '#8C8C8A',
       acts: f.halt.kind === 'pauze' ? [{ label: 'Hervatten', strong: true, onClick: () => this.setHalt(c, null) }, stop] : [{ label: 'Opnieuw activeren', strong: true, onClick: () => this.setHalt(c, null) }] };
+  }
+  /**
+   * The row of campaign f of client x that misses its intake list (an older label, or an archived list): Overzetten
+   * to each new intake list of the board, and Stoppen (or Hervatten) as for any campaign.
+   */
+  lostRow(x, f, cards) {
+    const row = this.linkedRow(x, f, cards), what = f.link.labelId ? 'Label zonder kolom' : 'Kolom gearchiveerd';
+    const hint = x.moveTo.length ? '' : ' · maak de kolom in Trello of stop de campagne';
+    return { ...row, fg: '#B45309', meta: `${what}${f.halt ? ` · ${haltLine(f.halt)}` : ''}${hint}${cards}`,
+      acts: [...x.moveTo.map(t => ({ label: `Overzetten naar ${t.name}`, strong: true, onClick: () => this.askMove(x, f, t) })), ...row.acts.map(a => ({ ...a, strong: false }))] };
+  }
+  /**
+   * Overzetten, after "Weet je het zeker?": campaign f of client x continues in intake list t (joinList). It keeps
+   * its id, so its feedback, recruiter and Pauze, and takes the name of t. The cards of its old label or list keep
+   * counting for it (lib/boardStats.js).
+   */
+  askMove(x, f, t) {
+    const name = `${x.name} – ${f.name}`, renamed = t.name !== f.name ? ` en heet voortaan ${t.name}` : '';
+    this.setState({ confirm: {
+      title: 'Overzetten naar een kolom?', okLabel: 'Overzetten',
+      text: `${name} gaat verder in de kolom ‘Nieuwe Sollicitant | ${t.name}’${renamed}.`,
+      note: 'De campagne houdt zijn feedback, recruiter en status. Nieuwe kandidaten uit die kolom tellen voortaan voor deze campagne, de kaarten van eerder ook.',
+      onOk: () => {
+        this.setState(s => ({ confirm: null, live: { ...s.live, links: s.live.links.map(k => k.id === f.link.id ? { ...k, joinList: t.listId, labelName: t.name, vac: t.name } : k) } }), () => this.rebuildLive());
+        this.flash(`${name} overgezet naar ${t.name}`);
+      }
+    } });
   }
   /** Can `me` put campaign c on Pauze, resume or stop it? On their own clients (campaigns.pause), all with campaigns.all. */
   canHalt(c, me = this.me()) { return me.rights.has('campaigns.pause') && (me.rights.has('campaigns.all') || this.mktOf(c) === me.name); }
