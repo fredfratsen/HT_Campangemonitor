@@ -125,12 +125,14 @@ export default function WeekView({ v }) {
                   <div style={{ minWidth: '0' }}>
                     <span style={{ fontWeight: '600' }}>{c.client}</span>
                     <span style={{ color: '#5C5C5A' }}> – {c.vac}</span>
+                    {c.ctlTag ? <div style={{ fontSize: '12px', fontWeight: c.ctlDue ? '600' : '400', color: c.ctlDue ? '#1B1B63' : '#8C8C8A' }}>{c.ctlDue ? c.ctlTag : c.ctlTag[0].toUpperCase() + c.ctlTag.slice(1)}</div> : null}
                   </div>
                   <div style={{ color: '#3C3C3A' }}>{c.cur.leads} kandidaten</div>
                   <div style={{ fontWeight: '600', color: c.qFg }}>{c.qText}</div>
                   <div style={{ color: '#5C5C5A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.quote}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className={g.canCheck ? 'week-acts' : undefined} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {g.canCheck ? <button onClick={e => { e.stopPropagation(); c.check(); }} aria-label={`${c.client} – ${c.vac} op Check zetten`} style={{ border: '1.5px solid #1A7A4A', background: '#FFFFFF', color: '#1A7A4A', borderRadius: '6px', padding: '4px 12px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Check</button> : null}
+                    {g.canCheck ? <button onClick={e => { e.stopPropagation(); c.askCtl(); }} aria-label={`${c.client} – ${c.vac}: controle in x dagen`} style={{ border: '1.5px solid #1B1B63', background: '#FFFFFF', color: '#1B1B63', borderRadius: '6px', padding: '4px 10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap' }}>Controle in x dagen</button> : null}
                     <NewTabLink href={c.href} label={`${c.client} – ${c.vac} openen in een nieuw tabblad`} />
                   </div>
                 </div>)}

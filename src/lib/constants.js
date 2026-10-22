@@ -67,8 +67,9 @@ export function stageOf(name) {
 }
 // Trello card ids start with the creation time (seconds, hex).
 export const cardTs = id => parseInt(id.slice(0, 8), 16) * 1000;
-// Week fields written by the marketeer: monitor status (see monitor() in lib/helpers.js) and the update for the recruiter.
-export const MON_FIELDS = ['mon', 'monBy', 'monSig', 'upd', 'updBy'];
+// Week fields written by the marketeer: monitor status (see monitor() in lib/helpers.js), with Controle in x dagen
+// (lib/controle.js), and the update for the recruiter.
+export const MON_FIELDS = ['mon', 'monBy', 'monSig', 'ctl', 'ctlFrom', 'ctlAct', 'upd', 'updBy'];
 
 export const REASONS = ['Te weinig ervaring', 'Afstand', 'Taalbarrière', 'Geen interesse', 'Geen reactie', 'No show', 'Foutieve contactgegevens', 'Ander aanbod', 'Salaris te laag', 'Overgekwalificeerd', 'Overig'];
 
@@ -81,6 +82,7 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 36, date: '22 okt', tag: 'Nieuw', title: 'Controle in x dagen', text: 'Pas je iets aan in een campagne, dan kies je zelf over hoeveel dagen hij weer omhoog komt, om te zien hoe het uitpakt. In het weekoverzicht staat bij Wekelijkse controle naast Check de knop Controle in x dagen: kies 1, 2 of 3 dagen, of typ zelf een aantal. Bij Acties & campagnewijzigingen op de campagnekaart kies je het meteen bij de wijziging. Tot die dag staat de campagne op Check, ook over de wekelijkse controle heen; een nieuw signaal haalt hem eerder naar Actie nodig. Op de dag zelf staat hij bovenaan bij Wekelijkse controle, met waarvoor de controle was, zoals ‘Controle · Budget aangepast op 22 okt’.' },
   { id: 35, date: '22 okt', tag: 'Verbeterd', title: 'Ontbrekende feedback is geen signaal meer', text: 'Heeft een recruiter zijn wekelijkse feedback nog niet ingevuld, dan komt de campagne daardoor niet meer op Actie nodig; de regel is uit de Health-regels. Recruitment Marketeers zien alleen nog de feedback die gegeven is: geen telling, geen lijst, geen ‘Ontbreekt’ en geen herinneringen meer. De teamlead ziet het nog wel, in een dichtgeklapte balk Feedback recruiters onder de monitorstatus in het weekoverzicht. Klap je hem open, dan zie je per recruiter welke campagnes nog open staan, deze week en van vorige week, met de knop Herinnering sturen.' },
   { id: 34, date: '22 okt', tag: 'Verbeterd', title: 'Oude functies overzetten naar kolommen', text: 'Werkt een klant in Trello met kolommen ‘Nieuwe Sollicitant | functie’, dan telt een label daar niet meer als eigen functie, alleen nog samen met een kolom van dezelfde naam. Een campagne die nog aan een oud label hangt, staat in Toewijzing onder Niet volledig toegewezen, met ‘Geen kolom’. Klap de klant open en kies Overzetten naar de kolom waar de kandidaten nu binnenkomen: de campagne houdt zijn feedback, recruiter en status, krijgt de naam van de kolom, en de kaarten met het oude label tellen gewoon mee. Of stop hem. Een klant met één campagne voor het hele bord laat nu zien welke kolommen nieuw zijn, met de knop Splitsen. En heeft een klant meerdere recruiters, dan kies je bij een nieuwe functie met wie je hem toevoegt.' },
   { id: 33, date: '21 okt', tag: 'Verbeterd', title: 'TBA afspraak telt af in Live campagnes', text: 'Neemt een kandidaat op maar wil hij later teruggebeld worden, en zet je in Trello een ‘TBA afspraak’, dan telt de kaart de rest van de dag niet meer mee bij Contactpogingen, Nieuw bellen en Vandaag te bellen, net als bij ‘Geen gehoor’. Dat geldt voor elke reactie waar TBA in staat, ook als je het zelf typt. Onder Contactpogingen telt hij mee bij hoeveel je vandaag gebeld hebt, en die week vraagt om feedback. Na middernacht telt de kaart weer mee, als hij dan nog in Contactpoging of Nieuw staat. Het kan tot 5 minuten duren voordat het getal zakt.' },

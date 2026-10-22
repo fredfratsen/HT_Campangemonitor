@@ -15,6 +15,7 @@ import { ofPeople, pickPerson, NOBODY } from './lib/assignFilter.js';
 import { clientFunctions, isOpen, newFns, addWith } from './lib/assignFunctions.js';
 import { matchesQ } from './lib/queueSearch.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, daysTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
+import { monFields, ctlText, ctlDate, ctlDays, dayShort, CTL_MAX } from './lib/controle.js';
 import { build, ensureReasons, rollForward, seedAssign } from './lib/demoData.js';
 import { Sync, fromDocs } from './lib/sync.js';
 import { ROLES, LEVELS, RIGHT_KEYS, canViewAs, visibleCampaigns } from './lib/permissions.js';
@@ -39,6 +40,7 @@ import SidePanel from './views/SidePanel.jsx';
 import SettingsView from './views/settings/SettingsView.jsx';
 import DevView from './views/DevView.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
+import CtlDialog from './components/CtlDialog.jsx';
 
 // Per-browser settings (chosen data source, news read, "Bekijk als")
 const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as', ACTIE_VIEW_KEY = 'ht-cm-actie-view', LIVE_SORT_KEY = 'ht-cm-live-sort', FB_BAR_KEY = 'ht-cm-fb-bar';
@@ -75,11 +77,11 @@ export default class App extends React.Component {
       f: { q: '', status: 'all', sort: 'status', mineSort: 'leadsMost' },
       ci: { rec: 'all' }, ciKeep: [], ciQ: '', form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
-      act: { type: 'Advertentie', text: '', w: CUR }, ask: { to: '', text: '' }, reply: null, upd: null, fbBar: lsGet(FB_BAR_KEY, false),
+      act: { type: 'Advertentie', text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, reply: null, upd: null, fbBar: lsGet(FB_BAR_KEY, false),
       toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {}, who: NOBODY }, liveExp: {}, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
-      blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null
+      blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null, ctlDlg: null
     };
   }
 
@@ -931,7 +933,7 @@ export default class App extends React.Component {
     const ok = this.viewOk(nav.view), view = ok ? nav.view : this.homeView();
     if (!ok) this._navReplace = true; // for example a screen you no longer see after "Bekijk als"
     this.setState(s => ({ view, sel: nav.sel || s.sel, back: nav.back || s.back, navOpen: false,
-      ...(view === 'detail' ? { act: { ...s.act, text: '', w: CUR }, ask: { to: '', text: '' }, upd: null } : {}) }), () => window.scrollTo(0, nav.y || 0));
+      ...(view === 'detail' ? { act: { ...s.act, text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, upd: null } : {}) }), () => window.scrollTo(0, nav.y || 0));
     if (view === 'checkin') this.enterCheckin();
     if (view === 'klant') this.enterKlant();
   }
@@ -995,7 +997,7 @@ export default class App extends React.Component {
   }
 
   // ── Wekelijkse feedback recruiter ────────────────────────────────────
-  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR }, ask: { to: '', text: '' }, upd: null })); window.scrollTo(0, 0); }
+  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, upd: null })); window.scrollTo(0, 0); }
   flash(t) { this.setState({ toast: t }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2400); }
   /** The items { c, w, late, open } on Wekelijkse feedback recruiter: last week's open ones first (lib/checkin.js). */
   queue(st = this.state) {
@@ -1033,12 +1035,16 @@ export default class App extends React.Component {
       if (next) this.loadForm(next.c.id, next.w); else this.loadForm(f.id, f.w);
     });
   }
+  /** Records the campaign change in the form; with Controle in x dagen it also puts the campaign on Check until then. */
   addAction() {
-    const a = this.state.act;
+    const a = this.state.act, days = ctlDays(a.ctl), c = this.state.campaigns.find(x => x.id === this.state.sel);
     if (!a.text.trim()) { this.flash('Beschrijf eerst de wijziging'); return; }
-    const campaigns = this.state.campaigns.map(c => c.id !== this.state.sel ? c : { ...c, actions: [...c.actions, { id: c.id + 'a' + Date.now(), w: +a.w, type: a.type, text: a.text.trim() }] });
-    this.setState({ campaigns, act: { ...a, text: '' } });
-    this.flash('Campagnewijziging vastgelegd');
+    if (a.ctl !== '' && !days) { this.flash(`Kies voor de controle 1 tot ${CTL_MAX} dagen, of geen controle`); return; }
+    const id = c.id + 'a' + Date.now();
+    const campaigns = this.state.campaigns.map(x => x !== c ? x : { ...x, actions: [...x.actions, { id, w: +a.w, type: a.type, text: a.text.trim() }] });
+    this.setState({ campaigns, act: { ...a, text: '', ctl: '' } });
+    if (days) this.putMon(c, 'check', { days, act: id });
+    this.flash(`Campagnewijziging vastgelegd${days ? ` · controle ${dayShort(ctlDate(days))}` : ''}`);
   }
   /** Changes this week's entry of campaign id; fn(week, campaign) returns the fields to set. */
   setWeek(id, fn) {
@@ -1051,12 +1057,25 @@ export default class App extends React.Component {
   }
   /**
    * Monitor status for this week: 'check' (with the signals seen at that moment, see monitor()), 'klant', or
-   * 'open' to let the health rules decide again.
+   * 'open' to let the health rules decide again. With days it is Check with Controle in x dagen, for campaign change
+   * act if given; a plain Check keeps a controle whose day hasn't come yet (lib/controle.js monFields).
    */
-  setMon(c, mon) {
+  putMon(c, mon, { days, act } = {}) {
     const R = this.state.rules;
-    this.setWeek(c.id, (_, cc) => ({ mon, monBy: this.author(), monSig: mon === 'check' ? health(cc, R).reasons.map(r => r.k) : undefined }));
+    this.setWeek(c.id, (_, cc) => ({ ...monFields(cc, mon, health(cc, R).reasons.map(r => r.k), { days, act }), monBy: this.author() }));
+  }
+  setMon(c, mon) {
+    this.putMon(c, mon);
     this.flash(mon === 'open' ? 'De health-regels bepalen de status weer' : `${c.client} – ${c.vac} staat op ${MONITOR[mon].label}`);
+  }
+  /** Controle in x dagen from the Weekoverzicht: the dialog for campaign c, and saving it. */
+  askCtl(c) { this.setState({ ctlDlg: { id: c.id, title: `${c.client} – ${c.vac}`, days: '' } }); }
+  saveCtl() {
+    const dl = this.state.ctlDlg, days = dl ? ctlDays(dl.days) : 0, c = dl && this.state.campaigns.find(x => x.id === dl.id);
+    if (!days || !c) return;
+    this.setState({ ctlDlg: null });
+    this.putMon(c, 'check', { days });
+    this.flash(`${c.client} – ${c.vac} staat op Check · controle ${dayShort(ctlDate(days))}`);
   }
   /** Saves the update for the recruiter (this week) and lets the recruiter know under Meldingen. */
   saveUpd(c) {
@@ -1111,11 +1130,14 @@ export default class App extends React.Component {
     l8.forEach((w, i) => { if (w.q != null) pts.push(`${(l8.length > 1 ? i / (l8.length - 1) * 72 : 36).toFixed(1)},${(22 - (w.q - 1) / 9 * 20).toFixed(1)}`); });
     const l6 = ws.slice(-6), mx = Math.max(...l6.map(w => w.leads), 1);
     const lastFb = [...ws].reverse().find(w => w.q != null);
+    // Controle in x dagen (lib/controle.js): before its day "controle do 29 okt" with the check, on it what it was for.
+    const ctl = !H && m.ctl ? m.ctl : null, ctlT = ctl ? ctlText(ctl, c.actions) : '', withCtl = ctl ? ` · ${ctlT}` : '';
     return {
       id: c.id, client: c.client, vac: c.vac, rec: ina ? 'Niet actief' : c.rec, inactive: ina, start: c.start, startLabel: wl(c.start), cur, lvl: h.lvl,
       ms: m.s, msRank: H ? -1 : S.rank, monBy: m.by, statusLabel: H ? haltLabel(c.halt) : S.label, sFg: S.fg, sBg: S.bg, halt: c.halt || null, haltTag: H ? haltLabel(c.halt) : '',
-      monText: H ? haltLine(c.halt) : m.s === 'klant' ? `Sinds week ${wl(m.w)}${m.by ? ` · ${m.by}` : ''}` : m.s === 'check' ? `Gecheckt${m.by ? ` door ${m.by}` : ''}`
-        : m.s === 'goed' ? 'Geen signalen deze week' : m.stale ? `Nieuw signaal na de check van ${cur.monBy || 'de marketeer'}` : '',
+      monText: H ? haltLine(c.halt) : m.s === 'klant' ? `Sinds week ${wl(m.w)}${m.by ? ` · ${m.by}` : ''}` : m.s === 'check' ? `Gecheckt${m.by ? ` door ${m.by}` : ''}${withCtl}`
+        : ctl && ctl.due ? ctlT : m.s === 'goed' ? 'Geen signalen deze week' : m.stale ? `Nieuw signaal na de check van ${(ctl && ctl.by) || cur.monBy || 'de marketeer'}${withCtl}` : '',
+      ctl, ctlTag: ctlT, ctlDue: !!ctl && ctl.due,
       href: '#campagne=' + encodeURIComponent(c.id),
       reasons: H ? [] : h.reasons.map(r => ({ t: r.t, fg: STAT[r.l].fg, bg: STAT[r.l].bg })),
       missing, noFb, qText: noQ ? '—' : cur.q + '/10', qFg: qc(cur.q),
@@ -1134,7 +1156,7 @@ export default class App extends React.Component {
         : missing ? (lastFb ? `Nog geen feedback. Week ${wl(lastFb.w)}: ${lastFb.rec}` : 'Nog geen feedback')
         : open ? (lastFb ? `Week ${wl(lastFb.w)}: ${lastFb.rec || 'geen toelichting'}` : 'Nog geen recruiterfeedback') : (cur.rec || 'Geen toelichting'),
       hasQuote: true,
-      open: () => this.open(c.id), check: () => this.setMon(c, 'check')
+      open: () => this.open(c.id), check: () => this.setMon(c, 'check'), askCtl: () => this.askCtl(c)
     };
   }
 
@@ -1191,18 +1213,20 @@ export default class App extends React.Component {
     };
     const byPrio = (a, b) => (a.cur.q ?? 5.5) - (b.cur.q ?? 5.5);
     const bySeverity = (a, b) => b.lvl - a.lvl || byPrio(a, b);
-    // Campaigns without signals come up once a week as Wekelijkse controle; a Check button per row ticks them off.
+    // Campaigns without signals come up once a week as Wekelijkse controle; a Check button per row ticks them off, or
+    // Controle in x dagen ticks them off until that day. A controle whose day has come goes on top.
     // Actie nodig shows cards or, by choice (remembered in this browser), a list with one line per campaign.
+    const ctlFirst = (a, b) => b.ctlDue - a.ctlDue || bySeverity(a, b);
     const actieList = st.actieView === 'list';
     const actieViews = [['cards', 'Kaarten'], ['list', 'Lijst']].map(([k, label]) => {
       const on = st.actieView === k || (k === 'cards' && !actieList);
       return { label, on, bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#1D1D1B' : '#5C5C5A', sh: on ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => { lsSet(ACTIE_VIEW_KEY, k); this.setState({ actieView: k }); } };
     });
     const groups = [
-      { k: 'actie', sub: 'Bekijken en bijsturen deze week' }, { k: 'goed', sub: 'Geen signalen. Even nakijken en afvinken' },
+      { k: 'actie', sub: 'Bekijken en bijsturen deze week' }, { k: 'goed', sub: 'Geen signalen of een controle na een wijziging. Even nakijken en afvinken' },
       { k: 'klant', sub: 'Wacht op input van de klant, zoals saldo of foto’s' }, { k: 'check', sub: 'Beoordeeld deze week' }
     ].map(g => {
-      const items = D.filter(d => d.ms === g.k).sort(bySeverity), compact = g.k === 'goed' || g.k === 'check', asList = g.k === 'actie' && actieList, any = items.length > 0;
+      const items = D.filter(d => d.ms === g.k).sort(g.k === 'goed' ? ctlFirst : bySeverity), compact = g.k === 'goed' || g.k === 'check', asList = g.k === 'actie' && actieList, any = items.length > 0;
       return { label: MONITOR[g.k].label, fg: MONITOR[g.k].fg, n: items.length, sub: g.sub, items, cards: !compact && !asList && any, rows: compact && any, list: asList && any,
         views: g.k === 'actie' ? actieViews : null, canCheck: g.k === 'goed' && can('campaigns.monitor') };
     }).filter(g => g.n > 0);
@@ -1316,7 +1340,7 @@ export default class App extends React.Component {
         canFill: canFb && fbOpenWeek(w.w) && !off, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !off, addKlant: () => this.startKlant(selC.id),
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
         upd: w.upd || '', hasUpd: !!w.upd, updBy: w.updBy || 'marketeer',
-        monTag: MONITOR[w.mon] ? `${MONITOR[w.mon].label}${w.monBy ? ` · ${w.monBy}` : ''}` : '', monFg: MONITOR[w.mon] ? MONITOR[w.mon].fg : '', monBg: MONITOR[w.mon] ? MONITOR[w.mon].bg : '',
+        monTag: MONITOR[w.mon] ? `${MONITOR[w.mon].label}${w.monBy ? ` · ${w.monBy}` : ''}${w.ctl ? ` · controle ${dayShort(w.ctl)}` : ''}` : '', monFg: MONITOR[w.mon] ? MONITOR[w.mon].fg : '', monBg: MONITOR[w.mon] ? MONITOR[w.mon].bg : '',
         trText: selC.quick ? 'laden…' : `${w.tr.voorgesteld} voorgesteld · ${w.tr.gesprek} ${w.tr.gesprek === 1 ? 'gesprek' : 'gesprekken'}${w.tr.geplaatst ? ` · ${w.tr.geplaatst} geplaatst` : ''}`,
         reasons: reasonList(w.tr.reasons), hasReasons: reasonList(w.tr.reasons).length > 0, rejN: Object.values(w.tr.reasons || {}).reduce((a, b) => a + b, 0),
         acts: selC.actions.filter(a => a.w === w.w), fill: () => this.startCheckin(selC.id, w.w)
@@ -1325,7 +1349,9 @@ export default class App extends React.Component {
         const e = this.effect(selC, a);
         let eff = 'Effect: nog te vroeg om te beoordelen', effFg = '#8C8C8A';
         if (e.qB != null && e.qA != null) { const dq = e.qA - e.qB; eff = `Kwaliteit ${nl(e.qB)} → ${nl(e.qA)} · instroom ${nl(e.lB)} → ${nl(e.lA)} p/w`; effFg = dq > 0 ? '#1A7A4A' : dq < 0 ? '#D32F2F' : '#5C5C5A'; }
-        return { ...a, wl: wl(a.w), eff, effFg };
+        // The change the open controle belongs to says when it comes, or came, up again.
+        const ctl = dd.ctl && dd.ctl.act === a.id ? `${dd.ctl.due ? 'Controle sinds' : 'Controle op'} ${dayShort(dd.ctl.at)}` : '';
+        return { ...a, wl: wl(a.w), eff, effFg, ctl };
       }),
       noActions: selC.actions.length === 0,
       weekOpts: ws.slice().reverse().map(w => ({ v: w.w, l: 'Week ' + wl(w.w) })),
@@ -1497,6 +1523,8 @@ export default class App extends React.Component {
       setActType: e => { const v = tv(e); this.setState(s => ({ act: { ...s.act, type: v } })); },
       setActWeek: e => { const v = +tv(e); this.setState(s => ({ act: { ...s.act, w: v } })); },
       setActText: e => { const v = tv(e); this.setState(s => ({ act: { ...s.act, text: v } })); },
+      // Controle in x dagen with a change: only who may set the monitor status, on a running campaign.
+      canCtl: d.canMon, setActCtl: v => this.setState(s => ({ act: { ...s.act, ctl: v } })),
       addAction: () => this.addAction(),
       canAsk, ask: { text: st.ask.text, to: askTo, opts: askOpts, hasOpts: askOpts.length > 0 },
       setAskTo: e => { const v = tv(e); this.setState(s => ({ ask: { ...s.ask, to: v } })); },
@@ -1520,7 +1548,11 @@ export default class App extends React.Component {
       saveOffline: st.saveState === 'offline', isLocal: this.sync.mode === 'local',
       ...this.panelVals(me),
       hasToast: !!st.toast, toast: st.toast,
-      hasConfirm: !!st.confirm, confirm: st.confirm ? { ...st.confirm, onCancel: () => this.setState({ confirm: null }) } : null
+      hasConfirm: !!st.confirm, confirm: st.confirm ? { ...st.confirm, onCancel: () => this.setState({ confirm: null }) } : null,
+      hasCtlDlg: !!st.ctlDlg, ctlDlg: !st.ctlDlg ? null : {
+        title: st.ctlDlg.title, value: st.ctlDlg.days, onOk: () => this.saveCtl(), onCancel: () => this.setState({ ctlDlg: null }),
+        onChange: v => this.setState(s => ({ ctlDlg: s.ctlDlg && { ...s.ctlDlg, days: v } }))
+      }
     };
   }
   /** The "Bekijk als" picker: the team members whose view you may open, grouped by role. */
@@ -1671,6 +1703,7 @@ export default class App extends React.Component {
         </div>
         {v.hasPanel ? <SidePanel v={v} /> : null}
         {v.hasConfirm ? <ConfirmDialog {...v.confirm} /> : null}
+        {v.hasCtlDlg ? <CtlDialog {...v.ctlDlg} /> : null}
         {v.hasToast ? <div role="status" className="toast" style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', background: '#1B1B63', color: '#FFFFFF', padding: '12px 18px', borderRadius: '10px', fontSize: '14px', boxShadow: '0 8px 32px rgba(29,29,27,.15)', zIndex: 10 }}>{v.toast}</div> : null}
       </>
     );

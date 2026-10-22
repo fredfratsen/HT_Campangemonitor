@@ -3,7 +3,7 @@
 // allow, a reason to reject, or { value } to store a corrected value: author fields (recBy, klantBy, by,
 // from) are always set to the person who is logged in, so nobody can save under someone else's name.
 import { rightsOf } from '../src/lib/permissions.js';
-import { DEF_RULES, RENAME, REMIND_GAP_MS } from '../src/lib/constants.js';
+import { DEF_RULES, RENAME, REMIND_GAP_MS, MON_FIELDS as MON_KEYS } from '../src/lib/constants.js';
 import { feedbackWeek, fbOpenWeek, wl } from '../src/lib/weeks.js';
 
 export const NO_RIGHT = 'Je hebt geen rechten voor deze wijziging.';
@@ -17,7 +17,7 @@ const keysOf = (...objs) => [...new Set(objs.flatMap(o => o && typeof o === 'obj
 // marketeer's monitor status and update for the recruiter.
 const REC_FIELDS = new Set(['leads', 'q', 'rec', 'recBy', 'note', 'needsAction', 'at']);
 const KLANT_FIELDS = new Set(['klant', 'klantBy']);
-const MON_FIELDS = new Set(['mon', 'monBy', 'monSig', 'upd', 'updBy']);
+const MON_FIELDS = new Set(MON_KEYS);
 const emptyWeek = w => w && w.q == null && !w.rec && !w.klant && !w.note && !w.needsAction && !w.at && !w.mon && !w.upd;
 // When a reminder was sent: stamped by the server; older ones only have the client's id (Date.now() + name).
 const sentAt = n => n.ts ?? (parseFloat(String(n.id)) || 0);

@@ -1,8 +1,9 @@
 import React from 'react';
 import Button from '../components/Button.jsx';
+import { CtlPicker } from '../components/CtlDialog.jsx';
 
 export default function DetailView({ v }) {
-  const { act, addAction, ask, askQuestion, backLabel, canActions, canAsk, d, goBack, setActText, setActType, setActWeek, setAskText, setAskTo, showTrello, zone } = v;
+  const { act, addAction, ask, askQuestion, backLabel, canActions, canAsk, canCtl, d, goBack, setActCtl, setActText, setActType, setActWeek, setAskText, setAskTo, showTrello, zone } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -191,6 +192,10 @@ export default function DetailView({ v }) {
                   </select>
                 </div>
                 <textarea value={act.text ?? ''} onChange={setActText} rows="2" placeholder="Wat is er aangepast?" style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', lineHeight: '1.45', resize: 'vertical' }} />
+                {canCtl ? <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '2px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '500', color: '#3C3C3A' }}>Controle in x dagen <span style={{ fontWeight: '400', color: '#8C8C8A' }}>· optioneel, tot dan op Check</span></span>
+                    <CtlPicker value={act.ctl ?? ''} onChange={setActCtl} />
+                  </div> : null}
                 <Button variant="accent" size="sm" onClick={addAction}>Vastleggen</Button>
               </div> : null}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -198,6 +203,7 @@ export default function DetailView({ v }) {
                   <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Week {a.wl} · {a.type}</span>
                   <span style={{ fontSize: '13px', lineHeight: '1.45' }}>{a.text}</span>
                   <span style={{ fontSize: '12px', color: a.effFg }}>{a.eff}</span>
+                  {a.ctl ? <span style={{ fontSize: '12px', fontWeight: '600', color: '#1B1B63' }}>{a.ctl}</span> : null}
                 </div>)}
               {d.noActions ? <div style={{ fontSize: '13px', color: '#8C8C8A', borderTop: '1px solid #F5F2ED', paddingTop: '10px' }}>Nog geen wijzigingen vastgelegd.</div> : null}
             </div>

@@ -1,4 +1,5 @@
 // Small formatting helpers and the campaign health rules.
+import { isoDate } from './weeks.js';
 
 export const qc = q => q == null ? '#8C8C8A' : q >= 7 ? '#1A7A4A' : q >= 5 ? '#B45309' : '#D32F2F';
 export const qb = q => q == null ? '#F5F2ED' : q >= 7 ? '#E6F4ED' : q >= 5 ? '#FEF3C7' : '#FDECEA';
@@ -51,10 +52,18 @@ export function health(c, R) {
  * - 'goed': no rule fires and nobody checked it yet this week, so every campaign comes up once a week.
  * - 'actie': everything else (at least one rule fires).
  * `mon: 'open'` clears an earlier choice. Returns { s, by, w, stale }; `by` is empty when nobody set it.
+ * A Check with a controle (`ctl`, see controle.js) holds until that day, also in later weeks, and then comes up as
+ * 'goed' (or 'actie'); the result then has ctl: { at, from, act, by, due }.
  */
-export function monitor(c, h) {
+export function monitor(c, h, now = Date.now()) {
   const ws = c.weeks, cur = ws[ws.length - 1], set = [...ws].reverse().find(w => w.mon);
   if (set && set.mon === 'klant') return { s: 'klant', by: set.monBy || '', w: set.w, stale: false };
+  if (set && set.ctl) {
+    const ctl = { at: set.ctl, from: set.ctlFrom, act: set.ctlAct, by: set.monBy || '', due: set.ctl <= isoDate(new Date(now)) };
+    const fresh = !ctl.due && h.reasons.every(r => (set.monSig || []).includes(r.k));
+    if (fresh) return { s: 'check', by: ctl.by, w: set.w, stale: false, ctl };
+    return { s: h.lvl ? 'actie' : 'goed', by: '', w: null, stale: !ctl.due, ctl };
+  }
   const checked = cur.mon === 'check', fresh = checked && h.reasons.every(r => (cur.monSig || []).includes(r.k));
   if (fresh) return { s: 'check', by: cur.monBy || '', w: cur.w, stale: false };
   return { s: h.lvl ? 'actie' : 'goed', by: '', w: null, stale: checked };

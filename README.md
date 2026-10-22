@@ -64,7 +64,8 @@ have *Eigen klanten bekijken* instead, see the last point)
   quality. Filter by status; sort by priority, lowest quality, fewest candidates or client.
 - **Campaign detail**: candidates and quality per week, the Trello pipeline, rejection reasons, and a log of
   campaign changes (ad, audience, budget, vacancy text, ...). With the right *Monitorstatus en updates bijhouden*
-  you set the campaign to *Check* or *In afwachting van klant*, and write an **update for the recruiter**. The
+  you set the campaign to *Check* or *In afwachting van klant*, pick a **Controle in x dagen** with a change (see
+  [Monitor status](#monitor-status-and-health-rules)), and write an **update for the recruiter**. The
   recruiter sees it on the campaign and in their weekly feedback, and gets a notification under Meldingen. The
   address bar follows the open campaign (`#campagne=<id>`), so a link or a reload opens it again.
 - **Pauzeren and Stopzetten** on a campaign (right: *Campagnes pauzeren en stopzetten*; on your own clients, or all of
@@ -154,6 +155,14 @@ Every active campaign has one monitor status per week. The health rules decide i
 | **Wekelijkse controle** | No rule fires and nobody has checked the campaign yet this week. So every campaign comes up once a week; in the Weekoverzicht a *Check* button per row ticks it off |
 | **In afwachting van klant** | Set by hand when the client still has to deliver something, such as ad balance or photos. It stays on in the weeks after, until someone changes it |
 | **Check** | Set by hand: the campaign has been reviewed this week, whatever its scores. The next week it starts over. If a signal appears after the check that wasn't there at the time, the campaign goes back to *Actie nodig* |
+
+**Controle in x dagen.** After a change, the marketeer picks how many calendar days (1 to 60, with quick picks 1, 2
+and 3) until the campaign comes up again, to see how the change worked out. This is set from the *Controle in x
+dagen* button next to *Check* in the Weekoverzicht, or with the change itself under *Acties & campagnewijzigingen*.
+Until that day the campaign stays on *Check*, also through the weekly round. A new signal still brings it up as
+*Actie nodig*, and a *Check* then keeps the original day. From midnight on that day the campaign is back on top of
+*Wekelijkse controle*, labelled with what the controle was for ("Controle · Budget aangepast op 22 okt"). A plain
+*Check* closes it there, and *In afwachting van klant* or *Check ongedaan maken* end it earlier.
 
 The health rules and their defaults are below. Red signals sort above orange ones; both put a campaign on *Actie
 nodig*. Anyone with the right *Health-regels aanpassen* can switch each rule on or off and change its threshold in

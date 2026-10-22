@@ -254,6 +254,9 @@ test('monitor status and the update for the recruiter need campaigns.monitor, au
     assert.equal(makeAuthorizer(who, {})('campaigns', 'c1', c, set({ upd: 'x' })), NO_RIGHT);
   }
   assert.equal(makeAuthorizer(kim, {})('campaigns', 'c1', c, { ...c, weeks: [...c.weeks, week(40, { mon: 'klant' })] }), NO_RIGHT, 'not hidden in a new week');
+  const ctl = { mon: 'check', monBy: 'Iemand', monSig: [], ctl: '2026-10-29', ctlFrom: '2026-10-22', ctlAct: 'c1a1' };
+  assert.equal(makeAuthorizer(mkt, {})('campaigns', 'c1', c, set(ctl)).value.weeks[1].ctl, '2026-10-29', 'Controle in x dagen');
+  for (const who of [kim, am]) assert.equal(makeAuthorizer(who, {})('campaigns', 'c1', c, set({ ctl: '2026-10-29' })), NO_RIGHT, who.role);
   const docs = { 'live.links': { 't-1-all': { id: 't-1-all', boardId: '1', rec: 'Kim' } } };
   assert.equal(makeAuthorizer(mkt, docs)('live.fb', 't-1-all', {}, { 40: { mon: 'check', monBy: 'Danielle' } }), '', 'Trello mode too');
   assert.equal(makeAuthorizer(kim, docs)('live.fb', 't-1-all', {}, { 40: { upd: 'x' } }), NO_RIGHT);
