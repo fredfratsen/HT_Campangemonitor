@@ -33,7 +33,7 @@ export function announceResumed(applied, docs, by, now = Date.now()) {
     const known = Object.entries(docs[doc] || {}).some(([k, c]) => !keys.has(k) && c && !c.ended && c.rec === rec && K.key(c) === K.key(any) && !waitsForAds(c.halt));
     const id = String(now + Math.random());
     if (!known) log[id] = { id: Number(id), mode: K.mode, client, from: '', to: rec, at: now, by };
-    inbox[id] = { id: Number(id), to: rec, from: by, at: stamp(), read: false, kind: 'assign',
+    inbox[id] = { id: Number(id), to: rec, from: by, at: stamp(), read: false, kind: 'assign', client,
       ...(known ? { title: `${fns.length === 1 ? 'Nieuwe functie' : 'Nieuwe functies'} bij ${client}`, items: fns }
         : { title: `Nieuw bedrijf voor jou: ${client}`, items: [`De ads voor ${names(fns)} staan live`] }) };
   }

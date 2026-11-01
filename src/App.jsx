@@ -9,6 +9,7 @@ import {
 } from './lib/constants.js';
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
+import { clientTarget } from './lib/clientLink.js';
 import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
 import { startHalt, waitsForAds, haltLabel, haltLine } from './lib/halt.js';
 import { ofPeople, pickPerson, NOBODY } from './lib/assignFilter.js';
@@ -78,7 +79,7 @@ export default class App extends React.Component {
       ci: { rec: 'all' }, ciKeep: [], ciQ: '', form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
       act: { type: 'Advertentie', text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, reply: null, upd: null, fbBar: lsGet(FB_BAR_KEY, false),
-      toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {}, who: NOBODY }, liveExp: {}, mktDemo: null, seen: null, panel: null,
+      toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {}, who: NOBODY }, liveExp: {}, liveFocus: null, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
       blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null, ctlDlg: null
@@ -599,7 +600,7 @@ export default class App extends React.Component {
     const notes = Object.entries(byTo).map(([to, l]) => {
       const x = l[0], n = l.reduce((s, y) => s + y.fns.length, 0);
       return { id: at + Math.random(), to, from: au, at: stamp(), read: false, kind: 'assign',
-        ...(l.length === 1 ? { title: x.isNew ? `Nieuw bedrijf voor jou: ${x.client}` : `${n === 1 ? 'Nieuwe functie' : 'Nieuwe functies'} bij ${x.client}`,
+        ...(l.length === 1 ? { client: x.client, title: x.isNew ? `Nieuw bedrijf voor jou: ${x.client}` : `${n === 1 ? 'Nieuwe functie' : 'Nieuwe functies'} bij ${x.client}`,
           items: [`Op Pauze tot de ads live staan: ${names(x.fns)}`, hint(n)] }
           : { title: l.every(y => y.isNew) ? `${l.length} nieuwe bedrijven voor jou` : `Nieuwe campagnes bij ${l.length} klanten`,
             items: [...l.map(y => `${y.client} · op Pauze: ${names(y.fns)}`), hint(n)] }) };
@@ -800,7 +801,9 @@ export default class App extends React.Component {
             canReply: isQ && !n.answered && !replying && !me.isPreview, answered: isQ && !!n.answered, replying,
             replyText: replying ? st.reply.text : '', setReplyText: e => { const v = e.target.value; this.setState(s => ({ reply: { ...s.reply, text: v } })); },
             startReply: () => this.setState({ reply: { id: n.id, text: '' } }), cancelReply: () => this.setState({ reply: null }), sendReply: () => this.answer(n),
-            canOpen: qa && this.viewOk('detail', me) && st.campaigns.some(c => c.id === n.campaign), openCampaign: () => { this.setState({ panel: null }); this.open(n.campaign); } };
+            canOpen: qa && this.viewOk('detail', me) && st.campaigns.some(c => c.id === n.campaign), openCampaign: () => { this.setState({ panel: null }); this.open(n.campaign); },
+            // About one client (n.client): the whole notification opens it.
+            canClient: !!n.client, openClient: e => { e.stopPropagation(); this.openClient(n.client, me); } };
         })
       },
       news: { hasNew: st.newsSeen < NEWS[0].id, items: NEWS.map(n => ({ ...n, tagBg: n.tag === 'Nieuw' ? '#FFF8E0' : '#E7E7F0', tagFg: n.tag === 'Nieuw' ? '#B45309' : '#1B1B63' })) },
@@ -840,13 +843,28 @@ export default class App extends React.Component {
     const notes = Object.entries(byTo).map(([to, l]) => {
       const e = l[0], kept = e.to === e.from;
       return { id: e.id, to, from: au, at: stamp(), read: false, kind: 'assign',
-        ...(l.length === 1 ? {
+        ...(l.length === 1 ? { client: e.client,
           title: kept ? `${e.fns.length === 1 ? 'Nieuwe functie' : 'Nieuwe functies'} bij ${e.client}` : e.from ? `${e.client} is aan jou overgedragen` : `Nieuw bedrijf voor jou: ${e.client}`,
           items: kept ? e.fns : [...(e.from ? [`Eerder opgevolgd door ${e.from}`] : []), ...(e.fns.length ? [fnsText(e)] : [])] }
         : { title: l.every(x => x.to !== x.from) ? `${l.length} bedrijven aan jou toegewezen` : `${l.length} klanten voor jou gewijzigd`,
           items: l.map(x => `${x.client} · ${x.to === x.from ? fnsText(x) : x.from ? `eerder opgevolgd door ${x.from}` : 'nieuw'}`) }) };
     });
     this.setState(s => ({ assignLog: [...moved.map(({ fns, ...e }) => e), ...s.assignLog].slice(0, 500), inbox: [...notes, ...s.inbox] }));
+  }
+  /**
+   * A notification about client `name`, clicked: where clicking the client would take you (lib/clientLink.js). In Live
+   * campagnes the client folds open and lights up (liveFocus).
+   */
+  openClient(name, me = this.me()) {
+    const cs = this.state.campaigns;
+    const mine = this.viewOk('live', me) ? cs.filter(c => c.rec === me.rec && recruiterSees(c)) : null;
+    const shown = this.viewOk('campaigns', me) ? this.visible(cs.filter(c => !c.halt || c.halt.kind === 'pauze'), me) : null;
+    const t = clientTarget(name, mine, shown);
+    this.setState({ panel: null });
+    if (!t) this.flash(`${name} staat niet (meer) in je overzicht`);
+    else if (t.open) this.open(t.open);
+    else if (t.live) { this.go('live'); this.setState(s => ({ liveExp: { ...s.liveExp, [t.live]: true }, liveFocus: t.live })); }
+    else { this.setState(s => ({ f: { ...s.f, ...t.campaigns } })); this.go('campaigns'); }
   }
   /** Who a question about campaign c can go to: its marketeer and recruiter (not yourself), or both at once. */
   askTargets(c) {
@@ -1675,6 +1693,7 @@ export default class App extends React.Component {
         st, stBy: st ? e.by : '', stAt: st ? hhmm(e.at) : '', setSt: x => { x.stopPropagation(); this.setLiveStatus(g.key, nextStatus(st)); },
         tag: multi ? '' : g.fns[0].tag, multi, expanded: on, open: multi ? () => this.setState(s => ({ liveExp: { ...s.liveExp, [g.key]: !on } })) : () => this.open(g.fns[0].id),
         fns: on ? g.fns.map(f => ({ ...cells(f, 1, f.open ? 1 : 0, f.id, !!f.tag || f.noFb), vac: f.vac, tag: f.tag, open: () => this.open(f.id) })) : [],
+        focus: this.state.liveFocus === g.key, focused: () => this.setState({ liveFocus: null }),
         hasBadge: !!mineEv, badge: mineEv ? (ev.from ? `Overgenomen van ${ev.from}` : 'Nieuw') : '', bBg: mineEv && ev.from ? '#E7E7F0' : '#FFF8E0', bFg: mineEv && ev.from ? '#1B1B63' : '#B45309' };
     });
     // Open feedback: last week's (catching up, expires on Sunday) first, then this week's.

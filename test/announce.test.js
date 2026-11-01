@@ -19,7 +19,7 @@ test('the first campaign of a client that goes live: Nieuw bedrijf for the recru
   const ps = run(resume([link('kok', 'Kok')], [waiting(link('bar', 'Bediening'))]));
   const [e] = valuesOf(ps, 'assignLog'), [n] = valuesOf(ps, 'inbox');
   assert.deepEqual({ ...e, id: 0 }, { id: 0, mode: 'trello', client: 'Hotel A', from: '', to: 'Kim', at: NOW, by: 'Danielle' }, 'another function still waiting does not count');
-  assert.deepEqual({ ...n, id: 0, at: '' }, { id: 0, to: 'Kim', from: 'Danielle', at: '', read: false, kind: 'assign', title: 'Nieuw bedrijf voor jou: Hotel A', items: ['De ads voor Kok staan live'] });
+  assert.deepEqual({ ...n, id: 0, at: '' }, { id: 0, to: 'Kim', from: 'Danielle', at: '', read: false, kind: 'assign', client: 'Hotel A', title: 'Nieuw bedrijf voor jou: Hotel A', items: ['De ads voor Kok staan live'] });
   assert.equal(typeof n.at, 'string');
   assert.equal(String(e.id), Object.keys(ps.find(p => p.doc === 'assignLog').set)[0], 'stored under its id');
 });
@@ -27,7 +27,7 @@ test('the first campaign of a client that goes live: Nieuw bedrijf for the recru
 test('a client the recruiter already calls for: Nieuwe functie, only in Meldingen', () => {
   const ps = run(resume([link('kok', 'Kok')], [link('bar', 'Bediening')]));
   assert.deepEqual(valuesOf(ps, 'assignLog'), []);
-  assert.deepEqual(valuesOf(ps, 'inbox').map(n => [n.to, n.title, n.items]), [['Kim', 'Nieuwe functie bij Hotel A', ['Kok']]]);
+  assert.deepEqual(valuesOf(ps, 'inbox').map(n => [n.to, n.client, n.title, n.items]), [['Kim', 'Hotel A', 'Nieuwe functie bij Hotel A', ['Kok']]]);
 });
 
 test('several functions at once: one notification', () => {

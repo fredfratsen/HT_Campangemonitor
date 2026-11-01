@@ -148,6 +148,12 @@ have *Eigen klanten bekijken* instead, see the last point)
 data and live Trello data, and **Instellingen** (your account, password, two-factor, sessions and a download of
 your own data).
 
+A notification about one client (a new client, a client handed over, new functions, campaigns waiting on Pauze)
+opens that client when clicked, as clicking the client would: with one campaign its campaign page, with several the
+client folded open in Live campagnes for its recruiter, or Campagnes searched on the client (under Pauze when all
+wait there) for the others (`src/lib/clientLink.js`). The note carries the client's name (`client`); notifications
+about several clients at once, and ones from before this, aren't clickable.
+
 ### Monitor status and health rules
 
 Every active campaign has one monitor status per week. The health rules decide it, until a Recruitment Marketeer

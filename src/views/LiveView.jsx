@@ -49,9 +49,12 @@ function StatusPill({ r }) {
 function ClientBlock({ r }) {
   const [prev, setPrev] = React.useState(r.st), [moved, setMoved] = React.useState(false);
   if (prev !== r.st) { setPrev(r.st); setMoved(true); }
-  const cls = ['live-block', r.st && `live-st-${r.st}`, moved && 'live-st-anim'].filter(Boolean).join(' ');
+  // Opened from a notification (r.focus): scrolled into view, lit up once.
+  const ref = React.useRef(null), [lit, setLit] = React.useState(false);
+  React.useEffect(() => { if (!r.focus) return; ref.current.scrollIntoView({ block: 'center' }); setLit(true); r.focused(); }, [r.focus]);
+  const cls = ['live-block', r.st && `live-st-${r.st}`, moved && 'live-st-anim', lit && 'live-lit'].filter(Boolean).join(' ');
   return (
-    <div className={cls} style={{ borderBottom: '1px solid #F5F2ED' }}>
+    <div ref={ref} className={cls} onAnimationEnd={e => { if (e.animationName === 'live-lit') setLit(false); }} style={{ borderBottom: '1px solid #F5F2ED' }}>
       {/* A coloured row gets its hover from app.css: hov-row would replace the gradient, and the sweep with it. */}
       <div className={r.st ? 'live-row' : 'hov-row live-row'} onClick={r.open} aria-expanded={r.multi ? r.expanded : undefined} style={{ ...ROW, padding: '12px 20px' }}>
         <div style={{ minWidth: '0', display: 'flex', alignItems: 'center', gap: '10px' }}>
