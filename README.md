@@ -113,7 +113,11 @@ have *Eigen klanten bekijken* instead, see the last point)
   campaign whose function has no intake list any more (an older label on a board that has intake lists now, or an
   archived list) shows *Geen kolom*: *Overzetten* moves it to one of the board's new intake lists (it keeps its
   feedback, recruiter and Pauze, and takes the list's name), or stop it. Until then it keeps counting its label's
-  cards. Each of these puts the client under *Niet volledig toegewezen*.
+  cards. Each of these puts the client under *Niet volledig toegewezen*. **Opnieuw ophalen** (in the bar for ticked
+  clients) loads their boards from Trello right away, past the memory of the server and the app, and reads their
+  history of the 12 weeks again. Their campaigns take the names the board and its functions have in Trello now (a
+  renamed column or board; `withTrelloNames` in `src/lib/assignFunctions.js`), and keep their id, feedback,
+  recruiter and Pauze. A campaign with *Geen kolom* keeps its name.
 - **Trello-koppeling testen**: check the Trello setup against the conventions below.
 - Editing the health rules.
 - Setting the status of bugs and ideas (*Nieuw*, *Opgepakt*, *Opgelost*, *Doen we niet*) in the *Bug of idee
@@ -585,6 +589,9 @@ the same while its tab is visible:
   more than needed. The numbers are always counted from the whole board, never added up, so nobody counts twice.
 - The list of boards and `/members/me` are shared for 30 seconds, so several people opening the app at once share
   one Trello call.
+- A change Trello doesn't count as activity (possibly a renamed list) can take up to an hour to come through.
+  *Opnieuw ophalen* in Toewijzing loads a board at once (`/api/trello/boards/:id?fresh=1`, only with *Toewijzing
+  beheren*).
 - Only on Render and locally (`trello.refresh()` in `server/index.js`). On Netlify the app loads the boards itself.
 
 ### Trello snapshot

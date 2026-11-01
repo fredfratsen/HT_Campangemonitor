@@ -2,7 +2,7 @@
 // which campaigns lost their function in Trello (an older label on a board that has intake lists now).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clientFunctions, isOpen, newFns, addWith } from '../src/lib/assignFunctions.js';
+import { clientFunctions, isOpen, newFns, addWith, withTrelloNames } from '../src/lib/assignFunctions.js';
 import { boardFunctions } from '../src/lib/boardStats.js';
 import { board, intakeBoard, BOARD_ID, KOK, SPOED, IN } from './trello-fixture.js';
 
@@ -58,4 +58,21 @@ test('a new function is added with the client\'s recruiter, or with either of th
   assert.deepEqual(addWith({ linked: true, rec: '__multi', recs: ['Kim', 'Juul'] }), ['Kim', 'Juul']);
   assert.deepEqual(addWith({ linked: true, rec: '__inactive', recs: [''] }), ['__inactive']);
   assert.deepEqual(addWith({ linked: false, rec: '', recs: [] }), [], 'a new client gets its recruiter first');
+});
+
+test('Opnieuw ophalen gives the campaigns the names of their board and functions in Trello now', () => {
+  const bd = intakeBoard();
+  bd.name = 'Hotel Zee & Strand';
+  bd.lists.find(l => l.id === IN.bediening).name = 'Nieuwe Sollicitant | Bediening & bar';
+  const other = { id: 't-other-x', boardId: 'other', boardName: 'Ander bord', listId: 'x', vac: 'Kok' };
+  const links = [...ALL, link({ labelId: SPOED, vac: 'Spoed' }), link({ vac: 'Alle functies', labelName: 'Hele bord' }), other];
+  const got = withTrelloNames(links, BOARD_ID, bd), by = id => got.find(k => k.id === id);
+  assert.equal(by(ALL[1].id).vac, 'Bediening & bar', 'a renamed intake list');
+  assert.equal(by(ALL[1].id).labelName, 'Bediening & bar');
+  assert.equal(by(ALL[0].id).vac, 'Kok', 'Kok by its label, named after its intake list');
+  assert.equal(by(`t-${BOARD_ID}-${SPOED}`).vac, 'Spoed', 'without an intake list it keeps its name');
+  assert.equal(by(`t-${BOARD_ID}-all`).vac, 'Alle functies');
+  assert.ok(got.filter(k => k.boardId === BOARD_ID).every(k => k.boardName === 'Hotel Zee & Strand'));
+  assert.equal(by(other.id), other, 'other boards stay as they are');
+  assert.deepEqual(got.map(k => k.id), links.map(k => k.id), 'the same campaigns, so their feedback stays');
 });

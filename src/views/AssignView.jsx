@@ -110,6 +110,7 @@ export default function AssignView({ v }) {
             </select>
             <Button variant="primary" size="sm" onClick={b.apply}>Toewijzen</Button>
             <div style={{ display: 'flex', gap: '16px', marginLeft: 'auto' }}>
+              {b.canReload ? <button onClick={b.reload} disabled={b.reloading} title="Haal deze klanten helemaal opnieuw uit Trello, met de kolommen en namen van nu" style={{ ...textBtn, color: 'rgba(255,255,255,.8)', cursor: b.reloading ? 'default' : 'pointer' }}>{b.reloadText}</button> : null}
               {b.canIgnore ? <button onClick={b.ignore} style={{ ...textBtn, color: 'rgba(255,255,255,.8)' }}>Geen klant</button> : null}
               <button onClick={b.clear} style={{ ...textBtn, color: 'rgba(255,255,255,.8)' }}>Selectie wissen</button>
             </div>

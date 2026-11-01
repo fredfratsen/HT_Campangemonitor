@@ -15,7 +15,10 @@
 // board is loaded again: never skipped, at worst loaded once more than needed. The numbers are always counted from
 // the whole board, never added up, so a candidate never counts twice. refresh() is one round over the boards,
 // every 5 minutes (server/index.js), so the snapshot and the intake memory keep up without anyone in the app.
+// Opnieuw ophalen in Toewijzing (?fresh=1, right ‘assign’) loads a board from Trello now and reads its history of the
+// weeks the monitor shows again, for when Trello didn't count a change (a renamed list) as activity.
 import express from 'express';
+import { can } from '../src/lib/permissions.js';
 
 const BOARD_Q = 'fields=name&lists=all&list_fields=name,closed&labels=all&label_fields=name,color&cards=all&card_fields=idList,idLabels,closed&card_customFieldItems=true&customFields=true';
 const PAGE = 1000, MAX_PAGES = 20;
@@ -123,10 +126,10 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
   /**
    * The moves in a board's history since intake.since(), as [{ date, card, list, from }] (from: the list it left, for a
    * move between lists), and the ‘Geen gehoor’ and ‘TBA afspraak’ comments as [{ date, card, geenGehoor: true }]; null
-   * when Trello didn't give them.
+   * when Trello didn't give them. full: the weeks the monitor shows, again.
    */
-  async function history(id) {
-    const since = encodeURIComponent(intake.since(id, now())), moves = [];
+  async function history(id, full) {
+    const since = encodeURIComponent(intake.since(id, now(), full)), moves = [];
     let before = '';
     try {
       for (let page = 0; page < MAX_PAGES; page++) {
@@ -146,17 +149,20 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
     } catch (e) { return null; }
   }
 
-  /** A board: from memory while Trello reports it unchanged, else from Trello. { status, body, fresh }. */
-  function loadBoard(id) {
+  /**
+   * A board: from memory while Trello reports it unchanged, else from Trello. full: from Trello in any case, after the
+   * load under way, with its history read again. { status, body, fresh }.
+   */
+  function loadBoard(id, full = false) {
     const m = boards.get(id), t = now();
-    if (m && (activity.has(id) ? m.activity === activity.get(id) && t - m.at < FRESH : t - m.at < TTL)) return Promise.resolve({ status: 200, body: m.body });
-    if (loading.has(id)) return loading.get(id);
+    if (!full && m && (activity.has(id) ? m.activity === activity.get(id) && t - m.at < FRESH : t - m.at < TTL)) return Promise.resolve({ status: 200, body: m.body });
+    if (loading.has(id)) return full ? loading.get(id).catch(() => {}).then(() => loadBoard(id, true)) : loading.get(id);
     const seen = activity.get(id), g = gen;
     const p = (async () => {
       const r = await get(`/boards/${id}`, BOARD_Q);
       if (r.status !== 200) return r;
       const bd = minimise(JSON.parse(r.body));
-      if (intake) { const moves = await history(id); if (g === gen) keep('kolomgeheugen', () => intake.update(id, bd, moves, t)); }
+      if (intake) { const moves = await history(id, full); if (g === gen) keep('kolomgeheugen', () => intake.update(id, bd, moves, t)); }
       if (snapshot && g === gen) keep('snapshot', () => snapshot.board(id, bd, t, links(id)));
       const body = JSON.stringify(bd);
       if (g === gen) boards.set(id, { at: t, activity: seen, body });
@@ -190,8 +196,10 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
     if (!getCreds()) return res.status(503).json({ error: 'trello_not_configured' });
     const bm = BOARD_RE.exec(req.path), ep = !bm && ENDPOINTS.find(e => e.re.test(req.path));
     if (!bm && !ep) return res.status(404).json({ error: 'not_allowed' });
+    const full = !!bm && req.query.fresh === '1';
+    if (full && !can(req.account, 'assign')) return res.status(403).json({ error: 'forbidden' });
     try {
-      const r = bm ? await loadBoard(bm[1]) : await cached(req.path, ep);
+      const r = bm ? await loadBoard(bm[1], full) : await cached(req.path, ep);
       if (r.status === 200) return res.type('json').send(r.body);
       if (r.status === 401) return res.status(502).json({ error: 'trello_unauthorized' });
       if (r.status === 429) return res.status(429).json({ error: 'trello_rate_limited' });

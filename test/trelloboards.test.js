@@ -84,14 +84,15 @@ after(async () => {
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'htcm-boards-')); dirs.push(d); return d; };
 
 /** The Trello proxy with its memory in dir, as server/app.js sets it up on Render, on the fake clock. */
-async function serve(dir, { linked = new Set(), creds = { key: 'k', token: 't' } } = {}) {
+async function serve(dir, { linked = new Set(), creds = { key: 'k', token: 't' }, account = { role: 'teamlead' } } = {}) {
   const docs = fileDocs(dir);
   const router = trelloRouter(() => creds, { snapshot: createTrelloSnapshot(docs), intake: createTrelloIntake(docs), linked: () => linked, now: () => clock });
-  const server = await new Promise(ok => { const s = express().use('/api/trello', router).listen(0, () => ok(s)); });
+  const server = await new Promise(ok => { const s = express().use((req, res, next) => { req.account = account; next(); }).use('/api/trello', router).listen(0, () => ok(s)); });
   servers.add(server);
   const base = `http://127.0.0.1:${server.address().port}/api/trello`;
   return {
     router, text: async p => (await realFetch(base + p)).text(), get: async p => (await realFetch(base + p)).json(),
+    status: async p => (await realFetch(base + p)).status,
     /** What the app does: the list of boards, then a board. */
     load: async b => { await realFetch(base + '/members/me/boards'); return (await realFetch(base + `/boards/${b.id}`)).json(); },
     stop: () => { docs.flushAll(); return close(server); },
@@ -382,6 +383,35 @@ test('a board Trello reports unchanged comes from memory; a changed one, or one 
   clock += HOUR;
   await a.load(b);
   assert.equal(boardCalls().length, 3, 'an hour later');
+  await a.stop();
+});
+
+test('Opnieuw ophalen loads a board from Trello though it is reported unchanged, and reads its history again', async () => {
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const jan = arrive(b, 'kok', clock - 3 * DAY); move(b, jan, 'contact', clock - 2 * DAY);
+  const a = await serve(tmp());
+  await a.load(b);
+  // Renamed in Trello without Trello counting it as activity on the board.
+  b.lists.kok.name = 'Nieuwe Sollicitant | Chef-kok'; clock += 5 * MIN; calls = [];
+  assert.ok((await a.text(`/boards/${b.id}`)).includes('| Kok'), 'from memory');
+  const bd = await a.get(`/boards/${b.id}?fresh=1`);
+  assert.equal(bd.lists.find(l => l.id === b.lists.kok.id).name, 'Nieuwe Sollicitant | Chef-kok');
+  assert.equal(intakeOf(bd)[jan], b.lists.kok.id);
+  assert.equal(boardCalls().length, 1);
+  assert.equal(sinceOf(calls.find(c => c.includes('/actions'))), mondayOf(feedbackWeek(clock) - 11).getTime(), 'the weeks the monitor shows');
+  calls = [];
+  assert.ok((await a.text(`/boards/${b.id}`)).includes('Chef-kok'), 'and remembers the new load');
+  assert.equal(boardCalls().length, 0);
+  await a.stop();
+});
+
+test('only Toewijzing beheren can load a board anew', async () => {
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const a = await serve(tmp(), { account: { role: 'recruiter' } });
+  await a.load(b);
+  calls = [];
+  assert.equal(await a.status(`/boards/${b.id}?fresh=1`), 403);
+  assert.equal(boardCalls().length, 0);
   await a.stop();
 });
 

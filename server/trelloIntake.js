@@ -28,13 +28,14 @@ export function createTrelloIntake(docs) {
 
   return {
     /**
-     * From when to read a board's history: the weeks the monitor shows the first time, after that what is new. A
-     * memory read by an older VERSION (it missed calls, ‘Geen gehoor’ or ‘TBA afspraak’) reads from last Monday once
-     * more, so this week's and last week's calls and today's call list are complete.
+     * From when to read a board's history: the weeks the monitor shows the first time (and with full: Opnieuw
+     * ophalen in Toewijzing), after that what is new. A memory read by an older VERSION (it missed calls, ‘Geen gehoor’
+     * or ‘TBA afspraak’) reads from last Monday once more, so this week's and last week's calls and today's call list
+     * are complete.
      */
-    since(id, now = Date.now()) {
+    since(id, now = Date.now(), full = false) {
       const b = boards()[id];
-      if (!b || !b.since) return new Date(mondayOf(feedbackWeek(now) - LIVE_WEEKS + 1).getTime()).toISOString();
+      if (full || !b || !b.since) return new Date(mondayOf(feedbackWeek(now) - LIVE_WEEKS + 1).getTime()).toISOString();
       const from = Date.parse(b.since) - OVERLAP;
       const back = (b.version || 0) < VERSION ? mondayOf(feedbackWeek(now) - 1).getTime() : from;
       return new Date(Math.min(from, back)).toISOString();

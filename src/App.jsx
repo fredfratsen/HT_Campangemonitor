@@ -12,7 +12,7 @@ import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } fro
 import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
 import { startHalt, waitsForAds, haltLabel, haltLine } from './lib/halt.js';
 import { ofPeople, pickPerson, NOBODY } from './lib/assignFilter.js';
-import { clientFunctions, isOpen, newFns, addWith } from './lib/assignFunctions.js';
+import { clientFunctions, isOpen, newFns, addWith, withTrelloNames } from './lib/assignFunctions.js';
 import { matchesQ } from './lib/queueSearch.js';
 import { qc, qb, nl, avgOf, sgn, reasonList, agoTxt, daysTxt, lsGet, lsSet, rnd, health, monitor } from './lib/helpers.js';
 import { monFields, ctlText, ctlDate, ctlDays, dayShort, CTL_MAX } from './lib/controle.js';
@@ -537,6 +537,8 @@ export default class App extends React.Component {
         mktOpts: [{ v: '', l: 'Marketeer: niet wijzigen' }, ...this.mkts().map(x => ({ v: x, l: x }))],
         apply: () => this.assignPicked(picked),
         canIgnore: picked.every(x => !x.linked), ignore: () => this.ignoreClients(picked, true),
+        canReload: live, reloading: !!A.reload, reload: () => this.reloadBoards(picked),
+        reloadText: A.reload ? `Ophalen… ${A.reload.done}/${A.reload.total}` : 'Opnieuw ophalen',
         clear: () => setA({ sel: {}, rec: '', mkt: '' })
       }
     };
@@ -719,6 +721,35 @@ export default class App extends React.Component {
     const n = `${done} ${done === 1 ? 'klant' : 'klanten'}`;
     const text = rec === '__inactive' ? `${n} op Niet actief gezet${mkt ? ` · marketeer ${mkt}` : ''}` : `${n} toegewezen aan ${names([rec, mkt].filter(Boolean))}`;
     this.assignFlash(res, done ? text : '');
+  }
+  /**
+   * Opnieuw ophalen (the ticked clients in Toewijzing): their boards fresh from Trello, past the memory of the server
+   * and the app, with their history read again (server/trello.js). Their campaigns take the names the board and its
+   * functions have in Trello now (lib/assignFunctions.js), for a column or board renamed there.
+   */
+  async reloadBoards(list) {
+    if (this.state.source !== 'trello' || this.state.asg.reload || !list.length) return;
+    const setR = reload => this.setState(s => ({ asg: { ...s.asg, reload } }));
+    const got = {}, failed = [];
+    let err = '';
+    for (const x of list) {
+      setR({ done: Object.keys(got).length + failed.length, total: list.length });
+      try { got[x.key] = await this.tget(`/boards/${x.key}?fresh=1`); this._bd[x.key] = got[x.key]; this._seen[x.key] = { activity: x.board.dateLastActivity, at: Date.now() }; }
+      catch (e) { failed.push(x.name); err = e.message; }
+    }
+    let renamed = 0;
+    this.setState(s => {
+      let links = s.live.links;
+      for (const [id, bd] of Object.entries(got)) links = withTrelloNames(links, id, bd);
+      renamed = links.filter((k, i) => k.vac !== s.live.links[i].vac || k.boardName !== s.live.links[i].boardName).length;
+      return { boardData: { ...this._bd }, boardList: s.boardList.map(b => got[b.id] && got[b.id].name ? { ...b, name: got[b.id].name } : b),
+        live: { ...s.live, links }, asg: { ...s.asg, reload: null, sel: {} } };
+    }, () => {
+      this.rebuildLive();
+      const n = list.length - failed.length, what = n === 1 ? (list.find(x => got[x.key]) || {}).name : `${n} klanten`;
+      this.flash(!n ? `Opnieuw ophalen mislukt: ${err}` : [`${what} opnieuw opgehaald uit Trello`,
+        renamed ? `nieuwe naam voor ${renamed} ${renamed === 1 ? 'campagne' : 'campagnes'}` : '', failed.length ? `${names(failed)} mislukt` : ''].filter(Boolean).join(' · '));
+    });
   }
   /** "Geen klant": a board that isn't a client leaves the list (Herstel brings it back). */
   ignoreClients(list, on) {

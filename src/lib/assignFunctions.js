@@ -2,7 +2,7 @@
 // lost their function in Trello. On a board with intake lists ("Nieuwe Sollicitant | Kok"), a campaign of an older
 // label or of an archived intake list misses one (noCol): the teamlead moves it to an intake list (Overzetten, so it
 // keeps its feedback) or stops it. How the functions are counted: lib/boardStats.js.
-import { linkKey } from './boardStats.js';
+import { linkKey, boardFunctions } from './boardStats.js';
 
 /**
  * Client boardId with its Trello links (campaigns), fns (boardFunctions of the loaded board, null while it loads) and
@@ -34,3 +34,17 @@ export const newFns = x => x.whole ? (x.cols ? x.split : []) : x.fns.filter(f =>
 
 /** Who a new function of client x can be added with: its recruiter (or Niet actief), either one when it has several. */
 export const addWith = x => !x.linked || !x.rec ? [] : x.rec === '__multi' ? x.recs.filter(Boolean) : [x.rec];
+
+/**
+ * Opnieuw ophalen: the Trello links with the names of board bd (boardId) as they are in Trello now, the board's and
+ * each function's (an intake list or label renamed in Trello). A campaign without a function now (Geen kolom), or for
+ * the whole board, keeps its own. Links of other boards stay as they are.
+ */
+export function withTrelloNames(links, boardId, bd) {
+  const fns = boardFunctions(bd, links.filter(k => k.boardId === boardId));
+  return links.map(k => {
+    if (k.boardId !== boardId) return k;
+    const f = linkKey(k) !== '*' && fns.find(x => x.id === linkKey(k));
+    return { ...k, boardName: bd.name || k.boardName, ...(f ? { labelName: f.name, vac: f.name } : {}) };
+  });
+}
