@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCandidates, parseLead, parseDesc } from '../server/candidates.js';
-import { atsStats, addStats, KEEP_MS } from '../src/lib/ats.js';
+import { atsStats, addStats, KEEP_MS, openQuestions } from '../src/lib/ats.js';
 import { weekOf } from '../src/lib/weeks.js';
 
 const memDocs = () => (name, initial) => ({ data: initial(), save() {}, flush() {} });
@@ -226,4 +226,42 @@ test('a refused move changes nothing; doorzetten needs Gescreend or further', ()
   assert.throws(() => ats.act(kim, c.id, { kind: 'move', to: 'gescreend', contact: { name: 'Nieuwe Naam', phone: '0612345678' } }), /Vul eerst de screening in/);
   assert.equal(c.stage, 'nieuw'); assert.equal(c.name, 'Priya Ramdin'); assert.equal(c.log.length, n);
   assert.throws(() => ats.act(kim, c.id, { kind: 'doorzetten' }), /Doorzetten kan pas vanaf Gescreend\./);
+});
+
+function atClient(ats, key) {
+  const c = ats.take(key, priya).cand;
+  return ats.act(kim, c.id, { kind: 'move', to: 'gescreend', screening: SCR });
+}
+const door = { naam: 'Anna', organisatie: 'Sojubar' };
+test('the client: Geen gehoor stays put, Op gesprek / Aangenomen / Afwijzen move, each marked as the client', () => {
+  const { ats, key } = setup(), c = atClient(ats, key);
+  assert.equal(ats.klantAct('t-b1-kok', c.id, { kind: 'geenGehoor' }, door).stage, 'gescreend');
+  assert.equal(c.klantGg, 1);
+  assert.deepEqual([c.log[0].by, c.log[0].klant], ['Sojubar · Anna', true]);
+  assert.ok(c.undo, 'Geen gehoor keeps the recruiter\'s undo');
+  const g = ats.klantAct('t-b1-kok', c.id, { kind: 'gesprek', at: '2026-11-12T14:00:00' }, door);
+  assert.equal(g.stage, 'gesprek');
+  assert.equal(g.undo, null, 'a move by the client clears the recruiter\'s undo');
+  assert.equal(ats.klantAct('t-b1-kok', c.id, { kind: 'gesprek', at: '2026-11-19T14:00:00' }, door).stage, 'gesprek', 'nog een gesprek');
+  assert.throws(() => ats.klantAct('t-b1-kok', c.id, { kind: 'afwijzen', reason: 'Diefstal' }, door), /Kies een reden/);
+  assert.equal(ats.klantAct('t-b1-kok', c.id, { kind: 'afwijzen', reason: 'No show' }, door).reason, 'No show');
+  assert.throws(() => ats.klantAct('t-b1-kok', c.id, { kind: 'gesprek', at: '2026-11-20T10:00:00' }, door), /alleen bij Gescreend of Gesprek/);
+});
+test('the client only reaches visible candidates of the link it names', () => {
+  const { ats, key } = setup(), c = atClient(ats, key), fresh = ats.take(key, { naam: 'Mo', telefoon: '0633334444' }).cand;
+  assert.equal(ats.klantAct('t-b1-andere', c.id, { kind: 'opmerking', text: 'x' }, door), null);
+  assert.equal(ats.klantAct('t-b1-kok', fresh.id, { kind: 'opmerking', text: 'x' }, door), null);
+  assert.equal(ats.klantAct('t-b1-kok', 'bestaatniet', { kind: 'opmerking', text: 'x' }, door), null);
+  assert.throws(() => ats.klantAct('t-b1-kok', c.id, { kind: 'opmerking', text: 'x' }, { naam: '' }), /Wie de actie deed ontbreekt/);
+});
+test('questions: the RM answers each once; open ones are counted', () => {
+  const { ats, key } = setup(), c = atClient(ats, key);
+  ats.klantAct('t-b1-kok', c.id, { kind: 'vraag', text: 'Rijbewijs?' }, door);
+  ats.klantAct('t-b1-kok', c.id, { kind: 'vraag', text: 'Weekend?' }, door);
+  const [q1] = c.vragen, rm = { id: 'danielle', name: 'Danielle' };
+  ats.act(rm, c.id, { kind: 'antwoord', vraagId: q1.id, text: 'Ja, B' });
+  assert.equal(openQuestions(c), 1);
+  assert.deepEqual([q1.antwoord.door, q1.antwoord.tekst], ['Danielle', 'Ja, B']);
+  assert.throws(() => ats.act(rm, c.id, { kind: 'antwoord', vraagId: q1.id, text: 'nog eens' }), /al beantwoord/);
+  assert.throws(() => ats.act(rm, c.id, { kind: 'antwoord', vraagId: 'nee', text: 'x' }), /bestaat niet/);
 });

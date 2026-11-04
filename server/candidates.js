@@ -13,7 +13,7 @@
 //   reason and the weeks they were called in, so the monitor's numbers stay the same (atsStats).
 import { randomToken, sha256 } from './crypto.js';
 import { normEmail, normPhone } from './blacklist.js';
-import { STAGE_KEYS, STAGE_RANK, CALL_STAGES, END_STAGES, KEEP_MS, stageName, cleanScreening, screeningMissing } from '../src/lib/ats.js';
+import { visibleToClient, STAGE_KEYS, STAGE_RANK, CALL_STAGES, END_STAGES, KEEP_MS, stageName, cleanScreening, screeningMissing } from '../src/lib/ats.js';
 import { REASONS } from '../src/lib/constants.js';
 import { weekOf } from '../src/lib/weeks.js';
 
@@ -96,7 +96,7 @@ export function createCandidates(docs) {
   const linkOfKey = raw => { const h = sha256(String(raw || '')); return Object.keys(D.links).find(id => D.links[id].hash === h) || null; };
 
   const mustGet = id => D.cands[id] || fail('Deze kandidaat bestaat niet (meer).');
-  const log = (c, by, what, now) => { c.log.unshift({ at: now, by, what }); c.lastAt = now; };
+  const log = (c, by, what, now, extra) => { c.log.unshift({ at: now, by, what, ...extra }); c.lastAt = now; };
   const callWeek = (c, now) => { const w = weekOf(now); if (!c.calls.includes(w)) c.calls.push(w); };
 
   /** A lead for the campaign of key raw. Returns { cand, dup }, or null for an unknown key. */
@@ -227,6 +227,15 @@ export function createCandidates(docs) {
         needScreening(c.screening);
         c.doorgezetOp = now; log(c, by, 'Doorgezet naar klant', now); keepUndo = true;
         break;
+      case 'antwoord': {
+        const text = line(a.text, 1000), q = (c.vragen || []).find(x => x.id === a.vraagId);
+        if (!q) fail('Deze vraag bestaat niet (meer).');
+        if (q.antwoord) fail('Deze vraag is al beantwoord.');
+        if (!text) fail('Schrijf eerst een antwoord.');
+        q.antwoord = { at: now, door: by, tekst: text };
+        log(c, by, `Antwoord aan klant: ${text}`, now); keepUndo = true;
+        break;
+      }
       case 'undo':
         if (!c.undo) fail('Er is niets om ongedaan te maken.');
         Object.assign(c, c.undo); c.undo = null;
@@ -236,6 +245,57 @@ export function createCandidates(docs) {
       default: fail('Onbekende actie.');
     }
     if (!keepUndo) c.undo = undoable ? before : null;
+    f.save();
+    return c;
+  }
+
+  /**
+   * What the client does with a candidate handed over (see visibleToClient), through the portal of campaign linkId:
+   * { kind: 'geenGehoor' | 'gesprek' (at) | 'aangenomen' | 'afwijzen' (reason) | 'opmerking' (text) | 'vraag' (text) },
+   * door = { naam, organisatie }. Returns null when the candidate isn't there for this client. Not undoable.
+   */
+  function klantAct(linkId, id, a = {}, door = {}, now = Date.now()) {
+    const c = D.cands[id];
+    if (!c || c.link !== linkId || !visibleToClient(c)) return null;
+    const naam = line(door.naam, 80), org = line(door.organisatie, 80);
+    if (!naam || !org) fail('Wie de actie deed ontbreekt.');
+    const by = `${org} · ${naam}`, say = what => log(c, by, what, now, { klant: true });
+    const text = () => { const t = line(a.text, 1000); if (!t) fail('Schrijf eerst een tekst.'); return t; };
+    switch (a.kind) {
+      case 'geenGehoor':
+        c.klantGg = (c.klantGg || 0) + 1; say('Gebeld, geen gehoor');
+        break;
+      case 'gesprek': {
+        if (!['gescreend', 'gesprek'].includes(c.stage)) fail('Een gesprek plannen kan alleen bij Gescreend of Gesprek.');
+        const at = Date.parse(a.at);
+        if (!a.at || isNaN(at)) fail('Kies de datum en tijd van het gesprek.');
+        moveTo(c, 'gesprek', now); c.gesprek = at; c.undo = null;
+        say(`Op gesprek · ${when(at)}`);
+        break;
+      }
+      case 'aangenomen':
+        if (['aangenomen', 'afgewezen'].includes(c.stage)) fail(`${c.name} is al afgerond.`);
+        moveTo(c, 'aangenomen', now); c.undo = null;
+        say('Aangenomen');
+        break;
+      case 'afwijzen':
+        if (!REASONS.includes(a.reason)) fail('Kies een reden.');
+        if (c.stage === 'afgewezen') fail(`${c.name} is al afgewezen.`);
+        moveTo(c, 'afgewezen', now); c.reason = a.reason; c.undo = null;
+        say(`Afgewezen: ${a.reason}`);
+        break;
+      case 'opmerking':
+        say(`Opmerking: ${text()}`);
+        break;
+      case 'vraag': {
+        const tekst = text();
+        (c.vragen ||= []).push({ id: 'v' + now.toString(36) + randomToken(3), at: now, door: by, tekst, antwoord: null });
+        say(`Vraag: ${tekst}`);
+        break;
+      }
+      default: fail('Onbekende actie.');
+    }
+    c.klantAt = now;
     f.save();
     return c;
   }
@@ -261,5 +321,5 @@ export function createCandidates(docs) {
     if (hit) f.save();
   }
 
-  return { switched, newKey, linkOfKey, take, fromTrello, takeTrello, act, get: id => D.cands[id] || null, ofLink, all, anon: () => D.anon, prune, rename };
+  return { switched, newKey, linkOfKey, take, fromTrello, takeTrello, act, klantAct, get: id => D.cands[id] || null, ofLink, all, anon: () => D.anon, prune, rename };
 }
