@@ -129,6 +129,12 @@ export function answer(url, now = Date.now()) {
   if (b < 0) return Response.json({ message: 'not found' }, { status: 404 });
   const { actions, ...bd } = board(b, now);
   if (p === `/boards/${boardId(b)}`) return Response.json(bd);
+  // The open cards with their name and description, as Zapier writes it (for a function switched to the ATS).
+  if (p === `/boards/${boardId(b)}/cards`) {
+    const who = Object.fromEntries(actions.filter(a => a.type === 'createCard').map(a => [a.data.card.id, a.data.card.name]));
+    return Response.json(bd.cards.filter(c => !c.closed).map(c => ({ id: c.id, name: who[c.id] || 'Kandidaat',
+      desc: `**Telefoonnummer:** 06${String(Math.floor(rnd(c.id, 'tel') * 1e8)).padStart(8, '0')}\n**E-mail:** ${(who[c.id] || 'kandidaat').toLowerCase().replace(/[^a-z]+/g, '.')}@gmail.com\n**Ervaring:** ${1 + Math.floor(rnd(c.id, 'jaar') * 8)} jaar` })));
+  }
   if (p !== `/boards/${boardId(b)}/actions`) return Response.json({ message: 'not found' }, { status: 404 });
   const q = u.searchParams, since = Date.parse(q.get('since') || 0), before = q.get('before');
   return Response.json(actions.filter(a => Date.parse(a.date) >= since && (!before || a.id < before)).slice(0, Number(q.get('limit')) || 50));

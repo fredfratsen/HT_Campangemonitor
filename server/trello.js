@@ -4,7 +4,9 @@
 // Data minimisation: the server decides which fields are fetched, not the browser. Only list names, labels, and
 // per card its list, labels and the two custom fields the monitor uses (Sollicitatiedatum, Reden afgewezen)
 // come through. Candidate names, descriptions and other custom fields (phone numbers, ...) are never fetched with
-// a board. A board's history (which list each card went to, and the ‘Geen gehoor’ and ‘TBA afspraak’ comments, for
+// a board. Only for a campaign switched to the ATS are the name and description of its open cards read, when they
+// move to the app's board (cardTexts, see candidates.js); the cards it took over are left out of every board load
+// from then on (skip). A board's history (which list each card went to, and the ‘Geen gehoor’ and ‘TBA afspraak’ comments, for
 // trelloIntake.js) always comes with the card's title, the candidate's name: of each move only the card and list ids
 // are kept, of a comment only the card id and the time, the rest (the comment's text too) is dropped right away, so
 // the name is never stored or sent on.
@@ -74,9 +76,10 @@ export async function testTrello(creds) {
  * @param o.intake    createTrelloIntake (trelloIntake.js): the intake list every card came in through
  * @param o.linked    () => Set of the board ids linked in Toewijzing, for refresh()
  * @param o.links     id => the Trello links (campaigns) of a board, so the snapshot counts its functions as the app does
+ * @param o.skip      id => Set of the board's card ids taken over by the ATS (candidates.fromTrello): left out
  * @param o.now       the clock (tests)
  */
-export function trelloRouter(getCreds, { snapshot = null, intake = null, linked = () => new Set(), links = () => [], now = Date.now } = {}) {
+export function trelloRouter(getCreds, { snapshot = null, intake = null, linked = () => new Set(), links = () => [], skip = () => new Set(), now = Date.now } = {}) {
   const cache = new Map(); // url -> { at, body } or { pending }: /members/me and the list of boards
   const boards = new Map(); // board id -> { at, activity, body }: its last load
   const loading = new Map(); // board id -> the load from Trello under way
@@ -161,7 +164,7 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
     const p = (async () => {
       const r = await get(`/boards/${id}`, BOARD_Q);
       if (r.status !== 200) return r;
-      const bd = minimise(JSON.parse(r.body));
+      const bd = without(minimise(JSON.parse(r.body)), id);
       if (intake) { const moves = await history(id, full); if (g === gen) keep('kolomgeheugen', () => intake.update(id, bd, moves, t)); }
       if (snapshot && g === gen) keep('snapshot', () => snapshot.board(id, bd, t, links(id)));
       const body = JSON.stringify(bd);
@@ -171,6 +174,33 @@ export function trelloRouter(getCreds, { snapshot = null, intake = null, linked 
     loading.set(id, p);
     return p;
   }
+
+  /** Board bd without the cards the ATS took over (changes bd in place). */
+  function without(bd, id) {
+    const sk = skip(id);
+    if (sk.size) bd.cards = (bd.cards || []).filter(c => !sk.has(c.id));
+    return bd;
+  }
+  /** Board id fresh from Trello, with its history read again (for the ATS to take its cards over). Throws on an error. */
+  router.board = async id => {
+    const r = await loadBoard(id, true);
+    if (r.status !== 200) throw new Error(`Trello gaf een fout (${r.status}).`);
+    return JSON.parse(r.body);
+  };
+  /** The name and description of the open cards ids of board id, as Map id → { name, desc }; the other cards are dropped. */
+  router.cardTexts = async (id, ids) => {
+    const r = await get(`/boards/${id}/cards`, 'filter=open&fields=name,desc');
+    if (r.status !== 200) throw new Error(`Trello gaf een fout (${r.status}).`);
+    return new Map(JSON.parse(r.body).filter(c => ids.has(c.id)).map(c => [c.id, { name: c.name, desc: c.desc }]));
+  };
+  /** After the ATS took cards over: board id from memory and its snapshot without them, before anyone loads it again. */
+  router.dropTaken = id => {
+    const m = boards.get(id);
+    if (!m) return;
+    const bd = without(JSON.parse(m.body), id);
+    m.body = JSON.stringify(bd);
+    if (snapshot) keep('snapshot', () => snapshot.board(id, bd, now(), links(id)));
+  };
 
   /** One round: the list of boards, then every linked or recently active board that changed (or is over an hour old). */
   let busy = false;

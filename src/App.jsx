@@ -66,8 +66,11 @@ const names = a => a.length > 1 ? `${a.slice(0, -1).join(', ')} en ${a[a.length 
 const pausedText = n => `${n} nieuwe ${n === 1 ? 'campagne' : 'campagnes'} op Pauze tot de ads live staan`;
 
 class TrelloError extends Error {}
-/** Kandidaten › Bord: the open campaign (link), its candidates, the one in the panel (sel) and what the panel asks (mode). */
+/** Recruiter › Bord: the open campaign (link), its candidates, the one in the panel (sel) and what the panel asks (mode). */
 const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null };
+// The open Trello cards of a switched campaign come onto the Bord (server/candidates.js takeTrello).
+const TRELLO_NOTE = 'De lopende kaarten uit Trello komen mee naar het Bord. In Trello blijven ze staan, maar ze tellen daar niet meer mee.';
+const trelloDone = n => !n ? 'Geen nieuwe kaarten uit Trello' : `${n} ${n === 1 ? 'kandidaat' : 'kandidaten'} uit Trello op het Bord gezet`;
 
 export default class App extends React.Component {
   static defaultProps = { startView: 'week', showTrello: true };
@@ -656,7 +659,8 @@ export default class App extends React.Component {
     const c = { id: f.link ? f.link.id : f.campaign.id, client: x.name, vac: f.name, halt: f.halt }, stop = { label: 'Stoppen', onClick: () => this.askHalt(c, 'stop') };
     // Switched to the ATS: its candidates come in through an intake link (Zapier), not as Trello cards.
     const canAts = !!f.link && this.state.source === 'trello' && this.sync.mode === 'server', sw = canAts && this.state.atsInfo ? this.state.atsInfo[c.id] : null;
-    const ats = !canAts || !this.state.atsInfo ? [] : [sw ? { label: 'Nieuwe intake-link', onClick: () => this.askIntake(c, false) } : { label: 'Omzetten naar ATS', onClick: () => this.askIntake(c, true) }];
+    const ats = !canAts || !this.state.atsInfo ? [] : sw ? [{ label: 'Kaarten uit Trello halen', onClick: () => this.askTrello(c) }, { label: 'Nieuwe intake-link', onClick: () => this.askIntake(c, false) }]
+      : [{ label: 'Omzetten naar ATS', onClick: () => this.askIntake(c, true) }];
     const atsText = sw ? ` · ATS, intake-link …${sw.last4 || ''}` : '';
     if (!f.halt) return { name: f.name, meta: `Campagne${atsText}${cards}`, fg: '#1D1D1B', acts: [...ats, stop] };
     return { name: f.name, meta: haltLine(f.halt) + atsText + cards, fg: '#8C8C8A',
@@ -672,19 +676,37 @@ export default class App extends React.Component {
       title: first ? 'Omzetten naar het ATS?' : 'Nieuwe intake-link?', okLabel: first ? 'Omzetten' : 'Nieuwe link maken',
       text: first ? `Nieuwe kandidaten voor ${name} komen dan via een intake-link in de app binnen, op het Bord, in plaats van in Trello.`
         : `De huidige intake-link van ${name} werkt dan meteen niet meer.`,
-      note: first ? 'Zet daarna de zap in Zapier op de nieuwe link. Kaarten die al in Trello staan, lopen daar af en blijven meetellen.'
+      note: first ? `Zet daarna de zap in Zapier op de nieuwe link. ${TRELLO_NOTE}`
         : 'Zet de nieuwe link meteen in de zap, anders komen er geen kandidaten meer binnen.',
       onOk: async () => {
         this.setState({ confirm: null });
-        try { const r = await api('POST', `/api/kandidaten/intake/${encodeURIComponent(c.id)}`); this.showIntake(name, r.url); this.loadAts(); }
+        try {
+          const r = await api('POST', `/api/kandidaten/intake/${encodeURIComponent(c.id)}`);
+          this.showIntake(name, r.url, r.trello);
+          this.loadAts();
+        } catch (e) { this.flash(e.message); }
+      }
+    } });
+  }
+  /** Kaarten uit Trello halen: the open cards that are still in Trello (came in there since), onto the Bord too. */
+  askTrello(c) {
+    const name = `${c.client} – ${c.vac}`;
+    this.setState({ confirm: {
+      title: 'Kaarten uit Trello halen?', okLabel: 'Naar het bord',
+      text: `De lopende kandidaten van ${name} die nog in Trello staan, komen op het Bord.`, note: TRELLO_NOTE,
+      onOk: async () => {
+        this.setState({ confirm: null });
+        try { const r = await api('POST', `/api/kandidaten/trello/${encodeURIComponent(c.id)}`); this.flash(trelloDone(r.trello)); this.loadAts(); }
         catch (e) { this.flash(e.message); }
       }
     } });
   }
-  showIntake(name, url) {
+  /** n: how many Trello cards came along when switching (null: none tried, or Trello failed). */
+  showIntake(name, url, n = undefined) {
     this.setState({ confirm: {
       title: 'Intake-link voor Zapier', okLabel: 'Kopiëren en sluiten', text: url,
-      note: `Plak deze link in de zap van ${name} (Webhooks by Zapier › POST). Je ziet hem maar één keer; kwijt, dan maak je een nieuwe.`,
+      note: `Plak deze link in de zap van ${name} (Webhooks by Zapier › POST). Je ziet hem maar één keer; kwijt, dan maak je een nieuwe.`
+        + (n === undefined ? '' : n === null ? ' De kaarten uit Trello lukten nu niet; probeer het straks met Kaarten uit Trello halen.' : ` ${trelloDone(n)}.`),
       onOk: () => {
         this.setState({ confirm: null });
         navigator.clipboard.writeText(url).then(() => this.flash('Intake-link gekopieerd'), () => this.flash('Kopiëren lukte niet'));
@@ -1286,18 +1308,20 @@ export default class App extends React.Component {
     // Menu: one section per kind of work, each item only when you have the right for it.
     const navActive = st.view === 'detail' ? st.back : st.view;
     const navItem = ([k, label, badge]) => ({ label, badge, hasBadge: !!badge, bg: navActive === k ? '#F5F2ED' : 'transparent', fg: navActive === k ? '#1B1B63' : '#3C3C3A', fw: navActive === k ? 600 : 500, onClick: () => this.go(k) });
+    // Bord with the recruiter's daily work; Health-regels and Blacklist, seldom needed, at the bottom under Dev.
     const navSections = [
-      recMode && { title: 'Recruiter', items: [['live', 'Live campagnes'], ['checkin', 'Wekelijkse feedback recruiter', myOpen], ['mine', 'Mijn campagnes']] },
+      { title: 'Recruiter', items: [
+        ...(recMode ? [['live', 'Live campagnes'], ['checkin', 'Wekelijkse feedback recruiter', myOpen], ['mine', 'Mijn campagnes']] : []),
+        ...(this.viewOk('bord', me) && this.bordCampaigns(me).length ? [['bord', 'Bord']] : [])] },
       { title: 'Campagnemonitor', items: [
         ...(overview ? [['week', 'Weekoverzicht'], ['campaigns', 'Campagnes']] : []),
         ...(can('feedback.client') ? [['klant', 'Feedback klant']] : []),
         ...(can('assign') ? [['toewijzing', 'Toewijzing', this.assignData().open]] : []),
-        ...(HISTORY_ENABLED && overview ? [['history', 'Historie & analyse']] : []),
-        ...(overview ? [['rules', 'Health-regels']] : [])] },
-      { title: 'Kandidaten', items: [
-        ...(this.viewOk('bord', me) && this.bordCampaigns(me).length ? [['bord', 'Bord']] : []),
+        ...(HISTORY_ENABLED && overview ? [['history', 'Historie & analyse']] : [])] },
+      { title: 'Dev', items: [
+        ...(this.viewOk('dev', me) ? [['dev', 'Bugs & ideeën', this.unsortedIdeas()]] : []),
+        ...(overview ? [['rules', 'Health-regels']] : []),
         ...(this.viewOk('blacklist', me) ? [['blacklist', 'Blacklist', can('blacklist.manage') && st.blSum ? st.blSum.pending : 0]] : [])] },
-      this.viewOk('dev', me) && { title: 'Dev', items: [['dev', 'Bugs & ideeën', this.unsortedIdeas()]] },
       { title: '', items: [['settings', 'Instellingen']] }
     ].filter(x => x && x.items.length).map(x => ({ title: x.title, items: x.items.map(navItem) }));
 
@@ -1783,7 +1807,11 @@ export default class App extends React.Component {
     try {
       const r = await api('GET', '/api/kandidaten/stats');
       this._ats = r.links; this._atsLoaded = true;
+      // A board the ATS took more Trello cards of: load it again, so they no longer count in Trello as well.
+      const was = this._taken || {}, taken = r.taken || {}, again = Object.keys(taken).filter(id => this._taken && taken[id] !== (was[id] || 0) && this._bd && this._bd[id]);
+      this._taken = taken;
       this.setState({ atsInfo: r.links }, () => { if (this.state.source === 'trello') this.rebuildLive(); else this.openPending(); });
+      if (again.length) await this.loadBoards(again.map(id => ({ id, dateLastActivity: ((this._seen || {})[id] || {}).activity })), this._run, true);
     } catch (e) { /* keeps what it has; the next change tries again */ }
   }
   /** The switched campaigns `me` has a board of: their own as a recruiter, all of them with candidates.all. */

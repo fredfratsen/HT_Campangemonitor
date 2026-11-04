@@ -89,8 +89,8 @@ have *Eigen klanten bekijken* instead, see the last point)
   example while covering for a colleague. Like a recruiter's own campaigns, this is a filter in the app, not a
   server check.
 
-**Candidates** (Bord: recruiters on their own campaigns, *Alle kandidaten bekijken* on all; Blacklist: right
-*Blacklist raadplegen*; recruiters, Teamlead, Dev)
+**Candidates** (Bord, in the menu under Recruiter: recruiters on their own campaigns, *Alle kandidaten bekijken* on
+all; Blacklist, under Dev with Health-regels: right *Blacklist raadplegen*; recruiters, Teamlead, Dev)
 
 - **Bord** (the ATS): a campaign switched over from Trello keeps its candidates in the app itself
   (`server/candidates.js`, `DATA_DIR/candidates.json`, never in `/api/state`), on a board per function: Nieuw,
@@ -99,8 +99,14 @@ have *Eigen klanten bekijken* instead, see the last point)
   each Meta lead to it (`POST /api/intake/<key>`, no login, JSON or form; `naam`/`full_name`, `telefoon`/`phone_number`,
   `email`, `bron`, the other fields become the answers shown on the candidate). The whole link shows once; *Nieuwe
   intake-link* replaces it. The same phone number or email address on the same function within 30 days is no new
-  candidate. Cards that were already in Trello finish there; Trello's and the ATS's numbers of the campaign are added up
-  (`addStats` in `src/lib/ats.js`), so Weekoverzicht, Live campagnes and the weekly feedback keep working.
+  candidate. Switching also brings the function's **open Trello cards** onto the board (Nieuw, Contactpoging, Niet
+  bereikbaar, Gescreend, Gesprek, Voorstel; Afgewezen and Aangenomen stay in Trello): the server reads the name and
+  description of those cards only (`cardTexts` in `server/trello.js`), takes phone, email and the `Vraag: antwoord`
+  lines from the description (`parseDesc`), and keeps when they applied, how far they got and their call weeks. The
+  cards stay in Trello, but every board load leaves them out from then on (`skip`, by card id), so nothing counts
+  twice. *Kaarten uit Trello halen* in Toewijzing does it again for cards that came into Trello since. Trello's and the
+  ATS's numbers of the campaign are added up (`addStats` in `src/lib/ats.js`), so Weekoverzicht, Live campagnes and
+  the weekly feedback keep working.
   Click a card and a panel opens next to the board: phone and email, an automatic blacklist check on phone and email,
   and one click per outcome: *Geen gehoor* (counts an attempt and takes the card off today's call list until
   midnight, like the Trello button; it never moves the card, also not the third time: then the panel offers *Naar
@@ -108,7 +114,7 @@ have *Eigen klanten bekijken* instead, see the last point)
   naar* (Gesprek asks the moment), a note, and *Ongedaan maken* for the last move. Cards can also be dragged to
   another column (with a mouse); while dragging, a drop zone *Sleep hierheen om af te wijzen* shows at the bottom, and
   dropping on Gesprek or Afgewezen first asks the moment or the reason in the panel. Setting a client to *Done* on the board flashes
-  the whole screen green, with a winking thumbs-up (our own drawing, `Celebrate` in `BoardView.jsx`). Everyone who has the board open
+  the whole screen green, with `public/the-office.gif` and confetti (`Celebrate` in `BoardView.jsx`). Everyone who has the board open
   sees a change at once (the server counts `meta.ats` up). Live campagnes links to it (*Bord →*); the address bar
   follows it (`#bord=<campaign>`). Personal data is kept **4 weeks** after Afgewezen or Aangenomen, or after the last
   action in an open stage; then only anonymous counts are left (campaign, week, how far they got, reason, call weeks).
@@ -303,7 +309,8 @@ variable afterwards.
   privacy statement (Meta form), and how a candidate's request for access or erasure is handled (not in the app yet).
 - **Data minimisation for candidates.** The server decides which Trello fields are fetched, not the browser. Only
   lists, labels, and per card its list, labels and the two custom fields the monitor uses (*Sollicitatiedatum*,
-  *Reden afgewezen*) come through. Descriptions and other custom fields are never fetched. To know which intake list
+  *Reden afgewezen*) come through. Descriptions and other custom fields are never fetched, except the name and
+  description of the open cards of a function switched to the ATS, once, when they move to the Bord. To know which intake list
   a card came in through, the server also reads each board's history; Trello always sends the card's title (the
   candidate's name) with it. The server keeps only the card and list ids of each move and drops the rest right away,
   so names are never stored or sent to the browser (`server/trello.js`). The same goes for comments, read for
@@ -738,6 +745,7 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | GET | `/api/kandidaten/stats` | The switched campaigns and their anonymous numbers (`last4` of the key only with *assign*) |
 | GET | `/api/kandidaten?link=` | The candidates of a switched campaign (its recruiter, or *candidates.all*) |
 | POST | `/api/kandidaten/:id/actie` | `{ kind: geenGehoor \| tba \| move \| reject \| note \| undo, … }` |
-| POST | `/api/kandidaten/intake/:linkId` | Switch a campaign to the ATS, or give it a new intake link (*assign*) |
+| POST | `/api/kandidaten/intake/:linkId` | Switch a campaign to the ATS (with its open Trello cards), or give it a new intake link (*assign*) |
+| POST | `/api/kandidaten/trello/:linkId` | The open Trello cards of a switched campaign onto its board (*assign*) |
 | GET | `/api/trello/…` | Read-only Trello proxy (`members/me`, `members/me/boards`, `boards/:id`) |
 | GET | `/api/trello/snapshot` | The [Trello snapshot](#trello-snapshot): `{ boards: { [boardId]: { at, stats } } }` |

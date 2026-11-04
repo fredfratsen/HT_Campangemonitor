@@ -2,7 +2,7 @@
 // show right after login, before the full boards are loaded in the background.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey } from '../src/lib/boardStats.js';
+import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey, cardsOf } from '../src/lib/boardStats.js';
 import { intakeName, stageOf } from '../src/lib/constants.js';
 import { CUR } from '../src/lib/weeks.js';
 import { board, intakeBoard, dayOf, BOARD_ID, KOK, BEDIENING, SPOED, IN, INTAKE_CARD, CARD } from './trello-fixture.js';
@@ -204,4 +204,16 @@ test('a function without cards yet is a campaign of one empty week', () => {
   const c = liveCampaign(link, undefined, {}, []);
   assert.deepEqual(c.weeks.map(w => [w.w, w.leads]), [[CUR, 0]]);
   assert.deepEqual(c.live, { nieuw: 0, contact: 0, gebeld: 0 });
+});
+
+test('the open cards of one campaign, for the ATS to take over: by function, not archived, not Informatie', () => {
+  const ids = key => cardsOf(board(), key).map(x => x.card.id).sort();
+  assert.deepEqual(ids(KOK), [CARD.kokNew, CARD.kokContact].sort());
+  assert.deepEqual(ids(BEDIENING), [CARD.bedGesprek]);
+  assert.deepEqual(ids('*'), [CARD.kokNew, CARD.kokContact, CARD.bedGesprek].sort());
+  const g = cardsOf(board(), BEDIENING)[0];
+  assert.equal(g.stage, 'gesprek');
+  assert.equal(g.list, 'Gesprek');
+  assert.ok(g.at > 0);
+  assert.deepEqual(cardsOf(intakeBoard(), KOK).map(x => x.card.id).sort(), [INTAKE_CARD.inKok, INTAKE_CARD.kokMoved, INTAKE_CARD.labelOnly].sort(), 'a card keeps the intake list it came in through');
 });

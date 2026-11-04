@@ -11,8 +11,9 @@ import { INTEGRATIONS } from './secrets.js';
 import { testTrello } from './trello.js';
 import { testSmtp } from './mail.js';
 import { BlacklistError, normEmail as blEmail, normPhone } from './blacklist.js';
-import { CandidateError } from './candidates.js';
+import { CandidateError, trelloStage } from './candidates.js';
 import { atsStats } from '../src/lib/ats.js';
+import { cardsOf, linkKey } from '../src/lib/boardStats.js';
 import { TimingError } from './timing.js';
 import { MON, stamp } from '../src/lib/weeks.js';
 import { IDEA_TYPES, IDEA_STATUS } from '../src/lib/constants.js';
@@ -382,7 +383,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     const e = blacklist.add(req.account, b, { direct });
     audit.log(direct ? 'blacklist.added' : 'blacklist.proposed', { actor: req.account, details: blacklist.auditDetails(e) });
     if (!direct) notify(req.account, accounts.live().filter(a => a.status === 'active' && a.id !== req.account.id && manages(a)).map(a => a.name),
-      'Voordracht voor de blacklist', [`${req.account.name} draagt een kandidaat voor. Reden: ${e.reason}.`, 'Bevestig of wijs af onder Kandidaten › Blacklist.']);
+      'Voordracht voor de blacklist', [`${req.account.name} draagt een kandidaat voor. Reden: ${e.reason}.`, 'Bevestig of wijs af onder Dev › Blacklist.']);
     res.json({ entry: e, ...blacklist.counts() });
   }));
   bl.patch('/:id', mustManage, json, wrap(async (req, res) => {
@@ -437,7 +438,10 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   ats.get('/stats', (req, res) => {
     const sw = candidates.switched(), stats = atsStats(candidates.all(), candidates.anon());
     const keys = can(req.account, 'assign');
-    res.json({ links: Object.fromEntries(Object.entries(sw).map(([id, l]) => [id, { since: l.at, ...(keys ? { last4: l.last4 } : {}), stats: stats[id] || null }])) });
+    // taken: per board how many Trello cards the ATS took over, so open apps load that board again when it changes.
+    const taken = {};
+    for (const id of Object.keys(sw)) { const k = linkOf(id); if (k) taken[k.boardId] = candidates.fromTrello(k.boardId).size; }
+    res.json({ links: Object.fromEntries(Object.entries(sw).map(([id, l]) => [id, { since: l.at, ...(keys ? { last4: l.last4 } : {}), stats: stats[id] || null }])), taken });
   });
   ats.get('/', wrap(async (req, res) => {
     const id = String(req.query.link || ''), link = linkOf(id);
@@ -452,14 +456,42 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     atsChanged();
     res.json({ cand: view(req.account, out) });
   }));
-  // Toewijzing: switch a campaign over (its first intake link) or give it a new one. The whole link is only in this answer.
+  /**
+   * The open Trello cards of switched campaign link onto its board (candidates.takeTrello): only their names and
+   * descriptions are read. Returns how many came over.
+   */
+  async function fromTrello(a, link) {
+    const links = Object.values(store.docs['live.links'] || {}).filter(k => k.boardId === link.boardId);
+    const cards = cardsOf(await trello.board(link.boardId), linkKey(link), links).filter(x => trelloStage(x.stage, x.list));
+    const ids = new Set(cards.map(x => x.card.id));
+    if (!ids.size) return 0;
+    const texts = await trello.cardTexts(link.boardId, ids);
+    const n = candidates.takeTrello(a, link.id, link.boardId, cards.map(x => ({ ...x, ...texts.get(x.card.id) })));
+    trello.dropTaken(link.boardId);
+    audit.log('candidates.trello', { actor: a, details: { campagne: `${link.boardName} – ${link.vac}`, kandidaten: n } });
+    return n;
+  }
+  // Toewijzing: switch a campaign over (its first intake link, and its Trello cards come along) or give it a new one.
+  // The whole link is only in this answer.
   ats.post('/intake/:linkId', need('assign'), wrap(async (req, res) => {
     const link = linkOf(req.params.linkId);
     if (!link) return bad(res, 'Deze campagne bestaat niet (meer).');
     const first = !candidates.switched()[link.id], key = candidates.newKey(req.account, link.id);
     audit.log('candidates.intake_link', { actor: req.account, details: { campagne: `${link.boardName} – ${link.vac}`, actie: first ? 'omgezet naar ATS' : 'nieuwe intake-link' } });
+    let trelloN = null;
+    if (first && secrets.get('trello')) try { trelloN = await fromTrello(req.account, link); } catch (e) { console.error('[ats] Trello-kaarten niet overgehaald:', e.message); }
     atsChanged();
-    res.json({ url: linkUrl(req, `/api/intake/${key}`), first });
+    res.json({ url: linkUrl(req, `/api/intake/${key}`), first, trello: trelloN });
+  }));
+  // Toewijzing: the cards that came into Trello since, onto the board too (again, for a campaign switched earlier).
+  ats.post('/trello/:linkId', need('assign'), wrap(async (req, res) => {
+    const link = linkOf(req.params.linkId);
+    if (!link) return bad(res, 'Deze campagne bestaat niet (meer).');
+    if (!candidates.switched()[link.id]) return bad(res, 'Deze campagne staat nog niet op het ATS.');
+    let n;
+    try { n = await fromTrello(req.account, link); } catch (e) { return bad(res, `De kaarten uit Trello lukten niet: ${e.message}`); }
+    atsChanged();
+    res.json({ trello: n });
   }));
   api.use('/kandidaten', ats);
 

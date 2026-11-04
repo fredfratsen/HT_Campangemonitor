@@ -4,6 +4,9 @@
 //
 // - A switched campaign (a Trello link, by its id) has an intake key: Zapier posts each Meta lead to
 //   /api/intake/<key>. Only its hash is kept; a new key replaces the old one.
+// - The open cards a switched campaign still has in Trello come over too (takeTrello): name and description are read
+//   from Trello for those cards only. The cards stay in Trello, but the app leaves them out of its numbers from then
+//   on (fromTrello, by card id), so nobody counts twice.
 // - Geen gehoor never moves a candidate, also not the third time: the recruiter moves them (lib/ats.js).
 // - Four weeks after a candidate is done with (Afgewezen, Aangenomen), or four weeks after the last action in an open
 //   stage, the personal data goes (prune). What stays is anonymous: campaign, week, how far they got, the rejection
@@ -43,11 +46,35 @@ export function parseLead(body) {
   return { name, phone: phone || null, email: email || null, src, answers };
 }
 
+/**
+ * The description of a Trello card (as Zapier wrote it, lines like "Telefoon: 06…") → { phone, email, answers }.
+ * Markdown is dropped; a description without such lines is kept as one answer.
+ */
+export function parseDesc(desc) {
+  const text = String(desc || '').replace(/[*_`>#]/g, ''), answers = [];
+  let phone = '', email = '';
+  for (const raw of text.split('\n')) {
+    const m = /^\s*[-•]?\s*([^:]{1,80}):\s*(.+)$/.exec(raw);
+    if (!m) continue;
+    const k = m[1].trim(), v = line(m[2], 500);
+    if (/tel|phone|mobiel|gsm/i.test(k) && !phone && normPhone(v).length >= 9) phone = v;
+    else if (/mail/i.test(k) && !email && validEmail(normEmail(v))) email = normEmail(v);
+    else if (!/^(naam|name|full name|volledige naam|voornaam|achternaam)$/i.test(k) && answers.length < MAX_ANSWERS) answers.push([line(k, 120), v]);
+  }
+  if (!email) { const m = /[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/i.exec(text); if (m) email = normEmail(m[0]); }
+  if (!phone) { const m = /(?:\+|\b0)[\d\s()-]{8,16}\d/.exec(text); if (m && normPhone(m[0]).length >= 9) phone = line(m[0], 30); }
+  if (!answers.length && text.trim()) answers.push(['Beschrijving uit Trello', line(text, 1000)]);
+  return { phone: phone ? line(phone, 30) : null, email: email || null, answers };
+}
+/** Trello's stages (stageOf in constants.js) → the board's columns; Afgewezen and Aangenomen stay in Trello. */
+const FROM_TRELLO = { nieuw: 'nieuw', contact: 'contact', gescreend: 'gescreend', gesprek: 'gesprek', voorgesteld: 'voorstel' };
+export const trelloStage = (stage, list) => FROM_TRELLO[stage] || (stage === 'overig' && /bereikbaar/i.test(list) ? 'nb' : null);
+
 /** @param docs  document factory from jsonfile.js */
 export function createCandidates(docs) {
-  const f = docs('candidates', () => ({ links: {}, cands: {}, anon: [] }));
+  const f = docs('candidates', () => ({ links: {}, cands: {}, anon: [], trello: {} }));
   const D = f.data;
-  for (const k of ['links', 'cands']) if (!D[k]) D[k] = {};
+  for (const k of ['links', 'cands', 'trello']) if (!D[k]) D[k] = {};
   if (!D.anon) D.anon = [];
 
   /** The campaigns with an intake key: { linkId: { at, by, last4 } }. */
@@ -77,6 +104,32 @@ export function createCandidates(docs) {
       lastAt: now, calls: [], log: [{ at: now, by: 'automatisch', what: `Gesolliciteerd via ${lead.src}` }], undo: null };
     f.save();
     return { cand: c, dup: false };
+  }
+
+  /** The Trello cards taken over on board boardId: from then on the app leaves them out of Trello's numbers. */
+  const fromTrello = boardId => new Set(D.trello[boardId] || []);
+  /**
+   * Takes over the open Trello cards of campaign link on board boardId: [{ card, list, stage, at, name, desc }] (see
+   * cardsOf in lib/boardStats.js). They keep when they applied, how far they got and the weeks they were called in,
+   * so the numbers stay the same. A card already taken over isn't added again. Returns how many were added.
+   */
+  function takeTrello(actor, link, boardId, cards, now = Date.now()) {
+    const done = fromTrello(boardId);
+    let n = 0;
+    for (const x of cards) {
+      const stage = trelloStage(x.stage, x.list);
+      if (!stage || done.has(x.card.id)) continue;
+      done.add(x.card.id);
+      const name = line(x.name, 80) || 'Naam onbekend', { phone, email, answers } = parseDesc(x.desc);
+      const at = isNaN(x.at) ? now : x.at, gg = Date.parse(x.card.geenGehoor) || 0, id = 'k' + now.toString(36) + randomToken(4).replace(/[-_]/g, 'x');
+      D.cands[id] = { id, link, name, phone, email, src: 'Trello', answers, at, stage, reached: STAGE_RANK[stage] || 0, att: 0, gg, tba: null, gesprek: null,
+        reason: null, endedAt: null, lastAt: now, calls: [...(x.card.calls || [])], undo: null,
+        log: [{ at: now, by: actor.name, what: `Overgehaald uit Trello (${line(x.list, 60)})` }, { at, by: 'automatisch', what: 'Gesolliciteerd (Trello)' }] };
+      n++;
+    }
+    D.trello[boardId] = [...done];
+    f.save();
+    return n;
   }
 
   const moveTo = (c, to, now) => {
@@ -169,5 +222,5 @@ export function createCandidates(docs) {
     if (hit) f.save();
   }
 
-  return { switched, newKey, linkOfKey, take, act, get: id => D.cands[id] || null, ofLink, all, anon: () => D.anon, prune, rename };
+  return { switched, newKey, linkOfKey, take, fromTrello, takeTrello, act, get: id => D.cands[id] || null, ofLink, all, anon: () => D.anon, prune, rename };
 }

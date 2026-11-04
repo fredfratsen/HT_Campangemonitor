@@ -18,7 +18,7 @@ export const EVENTS = {
   'blacklist.added': 'Op de blacklist gezet', 'blacklist.proposed': 'Voorgedragen voor de blacklist', 'blacklist.approved': 'Voordracht blacklist bevestigd',
   'blacklist.rejected': 'Voordracht blacklist afgewezen', 'blacklist.withdrawn': 'Voordracht blacklist ingetrokken', 'blacklist.updated': 'Blacklist-vermelding gewijzigd',
   'blacklist.removed': 'Van de blacklist gehaald', 'blacklist.expired': 'Blacklist-vermelding verlopen', 'blacklist.export': 'Blacklist-vermelding gedownload',
-  'candidates.intake_link': 'Intake-link ATS', 'candidates.pruned': 'Kandidaatgegevens gewist (bewaartermijn)',
+  'candidates.intake_link': 'Intake-link ATS', 'candidates.trello': 'Kaarten uit Trello naar het bord', 'candidates.pruned': 'Kandidaatgegevens gewist (bewaartermijn)',
   'mail.sent': 'E-mail verstuurd', 'mail.failed': 'E-mail niet verstuurd', 'mail.to': 'Mailadres voor bugs en ideeën gewijzigd',
   'timing.minutes': 'Afgesproken tijd van vroeger gewijzigd',
 };

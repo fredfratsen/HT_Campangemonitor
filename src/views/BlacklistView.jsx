@@ -1,4 +1,4 @@
-// Kandidaten › Blacklist. Loads its own data from /api/blacklist: candidates' personal data are never part of the
+// Dev › Blacklist. Loads its own data from /api/blacklist: candidates' personal data are never part of the
 // shared state (see server/blacklist.js). With blacklist.view you search and propose; with blacklist.manage you
 // see the whole list and decide on proposals. Under "Bekijk als" it shows what that person would see; the server
 // still acts on your own rights.

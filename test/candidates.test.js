@@ -2,7 +2,7 @@
 // four weeks of keeping the data, and the numbers the monitor gets. The routes and rights are tested in server.test.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createCandidates, parseLead } from '../server/candidates.js';
+import { createCandidates, parseLead, parseDesc } from '../server/candidates.js';
 import { atsStats, addStats, KEEP_MS } from '../src/lib/ats.js';
 import { weekOf } from '../src/lib/weeks.js';
 
@@ -139,4 +139,37 @@ test('Trello and ATS numbers of one campaign add up', () => {
   assert.deepEqual(s.live, { nieuw: 3, contact: 2, gebeld: 1 });
   assert.equal(addStats(undefined, a), a);
   assert.equal(addStats(t, undefined), t);
+});
+
+test('a Trello description: phone, email and the other lines as answers; without such lines it is one answer', () => {
+  const d = parseDesc('**Telefoonnummer:** 06 1234 5678\n**E-mail:** Sanne@Example.com\nNaam: Sanne\nErvaring: 2 jaar\n\nAangemaakt door Zapier');
+  assert.deepEqual(d, { phone: '06 1234 5678', email: 'sanne@example.com', answers: [['Ervaring', '2 jaar']] });
+  const loose = parseDesc('Bel haar op +31 6 2222 3333 of mail mo@gmail.com');
+  assert.equal(loose.phone, '+31 6 2222 3333');
+  assert.equal(loose.email, 'mo@gmail.com');
+  assert.deepEqual(loose.answers, [['Beschrijving uit Trello', 'Bel haar op +31 6 2222 3333 of mail mo@gmail.com']]);
+  assert.deepEqual(parseDesc(''), { phone: null, email: null, answers: [] });
+});
+
+test('Trello cards onto the board: open stages only, once, with their numbers; the cards are left out from then on', () => {
+  const { ats } = setup(), now = Date.now(), at = now - 10 * DAY, w = weekOf(at);
+  const card = (id, stage, list, extra = {}) => ({ card: { id, ...extra }, stage, list, at, name: `Kandidaat ${id}`, desc: `Telefoon: 06123456${id.slice(-2)}` });
+  const cards = [card('c01', 'nieuw', 'Nieuwe Sollicitant | Kok', { calls: [w], geenGehoor: new Date(now).toISOString() }), card('c02', 'gesprek', 'Gesprek'),
+    card('c03', 'voorgesteld', 'Voorstel'), card('c04', 'overig', 'Niet bereikbaar'), card('c05', 'afgewezen', 'Afgewezen'), card('c06', 'geplaatst', 'Aangenomen')];
+  assert.equal(ats.takeTrello(kim, 't-b1-kok', 'b1', cards, now), 4);
+  const got = Object.fromEntries(ats.ofLink('t-b1-kok').map(c => [c.name.slice(-3), c]));
+  assert.deepEqual(Object.keys(got).sort(), ['c01', 'c02', 'c03', 'c04']);
+  assert.deepEqual([got.c01.stage, got.c02.stage, got.c03.stage, got.c04.stage], ['nieuw', 'gesprek', 'voorstel', 'nb']);
+  assert.equal(got.c01.at, at, 'when they applied, not when they came over');
+  assert.equal(got.c01.phone, '0612345601');
+  assert.equal(got.c01.src, 'Trello');
+  assert.equal(got.c01.log[0].by, 'Kim');
+  const s = atsStats(ats.all(), [], now)['t-b1-kok'];
+  assert.equal(s.weeks[w].nieuw, 4);
+  assert.equal(s.weeks[w].gesprek, 2, 'Gesprek and Voorstel got that far');
+  assert.equal(s.weeks[w].gebeld, 1, 'the weeks it was called in come along');
+  assert.deepEqual(s.live, { nieuw: 0, contact: 0, gebeld: 1 }, 'Geen gehoor today: off the call list');
+  assert.deepEqual([...ats.fromTrello('b1')].sort(), ['c01', 'c02', 'c03', 'c04']);
+  assert.equal(ats.takeTrello(kim, 't-b1-kok', 'b1', cards, now), 0, 'not twice');
+  assert.equal(ats.takeTrello(kim, 't-b1-kok', 'b1', [card('c07', 'contact', 'Contactpoging'), ...cards], now), 1, 'a card that came into Trello since');
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StatusPill } from './LiveView.jsx';
 
-// Kandidaten › Bord: the candidates of one campaign switched to the ATS, in columns like the Trello board, with a panel
+// Recruiter › Bord: the candidates of one campaign switched to the ATS, in columns like the Trello board, with a panel
 // next to it for the candidate you clicked. Every action goes to the server (App.bordAct); see lib/ats.js. Cards can
 // be dragged to another column, or onto the Afgewezen tile (with a mouse; on a phone Verplaatsen naar does the same).
 const eyebrow = { fontSize: '11px', fontWeight: '600', letterSpacing: '.08em', textTransform: 'uppercase', color: '#5C5C5A' };
@@ -142,8 +142,8 @@ function Panel({ p }) {
 
 /**
  * Done, clicked on the Bord: the whole screen flashes green with a beam of light rolling across (as a client row does in
- * Live campagnes), confetti rains down, and a winking face in a party hat gives a thumbs up. Our own drawing, so nothing
- * is loaded from elsewhere. Gone after a few seconds (App.celebrate); it never catches clicks.
+ * Live campagnes), confetti rains down, and the-office.gif (from /public) celebrates in the card. Gone after a few
+ * seconds (App.celebrate); it never catches clicks.
  */
 const CONFETTI_COLORS = ['#F9CE00', '#FB8915', '#1B1B63', '#3CC27F', '#1A7A4A', '#D32F2F', '#7FB8FF'];
 function confetti(n = 90) {
@@ -161,31 +161,7 @@ function Celebrate({ client }) {
       <div className="bord-done-flash" aria-hidden="true" />
       <div className="bord-done-confetti" aria-hidden="true">{bits.map(b => <span key={b.key} style={b.style} />)}</div>
       <div className="bord-done-card">
-        <svg className="bord-done-fig" width="220" height="250" viewBox="0 -50 220 250" aria-hidden="true">
-          <defs>
-            <linearGradient id="bord-done-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#F9CE00" /><stop offset="1" stopColor="#FB8915" /></linearGradient>
-          </defs>
-          <circle cx="92" cy="100" r="72" fill="url(#bord-done-face)" />
-          <circle cx="52" cy="122" r="11" fill="#FB8915" opacity=".45" />
-          <circle cx="132" cy="122" r="11" fill="#FB8915" opacity=".45" />
-          <ellipse cx="66" cy="86" rx="8" ry="11" fill="#1D1D1B" />
-          <ellipse className="bord-done-wink" cx="118" cy="86" rx="8" ry="11" fill="#1D1D1B" />
-          <path d="M104 64 q14 -8 28 0" fill="none" stroke="#1D1D1B" strokeWidth="5" strokeLinecap="round" />
-          <path d="M56 120 q36 34 72 0" fill="none" stroke="#1D1D1B" strokeWidth="6" strokeLinecap="round" />
-          <g className="bord-done-hat">
-            <path d="M62 36 L96 -40 L128 34 Z" fill="#1B1B63" />
-            <path d="M84 -14 L106 -18 M76 4 L114 -2 M68 22 L122 16" stroke="#F9CE00" strokeWidth="6" strokeLinecap="round" />
-            <path d="M58 36 Q95 48 132 34" fill="none" stroke="#FB8915" strokeWidth="8" strokeLinecap="round" />
-            <circle cx="96" cy="-42" r="11" fill="#FB8915" />
-            <circle cx="92" cy="-46" r="4" fill="#FFE2BD" />
-          </g>
-          <g className="bord-done-thumb">
-            <rect x="150" y="160" width="58" height="16" rx="5" fill="#1B1B63" />
-            <rect x="152" y="112" width="54" height="52" rx="13" fill="#FFE2BD" stroke="#1D1D1B" strokeWidth="4" />
-            <rect x="158" y="70" width="20" height="50" rx="10" fill="#FFE2BD" stroke="#1D1D1B" strokeWidth="4" />
-            <path d="M180 128 h24 M180 141 h24 M180 154 h22" stroke="#1D1D1B" strokeWidth="3" strokeLinecap="round" />
-          </g>
-        </svg>
+        <img className="bord-done-fig" src="/the-office.gif" width="220" height="182" alt="" />
         <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '26px', color: '#14603A' }}>Done! Top gedaan</div>
         <div style={{ fontSize: '14px', color: '#3C3C3A' }}>{client} staat op Done voor vandaag</div>
       </div>

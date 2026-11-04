@@ -107,6 +107,20 @@ export function boardStats(bd, now = Date.now(), links = []) {
 }
 
 /**
+ * The open cards of campaign key (as in boardStats) on board bd, Informatie not counted, as [{ card, list, stage, at }]:
+ * the list's name and stage, and when the candidate applied (Sollicitatiedatum, else when the card was made). For
+ * the cards a switched campaign takes over from Trello (server/candidates.js).
+ */
+export function cardsOf(bd, key, links = []) {
+  const lists = {}; (bd.lists || []).forEach(l => { lists[l.id] = l; });
+  const fnsOf = functions(bd, links).of, sd = (bd.customFields || []).find(f => /sollicitatiedatum/i.test(f.name));
+  return (bd.cards || []).filter(c => !c.closed && lists[c.idList] && stageOf(lists[c.idList].name) !== 'info' && (key === '*' || fnsOf(c).includes(key))).map(c => {
+    const dv = sd && (c.customFieldItems || []).find(i => i.idCustomField === sd.id), l = lists[c.idList];
+    return { card: c, list: l.name, stage: stageOf(l.name), at: dv && dv.value && dv.value.date ? Date.parse(dv.value.date) : cardTs(c.id) };
+  });
+}
+
+/**
  * Only what the home screens need (Weekoverzicht, Campagnes, Mijn campagnes, Live campagnes): new candidates and
  * cards called per week from week `from` on (whether a week asks feedback, see checkin.js), and today's call list.
  * No pipeline and no rejection reasons.
