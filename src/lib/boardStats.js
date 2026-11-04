@@ -16,6 +16,7 @@
 // that list under its own key, so it keeps its feedback and the cards of its old label or archived list.
 import { CUR, weekOf } from './weeks.js';
 import { RANK, MON_FIELDS, stageOf, intakeName, cardTs } from './constants.js';
+import { addStats } from './ats.js';
 
 /** How many weeks a campaign shows, up to and including the feedback week. */
 export const LIVE_WEEKS = 12;
@@ -140,13 +141,16 @@ export function liveCampaign(k, s, f, acts, quick = false) {
  * The campaigns of the Trello links L.links: from the full board (full[boardId], boardStats) once it's loaded, until
  * then from the snapshot (quick[boardId].stats). A board in neither shows no campaign yet. A board on Niet actief
  * keeps its campaigns for the Recruitment Marketeer, without a recruiter (inactive).
+ * ats: the campaigns switched to the app's own candidates ({ linkId: { stats } }, see lib/ats.js): their numbers are
+ * added to what Trello still has of them, and they show without their board too. They get ats: true.
  */
-export function liveCampaigns(L, full, quick) {
+export function liveCampaigns(L, full, quick, ats = {}) {
   const ina = L.inactive || {};
   return L.links.map(k => {
-    const key = linkKey(k), f = L.fb[k.id] || {}, acts = L.actions[k.id] || [];
-    const c = full[k.boardId] ? liveCampaign(k, full[k.boardId][key], f, acts)
-      : quick[k.boardId] ? liveCampaign(k, quick[k.boardId].stats[key], f, acts, true) : null;
+    const key = linkKey(k), f = L.fb[k.id] || {}, acts = L.actions[k.id] || [], sw = ats[k.id], a = sw ? sw.stats || undefined : undefined;
+    const t = full[k.boardId] ? full[k.boardId][key] : quick[k.boardId] ? quick[k.boardId].stats[key] : undefined;
+    let c = full[k.boardId] || quick[k.boardId] || sw ? liveCampaign(k, addStats(t, a), f, acts, !full[k.boardId] && !!quick[k.boardId]) : null;
+    if (c && sw) c = { ...c, ats: true };
     return c && ina[k.boardId] ? { ...c, rec: '', inactive: true } : c;
   }).filter(Boolean);
 }

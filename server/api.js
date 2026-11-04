@@ -10,7 +10,9 @@ import { announceResumed } from './announce.js';
 import { INTEGRATIONS } from './secrets.js';
 import { testTrello } from './trello.js';
 import { testSmtp } from './mail.js';
-import { BlacklistError } from './blacklist.js';
+import { BlacklistError, normEmail as blEmail, normPhone } from './blacklist.js';
+import { CandidateError } from './candidates.js';
+import { atsStats } from '../src/lib/ats.js';
 import { TimingError } from './timing.js';
 import { MON, stamp } from '../src/lib/weeks.js';
 import { IDEA_TYPES, IDEA_STATUS } from '../src/lib/constants.js';
@@ -20,7 +22,7 @@ const MONTH_OPTIONS = [0, 3, 6, 12, 24];
 // Checks an integration's values before they are saved, and on request afterwards.
 const TESTS = { trello: testTrello, smtp: testSmtp };
 
-export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs = 15000, events = false }) {
+export function apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, candidates, atsChanged, timing, mailer, pollMs = 15000, events = false }) {
   const api = express.Router();
   const json = express.json({ limit: '100kb' });
   api.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -30,7 +32,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   const wrap = fn => async (req, res) => {
     try { await fn(req, res); }
     catch (e) {
-      if (e instanceof AccountError || e instanceof BlacklistError || e instanceof TimingError) return res.status(400).json({ error: 'invalid', message: e.message });
+      if (e instanceof AccountError || e instanceof BlacklistError || e instanceof TimingError || e instanceof CandidateError) return res.status(400).json({ error: 'invalid', message: e.message });
       console.error(e);
       res.status(500).json({ error: 'server_error', message: 'Er ging iets mis op de server.' });
     }
@@ -415,6 +417,51 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     download(res, `blacklist-${fileName(e.name)}-${new Date().toISOString().slice(0, 10)}.json`, blacklist.exportOf(e));
   }));
   api.use('/blacklist', bl);
+
+  // ── Kandidaten (ATS) ─────────────────────────────────────────────────
+  // Candidates' personal data, so only through these routes and never in /api/state (see candidates.js). A recruiter
+  // sees the candidates of their own switched campaigns, candidates.all all of them. The numbers per campaign are
+  // anonymous and go to everyone, like the Trello numbers.
+  const ats = express.Router();
+  const linkOf = id => (store.docs['live.links'] || {})[id] || null;
+  const seesLink = (a, link) => !!link && (can(a, 'candidates.all') || (can(a, 'feedback.own') && !!a.recName && link.rec === a.recName));
+  /** On the blacklist? By phone number or email address, never by name alone. Only who may look the list up sees why. */
+  function blOf(a, c) {
+    const tel = c.phone ? normPhone(c.phone).slice(-9) : '', mail = c.email ? blEmail(c.email) : '';
+    const hit = blacklist.all().find(e => e.status === 'actief' && ((tel && e.phone && normPhone(e.phone).slice(-9) === tel) || (mail && e.email === mail)));
+    if (!hit) return null;
+    return can(a, 'blacklist.view') || can(a, 'blacklist.manage') ? { reason: hit.reason } : { reason: null };
+  }
+  const view = (a, c) => { const { undo, ...rest } = c; return { ...rest, canUndo: !!undo, bl: blOf(a, c) }; };
+
+  ats.get('/stats', (req, res) => {
+    const sw = candidates.switched(), stats = atsStats(candidates.all(), candidates.anon());
+    const keys = can(req.account, 'assign');
+    res.json({ links: Object.fromEntries(Object.entries(sw).map(([id, l]) => [id, { since: l.at, ...(keys ? { last4: l.last4 } : {}), stats: stats[id] || null }])) });
+  });
+  ats.get('/', wrap(async (req, res) => {
+    const id = String(req.query.link || ''), link = linkOf(id);
+    if (!seesLink(req.account, link)) return forbidden(res);
+    res.json({ cands: candidates.ofLink(id).map(c => view(req.account, c)) });
+  }));
+  ats.post('/:id/actie', json, wrap(async (req, res) => {
+    const c = candidates.get(req.params.id);
+    if (!c) return bad(res, 'Deze kandidaat bestaat niet (meer).');
+    if (!seesLink(req.account, linkOf(c.link))) return forbidden(res);
+    const out = candidates.act(req.account, c.id, req.body || {});
+    atsChanged();
+    res.json({ cand: view(req.account, out) });
+  }));
+  // Toewijzing: switch a campaign over (its first intake link) or give it a new one. The whole link is only in this answer.
+  ats.post('/intake/:linkId', need('assign'), wrap(async (req, res) => {
+    const link = linkOf(req.params.linkId);
+    if (!link) return bad(res, 'Deze campagne bestaat niet (meer).');
+    const first = !candidates.switched()[link.id], key = candidates.newKey(req.account, link.id);
+    audit.log('candidates.intake_link', { actor: req.account, details: { campagne: `${link.boardName} – ${link.vac}`, actie: first ? 'omgezet naar ATS' : 'nieuwe intake-link' } });
+    atsChanged();
+    res.json({ url: linkUrl(req, `/api/intake/${key}`), first });
+  }));
+  api.use('/kandidaten', ats);
 
   // ── Tijdwinst ────────────────────────────────────────────────────────
   // Every browser sends its active time; only team totals per week are stored, without who sent it (see timing.js).

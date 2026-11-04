@@ -9,6 +9,7 @@ import { createAuth, sameOrigin } from './auth.js';
 import { createSecrets } from './secrets.js';
 import { createPrivacy } from './privacy.js';
 import { createBlacklist } from './blacklist.js';
+import { createCandidates, CandidateError } from './candidates.js';
 import { createTiming } from './timing.js';
 import { createMailer } from './mail.js';
 import { trelloRouter } from './trello.js';
@@ -45,8 +46,12 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   const secrets = createSecrets(docs, secretsKey);
   const accounts = createAccounts(docs, secretsKey);
   const blacklist = createBlacklist(docs);
+  const candidates = createCandidates(docs);
   const timing = createTiming(docs);
-  const privacy = createPrivacy({ accounts, store, audit, blacklist });
+  const privacy = createPrivacy({ accounts, store, audit, blacklist, candidates });
+  // After a change to the candidates, open apps reload the board and the numbers: they hear of it through the shared
+  // data (meta.ats), so through the same push and polling as everything else.
+  const atsChanged = () => store.mutate(D => { const m = D.meta || (D.meta = {}); m.ats = (m.ats || 0) + 1; });
   const auth = createAuth({ accounts, audit, secure, hosting });
   const mailer = createMailer({ secrets, audit, deferred: deferMail });
   const allLinks = () => Object.values(store.docs['live.links'] || {});
@@ -82,10 +87,26 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
     app.use('/fonts', express.static(path.join(publicDir, 'fonts'), { maxAge: '365d', immutable: true }));
   }
 
+  // A lead from Meta, posted by a Zapier zap to the intake link of a campaign switched to the ATS (see candidates.js).
+  // No login: the key in the link is the password. At most INTAKE_PER_MIN per key per minute.
+  const INTAKE_PER_MIN = 60, intakeHits = new Map();
+  app.post('/api/intake/:key', express.json({ limit: '20kb' }), express.urlencoded({ extended: false, limit: '20kb' }), (req, res) => {
+    const k = req.params.key, now = Date.now(), h = intakeHits.get(k);
+    if (h && now - h.since < 60000 && h.n >= INTAKE_PER_MIN) return res.status(429).json({ error: 'too_many', message: 'Te veel verzoeken; probeer het over een minuut opnieuw.' });
+    intakeHits.set(k, h && now - h.since < 60000 ? { since: h.since, n: h.n + 1 } : { since: now, n: 1 });
+    if (intakeHits.size > 1000) intakeHits.clear();
+    let r;
+    try { r = candidates.take(k, req.body, now); }
+    catch (e) { if (e instanceof CandidateError) return res.status(400).json({ error: 'invalid', message: e.message }); throw e; }
+    if (!r) return res.status(404).json({ error: 'unknown_link', message: 'Deze intake-link bestaat niet (meer).' });
+    atsChanged();
+    res.status(r.dup ? 200 : 201).json({ id: r.cand.id, ...(r.dup ? { dubbel: true } : {}) });
+  });
+
   app.use(auth.guard);
 
   app.use('/api/trello', trello);
-  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, timing, mailer, pollMs, events: hosting !== 'netlify' }));
+  app.use('/api', apiRouter({ accounts, audit, secrets, store, privacy, trello, blacklist, candidates, atsChanged, timing, mailer, pollMs, events: hosting !== 'netlify' }));
 
   // The app itself
   if (distDir && fs.existsSync(distDir)) {
@@ -95,13 +116,15 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
     app.get('/', (req, res) => res.type('text').send('Nog geen build gevonden. Draai "npm run build" of gebruik "npm run dev".'));
   }
 
-  /** Expired sessions and links, automatic anonymisation, old audit months, blacklist entries whose term ended. */
+  /** Expired sessions and links, automatic anonymisation, old audit months, blacklist entries and candidates whose term ended. */
   async function housekeeping() {
     accounts.cleanup();
     await privacy.autoAnonymise();
     await audit.prune();
     for (const e of blacklist.prune()) audit.log('blacklist.expired', { details: blacklist.auditDetails(e, { status: e.status }) });
+    const n = candidates.prune();
+    if (n) { audit.log('candidates.pruned', { details: { kandidaten: n } }); atsChanged(); }
   }
 
-  return { app, store, accounts, secrets, audit, privacy, blacklist, mailer, trello, housekeeping };
+  return { app, store, accounts, secrets, audit, privacy, blacklist, candidates, mailer, trello, housekeeping };
 }

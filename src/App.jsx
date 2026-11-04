@@ -5,8 +5,9 @@ import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, isoDate, mo
 import { checkinQueue, openWeeks, needsFeedback, openByRecruiter } from './lib/checkin.js';
 import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, HALT, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
-  NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED
+  NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED, REASONS
 } from './lib/constants.js';
+import { STAGES, CALL_STAGES, MAX_ATTEMPTS, stageName, calledToday } from './lib/ats.js';
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
 import { clientTarget } from './lib/clientLink.js';
@@ -37,6 +38,7 @@ import DetailView from './views/DetailView.jsx';
 import HistoryView from './views/HistoryView.jsx';
 import RulesView from './views/RulesView.jsx';
 import BlacklistView from './views/BlacklistView.jsx';
+import BoardView from './views/BoardView.jsx';
 import SidePanel from './views/SidePanel.jsx';
 import SettingsView from './views/settings/SettingsView.jsx';
 import DevView from './views/DevView.jsx';
@@ -64,6 +66,8 @@ const names = a => a.length > 1 ? `${a.slice(0, -1).join(', ')} en ${a[a.length 
 const pausedText = n => `${n} nieuwe ${n === 1 ? 'campagne' : 'campagnes'} op Pauze tot de ads live staan`;
 
 class TrelloError extends Error {}
+/** Kandidaten › Bord: the open campaign (link), its candidates, the one in the panel (sel) and what the panel asks (mode). */
+const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null };
 
 export default class App extends React.Component {
   static defaultProps = { startView: 'week', showTrello: true };
@@ -82,17 +86,19 @@ export default class App extends React.Component {
       toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {}, who: NOBODY }, liveExp: {}, liveFocus: null, mktDemo: null, seen: null, panel: null,
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
-      blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null, ctlDlg: null
+      blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null, ctlDlg: null,
+      atsInfo: null, bord: BORD0
     };
   }
 
   // ── Loading & syncing ────────────────────────────────────────────────
   async componentDidMount() {
     this._hashOpen = this.hashId();
+    this._hashBord = this.bordHash();
     // The link in the mail about a new bug or idea; read now, as the address bar is reset once the app is loaded.
     this._ideasLink = window.location.hash === '#ideeen';
     // A link typed or pasted into the address bar. Back and forward between the app's own steps is handled by popstate.
-    this._hash = () => { if (window.history.state && window.history.state.nav) return; this._nav = null; this._hashOpen = this.hashId(); this.openPending(); };
+    this._hash = () => { if (window.history.state && window.history.state.nav) return; this._nav = null; this._hashOpen = this.hashId(); this._hashBord = this.bordHash(); this.openPending(); };
     window.addEventListener('hashchange', this._hash);
     // The browser's Back and Forward buttons move between the app's screens (see syncHistory).
     this._pop = e => { if (e.state && e.state.nav) this.restoreNav(e.state.nav); };
@@ -151,6 +157,7 @@ export default class App extends React.Component {
       this.sync.begin();
       this.touchLogin(account.id);
       this.loadBlSummary();
+      this.loadAts();
       this.startMeter();
       this._seenTimer = setInterval(() => this.setState(s => { const id = s.account.id, mine = s.seen[id]; return mine ? { seen: { ...s.seen, [id]: { ...mine, last: Date.now() } } } : null; }), 60000);
       if (this.state.view === 'checkin') this.enterCheckin();
@@ -177,6 +184,9 @@ export default class App extends React.Component {
       // A blacklist notification means a proposal came in or was decided on: the count in the menu changed.
       const nBl = sh.inbox.filter(n => n.kind === 'blacklist').length;
       if (nBl !== this._nBl) { this._nBl = nBl; this.loadBlSummary(); }
+      // Candidates changed (the server counts meta.ats up): new numbers, and the open board again.
+      const atsRev = (sh.meta || {}).ats || 0;
+      if (atsRev !== this._atsRev) { this._atsRev = atsRev; this.loadAts(); if (this.state.view === 'bord') this.loadBord(); }
     });
   }
 
@@ -329,7 +339,7 @@ export default class App extends React.Component {
     if (this._run === run) this.setState({ sync: { state: 'ok', at: new Date() } });
   }
   /** The campaigns of the Trello links, from the full boards or the snapshot (lib/boardStats.js). */
-  liveCampaigns(L = this.state.live) { return liveCampaigns(L, this.boardNumbers(L), this._quick || {}); }
+  liveCampaigns(L = this.state.live) { return liveCampaigns(L, this.boardNumbers(L), this._quick || {}, this._ats || {}); }
   /**
    * boardStats of every loaded board, counted with its Trello links (they decide which campaigns were moved to an
    * intake list and which labels still count). Counted again when the board or those links change.
@@ -644,9 +654,42 @@ export default class App extends React.Component {
   /** The row in Toewijzing of function f of client x that has a campaign: Stoppen, or Hervatten / Opnieuw activeren. */
   linkedRow(x, f, cards) {
     const c = { id: f.link ? f.link.id : f.campaign.id, client: x.name, vac: f.name, halt: f.halt }, stop = { label: 'Stoppen', onClick: () => this.askHalt(c, 'stop') };
-    if (!f.halt) return { name: f.name, meta: `Campagne${cards}`, fg: '#1D1D1B', acts: [stop] };
-    return { name: f.name, meta: haltLine(f.halt) + cards, fg: '#8C8C8A',
-      acts: f.halt.kind === 'pauze' ? [{ label: 'Hervatten', strong: true, onClick: () => this.setHalt(c, null) }, stop] : [{ label: 'Opnieuw activeren', strong: true, onClick: () => this.setHalt(c, null) }] };
+    // Switched to the ATS: its candidates come in through an intake link (Zapier), not as Trello cards.
+    const canAts = !!f.link && this.state.source === 'trello' && this.sync.mode === 'server', sw = canAts && this.state.atsInfo ? this.state.atsInfo[c.id] : null;
+    const ats = !canAts || !this.state.atsInfo ? [] : [sw ? { label: 'Nieuwe intake-link', onClick: () => this.askIntake(c, false) } : { label: 'Omzetten naar ATS', onClick: () => this.askIntake(c, true) }];
+    const atsText = sw ? ` · ATS, intake-link …${sw.last4 || ''}` : '';
+    if (!f.halt) return { name: f.name, meta: `Campagne${atsText}${cards}`, fg: '#1D1D1B', acts: [...ats, stop] };
+    return { name: f.name, meta: haltLine(f.halt) + atsText + cards, fg: '#8C8C8A',
+      acts: f.halt.kind === 'pauze' ? [{ label: 'Hervatten', strong: true, onClick: () => this.setHalt(c, null) }, ...ats, stop] : [{ label: 'Opnieuw activeren', strong: true, onClick: () => this.setHalt(c, null) }, ...ats] };
+  }
+  /**
+   * Omzetten naar ATS (first) or Nieuwe intake-link, after "Weet je het zeker?": the server makes the intake link for
+   * the Zapier zap (server/candidates.js), shown once.
+   */
+  askIntake(c, first) {
+    const name = `${c.client} – ${c.vac}`;
+    this.setState({ confirm: {
+      title: first ? 'Omzetten naar het ATS?' : 'Nieuwe intake-link?', okLabel: first ? 'Omzetten' : 'Nieuwe link maken',
+      text: first ? `Nieuwe kandidaten voor ${name} komen dan via een intake-link in de app binnen, op het Bord, in plaats van in Trello.`
+        : `De huidige intake-link van ${name} werkt dan meteen niet meer.`,
+      note: first ? 'Zet daarna de zap in Zapier op de nieuwe link. Kaarten die al in Trello staan, lopen daar af en blijven meetellen.'
+        : 'Zet de nieuwe link meteen in de zap, anders komen er geen kandidaten meer binnen.',
+      onOk: async () => {
+        this.setState({ confirm: null });
+        try { const r = await api('POST', `/api/kandidaten/intake/${encodeURIComponent(c.id)}`); this.showIntake(name, r.url); this.loadAts(); }
+        catch (e) { this.flash(e.message); }
+      }
+    } });
+  }
+  showIntake(name, url) {
+    this.setState({ confirm: {
+      title: 'Intake-link voor Zapier', okLabel: 'Kopiëren en sluiten', text: url,
+      note: `Plak deze link in de zap van ${name} (Webhooks by Zapier › POST). Je ziet hem maar één keer; kwijt, dan maak je een nieuwe.`,
+      onOk: () => {
+        this.setState({ confirm: null });
+        navigator.clipboard.writeText(url).then(() => this.flash('Intake-link gekopieerd'), () => this.flash('Kopiëren lukte niet'));
+      }
+    } });
   }
   /**
    * The row of campaign f of client x that misses its intake list (an older label, or an archived list): Overzetten
@@ -926,7 +969,7 @@ export default class App extends React.Component {
     return ({ week: ov, campaigns: ov, history: HISTORY_ENABLED && ov, rules: ov,
       klant: r('feedback.client'), 'trello-test': r('trello.link') || r('integrations'), toewijzing: r('assign'),
       live: rec, checkin: rec || r('feedback.all'), mine: rec, detail: ov || rec,
-      blacklist: r('blacklist.view') || r('blacklist.manage'), settings: true,
+      blacklist: r('blacklist.view') || r('blacklist.manage'), bord: rec || r('candidates.all'), settings: true,
       dev: this.state.account.rights.includes('dev') })[view] || false; // your own right, also in Bekijk als
   }
   /** Can `me` fill in the recruiter feedback of campaign c? */
@@ -940,12 +983,14 @@ export default class App extends React.Component {
   go(view) {
     if (!this.viewOk(view)) view = this.homeView();
     this._hashOpen = null;
-    this.setState({ view, navOpen: false, ...(view === 'checkin' ? { ciKeep: [], ciQ: '' } : {}), ...(view === 'klant' ? { kQ: '' } : {}) }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); window.scrollTo(0, 0);
+    this._hashBord = null;
+    this.setState({ view, navOpen: false, ...(view === 'checkin' ? { ciKeep: [], ciQ: '' } : {}), ...(view === 'klant' ? { kQ: '' } : {}) }); if (view === 'checkin') this.enterCheckin(); if (view === 'klant') this.enterKlant(); if (view === 'bord') this.enterBord(); window.scrollTo(0, 0);
   }
   /** Campaign id from a link like #campagne=<id>, for example opened in a new tab from the Weekoverzicht. */
   hashId() { const m = /^#campagne=(.+)$/.exec(window.location.hash); return m ? decodeURIComponent(m[1]) : null; }
   /** Opens the campaign of such a link once it's loaded; with Trello live that can be after the boards come in. */
   openPending() {
+    this.openPendingBord();
     const id = this._hashOpen;
     if (!id || !this.state.loaded) return;
     if (!this.viewOk('detail')) { this._hashOpen = null; return; }
@@ -953,19 +998,30 @@ export default class App extends React.Component {
     this._hashOpen = null;
     this.open(id);
   }
+  /** A function's board from a link like #bord=<id>, once the switched campaigns are known. */
+  bordHash() { const m = /^#bord=(.+)$/.exec(window.location.hash); return m ? decodeURIComponent(m[1]) : null; }
+  openPendingBord() {
+    const id = this._hashBord;
+    if (!id || !this.state.loaded) return;
+    if (!this.viewOk('bord') || this.sync.mode !== 'server') { this._hashBord = null; return; }
+    if (!this._atsLoaded) return;
+    this._hashBord = null;
+    this.openBord(id);
+  }
   /**
    * Every screen switch is a step in the browser history, so the browser's Back button returns to the previous screen
    * instead of leaving the app. The address bar follows the open campaign, so a reload or a copied link opens it again.
    * A step remembers its screen, the screen of the step before it (from) and how far down you were (y).
    */
   syncHistory() {
-    if (!this._navOn || this._hashOpen) return;
-    const st = this.state, n = this._nav, sel = st.view === 'detail' ? st.sel : null;
-    if (n && n.view === st.view && n.sel === sel) return;
+    if (!this._navOn || this._hashOpen || this._hashBord) return;
+    const st = this.state, n = this._nav, sel = st.view === 'detail' ? st.sel : null, bord = st.view === 'bord' ? st.bord.link : null;
+    if (n && n.view === st.view && n.sel === sel && (n.bord || null) === bord) return;
     const push = !!n && !this._navReplace;
     this._navReplace = false;
     if (push) this.stampY();
-    this.writeNav({ view: st.view, sel, back: st.back, from: push ? n.view : n ? n.from : null }, push, sel ? '#campagne=' + encodeURIComponent(sel) : window.location.pathname + window.location.search);
+    this.writeNav({ view: st.view, sel, bord, back: st.back, from: push ? n.view : n ? n.from : null }, push,
+      sel ? '#campagne=' + encodeURIComponent(sel) : bord ? '#bord=' + encodeURIComponent(bord) : window.location.pathname + window.location.search);
   }
   writeNav(nav, push, url) {
     this._nav = nav;
@@ -985,6 +1041,7 @@ export default class App extends React.Component {
       ...(view === 'detail' ? { act: { ...s.act, text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, upd: null } : {}) }), () => window.scrollTo(0, nav.y || 0));
     if (view === 'checkin') this.enterCheckin();
     if (view === 'klant') this.enterKlant();
+    if (view === 'bord') this.enterBord(nav.bord);
   }
   /** "← Weekoverzicht" in a campaign: when that's the screen of the step before, it is the browser's Back, so the history stays the same either way. */
   navBack() {
@@ -1237,7 +1294,9 @@ export default class App extends React.Component {
         ...(can('assign') ? [['toewijzing', 'Toewijzing', this.assignData().open]] : []),
         ...(HISTORY_ENABLED && overview ? [['history', 'Historie & analyse']] : []),
         ...(overview ? [['rules', 'Health-regels']] : [])] },
-      this.viewOk('blacklist', me) && { title: 'Kandidaten', items: [['blacklist', 'Blacklist', can('blacklist.manage') && st.blSum ? st.blSum.pending : 0]] },
+      { title: 'Kandidaten', items: [
+        ...(this.viewOk('bord', me) && this.bordCampaigns(me).length ? [['bord', 'Bord']] : []),
+        ...(this.viewOk('blacklist', me) ? [['blacklist', 'Blacklist', can('blacklist.manage') && st.blSum ? st.blSum.pending : 0]] : [])] },
       this.viewOk('dev', me) && { title: 'Dev', items: [['dev', 'Bugs & ideeën', this.unsortedIdeas()]] },
       { title: '', items: [['settings', 'Instellingen']] }
     ].filter(x => x && x.items.length).map(x => ({ title: x.title, items: x.items.map(navItem) }));
@@ -1586,6 +1645,7 @@ export default class App extends React.Component {
       exportCsv: () => this.exportCsv(),
       rules, rulesLocked: !lead, resetRules: () => { this.setState({ rules: { ...DEF_RULES } }); this.flash('Standaardregels hersteld'); },
       isBlacklist: st.view === 'blacklist',
+      isBord: st.view === 'bord', bordV: st.view === 'bord' ? this.bordVals(me) : null,
       bl: { canManage: can('blacklist.manage'), me: { id: me.id, name: me.name }, isLocal: this.sync.mode === 'local',
         campaigns: active.map(c => ({ client: c.client, vac: c.vac })).sort((a, b) => a.client.localeCompare(b.client) || a.vac.localeCompare(b.vac)),
         flash: t => this.flash(t), onCounts: s => this.setState({ blSum: s }) },
@@ -1669,7 +1729,7 @@ export default class App extends React.Component {
       // Wekelijkse controle is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
       // noFb: nothing open and this week needs no feedback (no new candidates, not called).
       const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c), cw = c.weeks[c.weeks.length - 1], open = openWeeks(c).length > 0;
-      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open,
+      return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open, ats: !!c.ats,
         noFb: !c.halt && !open && cw.q == null && !needsFeedback(cw),
         rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? haltLabel(c.halt) : '', added: added[c.client] || trelloCreated(c.boardId) };
     }), sort);
@@ -1688,11 +1748,11 @@ export default class App extends React.Component {
     const rows = groups.map(g => {
       const ev = recent[g.client], mineEv = ev && ev.to === me.rec, multi = g.fns.length > 1, on = multi && !!exp[g.key];
       const e = status[g.key], st = statusToday(e, now);
-      const asks = g.fns.filter(f => !f.tag && !f.noFb).length;
+      const asks = g.fns.filter(f => !f.tag && !f.noFb).length, onBord = g.fns.find(f => f.ats);
       return { ...cells(g, asks, g.open, g.firstOpen, !asks), key: g.key, client: g.client, vac: multi ? `${g.fns.length} functies` : g.fns[0].vac, mkt: g.fns[0].mkt || '—',
         st, stBy: st ? e.by : '', stAt: st ? hhmm(e.at) : '', setSt: x => { x.stopPropagation(); this.setLiveStatus(g.key, nextStatus(st)); },
-        tag: multi ? '' : g.fns[0].tag, multi, expanded: on, open: multi ? () => this.setState(s => ({ liveExp: { ...s.liveExp, [g.key]: !on } })) : () => this.open(g.fns[0].id),
-        fns: on ? g.fns.map(f => ({ ...cells(f, 1, f.open ? 1 : 0, f.id, !!f.tag || f.noFb), vac: f.vac, tag: f.tag, open: () => this.open(f.id) })) : [],
+        tag: multi ? '' : g.fns[0].tag, bord: onBord ? () => this.openBord(onBord.id) : null, multi, expanded: on, open: multi ? () => this.setState(s => ({ liveExp: { ...s.liveExp, [g.key]: !on } })) : () => this.open(g.fns[0].id),
+        fns: on ? g.fns.map(f => ({ ...cells(f, 1, f.open ? 1 : 0, f.id, !!f.tag || f.noFb), vac: f.vac, tag: f.tag, open: () => this.open(f.id), bord: f.ats ? () => this.openBord(f.id) : null })) : [],
         focus: this.state.liveFocus === g.key, focused: () => this.setState({ liveFocus: null }),
         hasBadge: !!mineEv, badge: mineEv ? (ev.from ? `Overgenomen van ${ev.from}` : 'Nieuw') : '', bBg: mineEv && ev.from ? '#E7E7F0' : '#FFF8E0', bFg: mineEv && ev.from ? '#1B1B63' : '#B45309' };
     });
@@ -1714,6 +1774,132 @@ export default class App extends React.Component {
       ]
     };
   }
+  // ── Bord (ATS) ───────────────────────────────────────────────────────
+  // The candidates of campaigns switched from Trello to the app's own candidates (server/candidates.js, lib/ats.js),
+  // on a board per function. Only with the server: the local demo has no candidates.
+  /** Which campaigns are switched, with their numbers (anonymous, for everyone); then the campaigns are counted again. */
+  async loadAts() {
+    if (this.sync.mode !== 'server') return;
+    try {
+      const r = await api('GET', '/api/kandidaten/stats');
+      this._ats = r.links; this._atsLoaded = true;
+      this.setState({ atsInfo: r.links }, () => { if (this.state.source === 'trello') this.rebuildLive(); else this.openPending(); });
+    } catch (e) { /* keeps what it has; the next change tries again */ }
+  }
+  /** The switched campaigns `me` has a board of: their own as a recruiter, all of them with candidates.all. */
+  bordCampaigns(me = this.me()) {
+    if (this.sync.mode !== 'server' || this.state.source !== 'trello') return [];
+    const all = me.rights.has('candidates.all'), mine = me.rights.has('feedback.own') && !!me.rec;
+    return this.state.campaigns.filter(c => c.ats && !c.ended && (all || (mine && c.rec === me.rec && recruiterSees(c))));
+  }
+  /** Opens the board of campaign link (else the one open before, else the first) and loads its candidates. */
+  enterBord(link) {
+    const list = this.bordCampaigns(), cur = this.state.bord.link;
+    const id = [link, cur].find(x => x && list.some(c => c.id === x)) || (list[0] ? list[0].id : null);
+    if (id === cur && this.state.bord.cands) { this.loadBord(); return; }
+    this.setState(s => ({ bord: { ...BORD0, link: id, showRej: s.bord.showRej } }), () => this.loadBord());
+  }
+  openBord(link) {
+    this._hashBord = null;
+    this.setState({ view: 'bord', navOpen: false, panel: null });
+    this.enterBord(link);
+    window.scrollTo(0, 0);
+  }
+  async loadBord() {
+    const link = this.state.bord.link;
+    if (!link) return;
+    try {
+      const r = await api('GET', '/api/kandidaten?link=' + encodeURIComponent(link));
+      this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: r.cands, err: '' } } : null);
+    } catch (e) { this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: s.bord.cands || [], err: e.message } } : null); }
+  }
+  setBord(p) { this.setState(s => ({ bord: { ...s.bord, ...p } })); }
+  /** An action on candidate id, by default the one in the panel (see candidates.act); done: what the toast says afterwards. */
+  async bordAct(body, done = '', id = this.state.bord.sel) {
+    const B = this.state.bord;
+    if (!id || B.busy) return;
+    this.setBord({ busy: true });
+    try {
+      const r = await api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, body);
+      this.setState(s => ({ bord: { ...s.bord, busy: false, mode: null, text: '', at: '', cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
+      if (done) this.flash(done);
+    } catch (e) { this.setBord({ busy: false }); this.flash(e.message); this.loadBord(); }
+  }
+  bordVals(me) {
+    const st = this.state, B = st.bord, list = this.bordCampaigns(me), now = Date.now();
+    if (!list.length) return { empty: true, emptyText: this.sync.mode !== 'server' ? 'Het bord werkt alleen met de server; in de lokale demo zijn er geen kandidaten.'
+      : 'Er staan nog geen campagnes van jou op het bord. De teamlead zet een functie om naar het ATS onder Toewijzing; daarna komen de kandidaten hier binnen in plaats van in Trello.' };
+    const c = list.find(x => x.id === B.link) || list[0], fns = list.filter(x => x.boardId === c.boardId);
+    const clients = [...new Map(list.map(x => [x.boardId, x])).values()].sort((a, b) => a.client.localeCompare(b.client, 'nl'));
+    const cands = B.link === c.id ? B.cands || [] : [];
+    const hhmm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    const day = t => { const d = new Date(t); return `${d.getDate()} ${MON[d.getMonth()]}`; };
+    const today0 = new Date(now).setHours(0, 0, 0, 0);
+    const age = t => { const n = Math.round((today0 - new Date(t).setHours(0, 0, 0, 0)) / 864e5); return n <= 0 ? hhmm(t) : n === 1 ? 'gisteren' : `${n}d`; };
+    const tbaToday = x => x.tba && x.tba.at >= today0;
+    const card = x => {
+      const call = CALL_STAGES.includes(x.stage), called = (x.stage === 'nieuw' || x.stage === 'contact') && calledToday(x, now);
+      return { id: x.id, name: x.name, sel: x.id === B.sel, dim: called, bl: !!x.bl,
+        tag: tbaToday(x) ? `TBA${x.tba.text ? ': ' + x.tba.text : ''}` : '',
+        dots: call ? [0, 1, 2].map(i => i < (x.att || 0)) : [],
+        label: [x.name, call && `${x.att || 0} ${x.att === 1 ? 'belpoging' : 'belpogingen'}`, called && 'vandaag gebeld', tbaToday(x) && `TBA ${x.tba.text || ''}`, x.bl && 'op de blacklist'].filter(Boolean).join(', '),
+        meta: called ? 'gebeld' : x.stage === 'nieuw' ? x.src : x.stage === 'afgewezen' ? x.reason || '' : '',
+        age: x.stage === 'gesprek' && x.gesprek ? when(x.gesprek) : call ? age(x.at) : day(x.lastAt),
+        onClick: () => this.setBord({ sel: x.id === B.sel ? null : x.id, mode: null, text: '', at: '' }),
+        dragging: B.drag === x.id, dragStart: () => this.setBord({ drag: x.id }), dragEnd: () => this.setBord({ drag: null, over: null }) };
+    };
+    // Call order: who waits longest first, who was called today last.
+    const order = (a, b) => ((calledToday(a, now) ? 1 : 0) - (calledToday(b, now) ? 1 : 0)) || a.at - b.at;
+    const cols = STAGES.filter(([k]) => k !== 'afgewezen' || B.showRej).map(([key, label]) => {
+      const xs = cands.filter(x => x.stage === key).sort(key === 'afgewezen' ? (a, b) => b.lastAt - a.lastAt : order);
+      return { key, label, n: xs.length, cards: xs.map(card) };
+    });
+    const status = (st.live.status || {})[c.boardId], sNow = statusToday(status, now), active = cands.filter(x => x.stage !== 'afgewezen' && x.stage !== 'aangenomen').length;
+    const x = cands.find(y => y.id === B.sel), act = (body, done) => this.bordAct(body, done);
+    const panel = !x ? null : {
+      name: x.name, busy: B.busy, mode: B.mode, text: B.text, at: B.at,
+      sub: `${stageName(x.stage)}${x.stage === 'afgewezen' && x.reason ? ` (${x.reason})` : ''} · ${c.vac} · binnen ${day(x.at)} via ${x.src}`,
+      phone: x.phone, tel: x.phone ? 'tel:' + x.phone.replace(/[^\d+]/g, '') : '', email: x.email, mailto: x.email ? 'mailto:' + x.email : '',
+      copy: () => navigator.clipboard.writeText(x.phone).then(() => this.flash('Telefoonnummer gekopieerd'), () => this.flash('Kopiëren lukte niet')),
+      bl: !!x.bl, blText: x.bl ? `Op de blacklist${x.bl.reason ? ': ' + x.bl.reason : ''}` : 'Niet op de blacklist',
+      canUndo: x.canUndo, undoText: x.log[0] ? `${x.log[0].what} · ${x.log[0].by}` : '', undo: () => act({ kind: 'undo' }, 'Ongedaan gemaakt'),
+      isCall: CALL_STAGES.includes(x.stage), attText: x.att >= MAX_ATTEMPTS ? `${x.att}× geen gehoor` : `poging ${(x.att || 0) + 1} van ${MAX_ATTEMPTS}`,
+      canReject: x.stage !== 'afgewezen', canNb: (x.att || 0) >= MAX_ATTEMPTS && x.stage !== 'nb', nbText: 'Naar Niet bereikbaar', toNb: () => act({ kind: 'move', to: 'nb' }, `${x.name} staat nu in Niet bereikbaar`),
+      geenGehoor: () => act({ kind: 'geenGehoor' }, 'Geen gehoor gelogd · tot middernacht van de belllijst'),
+      startTba: () => this.setBord({ mode: 'tba', text: '' }), submitTba: e => { e.preventDefault(); act({ kind: 'tba', text: B.text }, 'TBA afspraak gelogd'); },
+      bereikt: () => act({ kind: 'move', to: 'gescreend' }, `${x.name} staat nu in Gescreend`),
+      startReject: () => this.setBord({ mode: 'reject' }),
+      reasons: REASONS.map(r => ({ text: r, pick: () => act({ kind: 'reject', reason: r }, `${x.name} afgewezen: ${r}`) })),
+      startNote: () => this.setBord({ mode: 'note', text: '' }), submitNote: e => { e.preventDefault(); act({ kind: 'note', text: B.text }, 'Notitie opgeslagen'); },
+      setText: e => this.setBord({ text: e.target.value }), setAt: e => this.setBord({ at: e.target.value }), cancel: () => this.setBord({ mode: null, text: '', at: '' }),
+      moveOpts: STAGES.filter(([k]) => k !== x.stage && k !== 'afgewezen').map(([v, l]) => ({ v, l })),
+      move: e => { const to = e.target.value; if (!to) return; if (to === 'gesprek') this.setBord({ mode: 'gesprek', at: '' }); else act({ kind: 'move', to }, `${x.name} staat nu in ${stageName(to)}`); },
+      submitGesprek: e => { e.preventDefault(); if (B.at) act({ kind: 'move', to: 'gesprek', at: new Date(B.at).toISOString() }, `${x.name} staat nu in Gesprek`); },
+      answers: (x.answers || []).map(([q, a]) => ({ q, a })),
+      log: x.log.map(h => ({ at: when(h.at), what: h.what, by: h.by })),
+      close: () => this.setBord({ sel: null, mode: null })
+    };
+    return {
+      empty: false, today: todayLong(), client: c.client, loading: B.link === c.id && !B.cands, err: B.err,
+      subline: `RM ${this.mktOf(c) || '—'} · ${active} ${active === 1 ? 'kandidaat' : 'kandidaten'} in behandeling`,
+      clientOpts: clients.map(y => ({ v: y.boardId, l: y.client })), clientValue: c.boardId,
+      setClient: e => { const f = list.find(y => y.boardId === e.target.value); if (f) this.openBord(f.id); },
+      tabs: fns.map(f => { const n = callList(f); return { id: f.id, label: f.vac, n: n.nieuw + n.contact, on: f.id === c.id, onClick: () => this.openBord(f.id) }; }),
+      status: { client: c.client, st: sNow, stBy: sNow ? status.by : '', stAt: sNow ? hhmm(status.at) : '', setSt: () => this.setLiveStatus(c.boardId, nextStatus(sNow)) },
+      cols, rejected: { n: cands.filter(y => y.stage === 'afgewezen').length, open: B.showRej, toggle: () => this.setBord({ showRej: !B.showRej }) },
+      // Dragging a card: dropped on a column it moves there; Gesprek and Afgewezen first ask the moment or the reason, in the panel.
+      dragFrom: (cands.find(y => y.id === B.drag) || {}).stage || null, over: B.over, setOver: k => this.setBord({ over: k }),
+      drop: to => {
+        const y = cands.find(z => z.id === B.drag);
+        this.setBord({ drag: null, over: null });
+        if (!y || y.stage === to) return;
+        if (to === 'gesprek' || to === 'afgewezen') { this.setBord({ sel: y.id, mode: to === 'gesprek' ? 'gesprek' : 'reject', text: '', at: '' }); return; }
+        this.setBord({ sel: y.id, mode: null });
+        this.bordAct({ kind: 'move', to }, `${y.name} staat nu in ${stageName(to)}`, y.id);
+      },
+      panel
+    };
+  }
   showTrello() { return this.props.showTrello ?? true; }
 
   render() {
@@ -1727,7 +1913,8 @@ export default class App extends React.Component {
           <Sidebar v={v} />
           <div className="nav-backdrop" onClick={v.closeNav} aria-hidden="true" />
           <main className="app-main" inert={v.navOpen ? '' : undefined}>
-            <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
+            {/* The board's columns use all the width there is. */}
+            <div style={{ maxWidth: v.isBord ? 'none' : '1240px', margin: '0 auto' }}>
               {v.isLocal ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', marginBottom: '20px' }}><b>Lokale demo zonder server.</b> Inloggen en rechten staan uit, en wat je invult blijft alleen in deze browser; het team ziet het niet.</div> : null}
               {v.saveOffline ? <div style={{ background: '#FDECEA', color: '#D32F2F', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', fontWeight: 500, marginBottom: '20px' }}>Geen verbinding met de server. Je wijzigingen worden opgeslagen zodra de verbinding terug is; sluit dit tabblad nog niet.</div> : null}
               {v.user.isPreview ? <div style={{ background: '#FFF8E0', borderRadius: '12px', padding: '10px 16px', fontSize: '14px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1746,6 +1933,7 @@ export default class App extends React.Component {
               {v.isHistory ? <HistoryView v={v} /> : null}
               {v.isRules ? <RulesView v={v} /> : null}
               {v.isBlacklist ? <BlacklistView b={v.bl} /> : null}
+              {v.isBord ? <BoardView b={v.bordV} /> : null}
               {v.isSettings ? <SettingsView s={v.settings} /> : null}
               {v.isDev ? <DevView d={v.dev} /> : null}
             </div>

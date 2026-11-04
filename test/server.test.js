@@ -157,6 +157,70 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.ok(!audit.includes('Vries'), 'the audit log has initials, not the name');
   });
 
+  if (mode === 'server') test('ATS: a switched campaign takes leads from its intake link; only its recruiter sees the candidates', async () => {
+    const kok = { id: 't-b8-kok', boardId: 'b8', boardName: 'Restaurant ATS', listId: 'li8', vac: 'Kok', rec: 'Tessa' };
+    const bed = { ...kok, id: 't-b8-bed', listId: 'li9', vac: 'Bediening', rec: 'Iemand' };
+    await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.links', set: { [kok.id]: kok, [bed.id]: bed } }] });
+    assert.equal((await S.rec.api('POST', `/api/kandidaten/intake/${kok.id}`)).status, 403, 'switching is Toewijzing beheren');
+    const sw = await S.dev.api('POST', `/api/kandidaten/intake/${kok.id}`);
+    assert.equal(sw.status, 200, sw.text);
+    assert.equal(sw.data.first, true);
+    const url = sw.data.url, lead = { full_name: 'Priya Ramdin', phone_number: '+31 6 1111 2222', email: 'priya@example.com', 'Ervaring?': '3 jaar' };
+    const post = (u, body, type = 'json') => fetch(u, { method: 'POST', headers: { 'content-type': type === 'json' ? 'application/json' : 'application/x-www-form-urlencoded' },
+      body: type === 'json' ? JSON.stringify(body) : new URLSearchParams(body).toString() });
+    assert.equal((await post(url, lead)).status, 201, 'no login, no Origin: Zapier');
+    assert.equal((await post(url, { naam: 'Mo El Amrani', telefoon: '0633334444' }, 'form')).status, 201, 'form-encoded too');
+    const again = await post(url, { ...lead, full_name: 'P. Ramdin' });
+    assert.equal(again.status, 200);
+    assert.equal((await again.json()).dubbel, true);
+    assert.equal((await post(url, { telefoon: '0612345678' })).status, 400);
+    assert.equal((await post(BASE + '/api/intake/verkeerd', lead)).status, 404);
+
+    const stats = await S.rec.get('/api/kandidaten/stats');
+    const s = stats.data.links[kok.id];
+    assert.equal(Object.values(s.stats.weeks).reduce((n, w) => n + w.nieuw, 0), 2);
+    assert.deepEqual(s.stats.live, { nieuw: 2, contact: 0, gebeld: 0 });
+    assert.equal(s.last4, undefined, 'the end of the key only for Toewijzing');
+    assert.equal((await S.dev.get('/api/kandidaten/stats')).data.links[kok.id].last4, new URL(url).pathname.slice(-4));
+    const state = (await S.dev.get('/api/state'));
+    assert.ok(!state.text.includes('Ramdin') && !state.text.includes('1111'), 'no candidate in /api/state');
+    assert.ok(state.data.docs.meta.ats >= 3, 'open apps hear of new candidates');
+
+    const list = await S.rec.get(`/api/kandidaten?link=${kok.id}`);
+    assert.equal(list.status, 200, list.text);
+    const priya = list.data.cands.find(c => c.name === 'Priya Ramdin');
+    assert.deepEqual(priya.answers, [['Ervaring?', '3 jaar']]);
+    assert.equal(priya.bl, null);
+    assert.equal((await S.rec.get(`/api/kandidaten?link=${bed.id}`)).status, 403, 'not their campaign');
+    assert.equal((await S.dev.get(`/api/kandidaten?link=${bed.id}`)).status, 200, 'candidates.all');
+    const act = body => S.rec.api('POST', `/api/kandidaten/${priya.id}/actie`, body);
+    for (let i = 0; i < 3; i++) assert.equal((await act({ kind: 'geenGehoor' })).data.cand.stage, 'nieuw', 'Geen gehoor never moves the card');
+    const nb = await act({ kind: 'move', to: 'nb' });
+    assert.equal(nb.data.cand.stage, 'nb');
+    assert.equal(nb.data.cand.canUndo, true);
+    assert.equal(nb.data.cand.log[0].by, 'Test Recruiter');
+    assert.equal((await act({ kind: 'undo' })).data.cand.stage, 'nieuw');
+    assert.equal((await act({ kind: 'reject', reason: 'Diefstal' })).status, 400);
+
+    await S.dev.api('POST', '/api/blacklist', { name: 'Priya R.', phone: '0611112222', reason: 'No-show bij gesprek of proefdag' });
+    const hit = (await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands.find(c => c.id === priya.id);
+    assert.deepEqual(hit.bl, { reason: 'No-show bij gesprek of proefdag' }, 'checked by phone number');
+
+    const inv = await S.dev.api('POST', '/api/admin/members', { name: 'ATS Marketeer', role: 'marketeer' });
+    const mkt = client();
+    await mkt.form(new URL(inv.data.link).pathname, { email: 'rm-ats@example.com', password: 'de marketeer zonder kandidaten', password2: 'de marketeer zonder kandidaten' });
+    assert.equal((await mkt.get(`/api/kandidaten?link=${kok.id}`)).status, 403);
+    assert.equal((await mkt.api('POST', `/api/kandidaten/${priya.id}/actie`, { kind: 'note', text: 'x' })).status, 403);
+    assert.equal((await mkt.get('/api/kandidaten/stats')).status, 200, 'the numbers are anonymous');
+
+    const renew = await S.dev.api('POST', `/api/kandidaten/intake/${kok.id}`);
+    assert.equal(renew.data.first, false);
+    assert.equal((await post(url, { naam: 'Te laat', telefoon: '0655556666' })).status, 404, 'the old link stops');
+    assert.equal((await post(renew.data.url, { naam: 'Op tijd', telefoon: '0655556666' })).status, 201);
+    const audit = (await S.dev.get('/api/admin/audit?type=candidates')).data.entries;
+    assert.deepEqual(audit.map(e => e.details.actie), ['nieuwe intake-link', 'omgezet naar ATS']);
+  });
+
   test('time in the app: everyone sends it, only Tijdwinst sees the team totals, and they carry no names', async () => {
     assert.equal((await S.rec.api('POST', '/api/timing', { seconds: { feedback: 120, other: 30 } })).status, 200);
     assert.equal((await S.dev.api('POST', '/api/timing', { seconds: { feedback: 60 } })).status, 200);

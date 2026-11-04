@@ -18,7 +18,7 @@ export default function ConfirmDialog({ title, text, note, okLabel = 'Doorgaan',
       <div onClick={onCancel} className="panel-backdrop" style={{ position: 'fixed', inset: '0', background: 'rgba(29,29,27,.38)', zIndex: '30' }} />
       <div ref={box} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 'min(440px,calc(100vw - 32px))', background: '#FFFFFF', borderRadius: '12px', boxShadow: '0 8px 32px rgba(29,29,27,.18)', zIndex: '31', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <h2 id="confirm-title" style={{ margin: '0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '20px' }}>{title}</h2>
-        <div id="confirm-text" style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px', lineHeight: '1.5', color: '#3C3C3A', textWrap: 'pretty' }}>
+        <div id="confirm-text" style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px', lineHeight: '1.5', color: '#3C3C3A', textWrap: 'pretty', overflowWrap: 'anywhere' }}>
           <span>{text}</span>
           {note ? <span style={{ color: '#5C5C5A' }}>{note}</span> : null}
         </div>

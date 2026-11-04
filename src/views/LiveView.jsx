@@ -25,14 +25,19 @@ function Cells({ r }) {
   );
 }
 
+/** A function switched to the ATS: its candidates are on the Bord, not in Trello. */
+function BordLink({ go }) {
+  return <button type="button" onClick={e => { e.stopPropagation(); go(); }} className="link-btn" style={{ fontSize: '12px', fontWeight: '600', marginLeft: '4px' }}>Bord →</button>;
+}
+
 const ST = { bezig: 'Ermee bezig', done: 'Done' };
 const NEXT = { '': 'Ermee bezig', bezig: 'Done', done: 'geen status' };
 
 /**
  * The Ermee bezig / Done toggle of a client: nothing → Ermee bezig → Done → nothing. Same size in every state; who set
- * it and when is in the tooltip.
+ * it and when is in the tooltip. Also on the Bord (BoardView).
  */
-function StatusPill({ r }) {
+export function StatusPill({ r }) {
   const now = r.st ? `${ST[r.st]}, door ${r.stBy} om ${r.stAt}` : 'nog niet opgepakt';
   return (
     <button type="button" className={`live-pill live-pill-${r.st || 'none'}`} onClick={r.setSt} aria-label={`${r.client}: ${now}. Klik voor ${NEXT[r.st]}.`} title={`${r.st ? `${ST[r.st]} · ${r.stBy} ${r.stAt}\n` : ''}Klik voor ${NEXT[r.st]}`}>
@@ -61,7 +66,7 @@ function ClientBlock({ r }) {
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', flex: 'none', background: r.dot }} />
           <span style={{ minWidth: '0' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontWeight: '600' }}>{r.client}{r.hasBadge ? <span style={{ fontSize: '11px', fontWeight: '600', padding: '2px 7px', borderRadius: '6px', background: r.bBg, color: r.bFg }}>{r.badge}</span> : null}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: r.multi ? '#1B1B63' : '#5C5C5A', fontWeight: r.multi ? '500' : '400' }}>{r.vac}{r.tag ? <HaltTag t={r.tag} /> : null}{r.multi ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', transform: r.expanded ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg> : null}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: r.multi ? '#1B1B63' : '#5C5C5A', fontWeight: r.multi ? '500' : '400' }}>{r.vac}{r.tag ? <HaltTag t={r.tag} /> : null}{r.bord ? <BordLink go={r.bord} /> : null}{r.multi ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1B1B63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: 'none', transform: r.expanded ? 'rotate(180deg)' : 'none' }}><path d="M6 9l6 6 6-6" /></svg> : null}</span>
           </span>
         </div>
         <div data-label="Marketeer" style={{ color: '#3C3C3A' }}>{r.mkt}</div>
@@ -74,6 +79,7 @@ function ClientBlock({ r }) {
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', flex: 'none', background: f.dot }} />
             <span style={{ fontWeight: '500' }}>{f.vac}</span>
             {f.tag ? <HaltTag t={f.tag} /> : null}
+            {f.bord ? <BordLink go={f.bord} /> : null}
           </div>
           <div />
           <Cells r={f} />

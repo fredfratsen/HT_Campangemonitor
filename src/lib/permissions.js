@@ -15,6 +15,7 @@ export const RIGHTS = [
   { key: 'campaigns.pause', group: 'werk', label: 'Campagnes pauzeren en stopzetten', desc: 'Een campagne van een eigen klant op Pauze zetten, hervatten of stopzetten (met Alle campagnes bekijken: van elke klant). Een gestopte campagne zet alleen Toewijzing beheren weer aan.' },
   { key: 'reminders.send', group: 'werk', label: 'Ontbrekende feedback opvolgen', desc: 'Zien welke recruiters hun wekelijkse feedback nog niet invulden, en hen een herinnering sturen. Zonder dit recht zie je alleen de feedback die gegeven is.' },
   { key: 'questions.ask', group: 'werk', label: 'Vragen stellen over campagnes', desc: 'Een vraag over een campagne sturen aan de Recruitment Marketeer en recruiter. Vraag en antwoord komen binnen onder Meldingen.' },
+  { key: 'candidates.all', group: 'werk', label: 'Alle kandidaten bekijken', desc: 'Het bord met kandidaten van alle campagnes die naar het ATS zijn omgezet, niet alleen die van je eigen campagnes. Zonder dit recht ziet een recruiter alleen de kandidaten van de eigen campagnes.' },
   { key: 'blacklist.view', group: 'werk', label: 'Blacklist raadplegen', desc: 'Opzoeken of een kandidaat op de blacklist staat, en waarom. Een kandidaat voordragen; wie de blacklist beheert, beslist.' },
   { key: 'rules.edit', group: 'beheer', label: 'Health-regels aanpassen', desc: 'Regels aan- en uitzetten en drempels wijzigen. Geldt voor het hele team.' },
   { key: 'trello.link', group: 'beheer', label: 'Trello-koppeling testen', desc: 'Op de testpagina nagaan of de borden uit Trello goed binnenkomen.' },
@@ -33,12 +34,12 @@ export const RIGHT_GROUPS = { werk: 'Werk', beheer: 'Beheer', eigenaar: 'Eigenaa
 
 export const LEVELS = { owner: { label: 'Eigenaar', rank: 3 }, admin: { label: 'Beheerder', rank: 2 }, member: { label: 'Lid', rank: 1 } };
 
-const WORK = ['campaigns.all', 'campaigns.own', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'campaigns.pause', 'reminders.send', 'questions.ask', 'blacklist.view'];
+const WORK = ['campaigns.all', 'campaigns.own', 'feedback.own', 'feedback.all', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'campaigns.pause', 'reminders.send', 'questions.ask', 'candidates.all', 'blacklist.view'];
 const ADMIN = ['rules.edit', 'trello.link', 'assign', 'ideas.manage', 'members.manage', 'blacklist.manage', 'timesaved'];
 
 export const ROLES = {
   dev: { label: 'Dev', level: 'owner', rights: RIGHT_KEYS, desc: 'Alles, inclusief integraties, auditlog en privacy-tools.' },
-  teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk, plus leden, toewijzing, Trello, regels, de blacklist en tijdwinst.' },
+  teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk (ook alle kandidaten), plus leden, toewijzing, Trello, regels, de blacklist en tijdwinst.' },
   marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.own', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'campaigns.pause'], desc: 'Campagnes, monitorstatus, klantfeedback, campagnewijzigingen, en pauzeren en stopzetten, voor de eigen klanten.' },
   accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet de campagnes van alle klanten, maar wijzigt niets, behalve de status op Live campagnes. Kan vragen stellen over campagnes.' },
   recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own', 'blacklist.view'], desc: 'Eigen campagnes, wekelijkse feedback, Live campagnes en de blacklist raadplegen.' },

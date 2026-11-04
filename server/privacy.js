@@ -4,7 +4,7 @@
 
 const eq = (names, v) => typeof v === 'string' && names.has(v);
 
-export function createPrivacy({ accounts, store, audit, blacklist }) {
+export function createPrivacy({ accounts, store, audit, blacklist, candidates }) {
   /**
    * Everything about one account, as a JSON-able object. Only the real data from Trello: the demo data (the
    * `campaigns` and `mktDemo` documents and demo assignments) is made up, and its names can match real people.
@@ -73,6 +73,7 @@ export function createPrivacy({ accounts, store, audit, blacklist }) {
       if (D.seen) delete D.seen[a.id];
     });
     blacklist.rename(names, pseudonym);
+    if (candidates) candidates.rename(names, pseudonym);
     const oldName = a.name;
     accounts.anonymise(a, pseudonym);
     await audit.rename(a.id, pseudonym);

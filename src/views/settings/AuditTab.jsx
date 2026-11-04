@@ -18,10 +18,11 @@ export const EVENTS = {
   'blacklist.added': 'Op de blacklist gezet', 'blacklist.proposed': 'Voorgedragen voor de blacklist', 'blacklist.approved': 'Voordracht blacklist bevestigd',
   'blacklist.rejected': 'Voordracht blacklist afgewezen', 'blacklist.withdrawn': 'Voordracht blacklist ingetrokken', 'blacklist.updated': 'Blacklist-vermelding gewijzigd',
   'blacklist.removed': 'Van de blacklist gehaald', 'blacklist.expired': 'Blacklist-vermelding verlopen', 'blacklist.export': 'Blacklist-vermelding gedownload',
+  'candidates.intake_link': 'Intake-link ATS', 'candidates.pruned': 'Kandidaatgegevens gewist (bewaartermijn)',
   'mail.sent': 'E-mail verstuurd', 'mail.failed': 'E-mail niet verstuurd', 'mail.to': 'Mailadres voor bugs en ideeën gewijzigd',
   'timing.minutes': 'Afgesproken tijd van vroeger gewijzigd',
 };
-const TYPES = [['', 'Alles'], ['login', 'Inloggen'], ['member', 'Leden'], ['2fa', 'Tweestapsverificatie'], ['password', 'Wachtwoorden'], ['integration', 'Integraties'], ['privacy', 'Privacy'], ['data', 'Regels & toewijzing'], ['blacklist', 'Blacklist'], ['mail', 'E-mail'], ['timing', 'Tijdwinst'], ['dev', 'Dev']];
+const TYPES = [['', 'Alles'], ['login', 'Inloggen'], ['member', 'Leden'], ['2fa', 'Tweestapsverificatie'], ['password', 'Wachtwoorden'], ['integration', 'Integraties'], ['privacy', 'Privacy'], ['data', 'Regels & toewijzing'], ['blacklist', 'Blacklist'], ['candidates', 'Kandidaten'], ['mail', 'E-mail'], ['timing', 'Tijdwinst'], ['dev', 'Dev']];
 const TONE = t => /fail|locked|denied|removed|deactivated|anonymised|reset$|disabled/.test(t) ? 'red' : /^login|logout/.test(t) ? 'neutral' : /^member|^2fa|^password|^account|^session/.test(t) ? 'navy' : 'amber';
 
 const rightLabel = k => (RIGHTS.find(r => r.key === k) || {}).label || k;
