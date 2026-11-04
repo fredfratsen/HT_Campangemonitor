@@ -31,7 +31,7 @@ function Card({ c }) {
 
 function Panel({ p }) {
   return (
-    <aside aria-label={`Kandidaat ${p.name}`} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '16px', display: 'flex', flexDirection: 'column', position: 'sticky', top: '16px' }}>
+    <aside aria-label={`Kandidaat ${p.name}`} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '16px', display: 'flex', flexDirection: 'column', position: 'sticky', top: '16px', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}>
       <div style={{ padding: '22px 24px 18px', display: 'flex', justifyContent: 'space-between', gap: '12px', borderBottom: '1px solid #E4E1DE' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '0' }}>
           <h2 style={{ margin: '0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', lineHeight: '1.2' }}>{p.name}</h2>
@@ -119,6 +119,50 @@ function Panel({ p }) {
             {p.moveOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
         </label>
+      </div>
+
+      {p.gate ? <form onSubmit={p.gate.submit} style={{ margin: '14px 24px 0', padding: '16px', background: '#E7E7F0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <span style={{ fontSize: '13px', fontWeight: '600' }}>Naar {p.gate.to}: dan ziet de klant {p.name}</span>
+          <span style={{ fontSize: '12px', color: '#3C3C3A' }}>Controleer de gegevens en vul hieronder de screening in.</span>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>Naam
+            <input value={p.gate.name} onChange={p.gate.setName} maxLength={80} style={{ ...field, color: '#1D1D1B' }} /></label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>Telefoon
+            <input type="tel" value={p.gate.phone} onChange={p.gate.setPhone} maxLength={30} style={{ ...field, color: '#1D1D1B' }} /></label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>E-mail
+            <input type="email" value={p.gate.email} onChange={p.gate.setEmail} style={{ ...field, color: '#1D1D1B' }} /></label>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button type="submit" disabled={p.busy || !p.gate.ok} style={{ ...outcome, background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px', opacity: p.gate.ok ? 1 : 0.5, cursor: p.gate.ok ? 'pointer' : 'not-allowed' }}>Doorzetten naar klant</button>
+            <button type="button" onClick={p.cancel} className="link-btn">Annuleren</button>
+          </div>
+          {p.gate.ok ? null : <span style={{ fontSize: '12px', color: '#B45309' }}>Nog in te vullen: {p.gate.missing.join(', ')}</span>}
+        </form> : null}
+
+      <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px', borderBottom: '1px solid #E4E1DE' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+          <span style={eyebrow}>Screening</span>
+          <button type="button" onClick={p.screening.copy} className="link-btn" style={{ textDecoration: 'underline' }}>Kopieer als tekst</button>
+        </div>
+        {p.screening.fields.map(f => {
+          const id = 'scr-' + f.key, lab = <label htmlFor={id} style={{ fontSize: '12px', color: '#5C5C5A' }}>{f.emoji} {f.label}{f.required ? ' *' : ''}</label>;
+          const v = f.value;
+          return <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {f.kind === 'choice' ? <span id={id} style={{ fontSize: '12px', color: '#5C5C5A' }}>{f.emoji} {f.label}{f.required ? ' *' : ''}</span> : lab}
+            {f.kind === 'text' ? <input id={id} value={v} onChange={e => f.set(e.target.value)} onBlur={p.screening.save} maxLength={200} placeholder={f.placeholder} style={field} />
+              : f.kind === 'long' ? <textarea id={id} rows={3} value={v} onChange={e => f.set(e.target.value)} onBlur={p.screening.save} maxLength={1000} style={{ border: '1px solid #E4E1DE', borderRadius: '10px', padding: '10px 12px', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', minWidth: '0' }} />
+              : f.kind === 'age' ? <input id={id} type="number" min={14} max={99} value={v} onChange={e => f.set(e.target.value)} onBlur={p.screening.save} style={{ ...field, width: '100px' }} />
+              : <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div role="group" aria-labelledby={id} style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {f.options.map(o => <button key={o} type="button" aria-pressed={v.keuze === o} onClick={() => f.set({ keuze: o, tekst: o === f.other ? v.tekst : '' })}
+                    style={{ border: `1px solid ${v.keuze === o ? '#1B1B63' : '#E4E1DE'}`, background: v.keuze === o ? '#1B1B63' : '#FFFFFF', color: v.keuze === o ? '#FFFFFF' : '#1D1D1B', borderRadius: '999px', padding: '7px 14px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>{o}</button>)}
+                </div>
+                {v.keuze === f.other ? <input aria-label={f.otherLabel} value={v.tekst} onChange={e => f.set({ keuze: v.keuze, tekst: e.target.value })} onBlur={p.screening.save} maxLength={200} placeholder={f.otherLabel} style={field} /> : null}
+              </div>}
+          </div>;
+        })}
+        {p.canDoorzetten ? <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+            <button type="button" onClick={p.doorzetten} disabled={p.busy || !!p.screening.missing.length} style={{ ...outcome, background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px', opacity: p.screening.missing.length ? 0.5 : 1, cursor: p.screening.missing.length ? 'not-allowed' : 'pointer' }}>{p.screening.missing.length ? 'Screening invullen' : 'Doorzetten naar klant'}</button>
+            {p.screening.missing.length ? <span style={{ fontSize: '12px', color: '#B45309' }}>Nog in te vullen: {p.screening.missing.join(', ')}</span> : null}
+          </div> : null}
       </div>
 
       {p.answers.length ? <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '10px', borderBottom: '1px solid #E4E1DE' }}>

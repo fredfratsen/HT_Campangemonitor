@@ -7,7 +7,7 @@ import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, HALT, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED, REASONS
 } from './lib/constants.js';
-import { STAGES, CALL_STAGES, MAX_ATTEMPTS, stageName, calledToday } from './lib/ats.js';
+import { STAGES, CALL_STAGES, MAX_ATTEMPTS, STAGE_RANK, SCREENING, stageName, calledToday, cleanScreening, screeningMissing, screeningText } from './lib/ats.js';
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
 import { clientTarget } from './lib/clientLink.js';
@@ -67,7 +67,9 @@ const pausedText = n => `${n} nieuwe ${n === 1 ? 'campagne' : 'campagnes'} op Pa
 
 class TrelloError extends Error {}
 /** Recruiter › Bord: the open campaign (link), its candidates, the one in the panel (sel) and what the panel asks (mode). */
-const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null };
+const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null, scr: {}, gateTo: '', gc: null };
+/** A saved screening as the panel edits it: raw strings (the age as text), so typing a space or a half number survives. */
+const scrDraft = s => { const c = cleanScreening(s); return { ...c, leeftijd: c.leeftijd == null ? '' : String(c.leeftijd) }; };
 // The open Trello cards of a switched campaign come onto the Bord (server/candidates.js takeTrello).
 const TRELLO_NOTE = 'De lopende kaarten uit Trello komen mee naar het Bord. In Trello blijven ze staan, maar ze tellen daar niet meer mee.';
 const trelloDone = n => !n ? 'Geen nieuwe kaarten uit Trello' : `${n} ${n === 1 ? 'kandidaat' : 'kandidaten'} uit Trello op het Bord gezet`;
@@ -1843,6 +1845,38 @@ export default class App extends React.Component {
     this.setState({ celebrate: { at: Date.now(), client } });
     this._celT = setTimeout(() => this.setState({ celebrate: null }), 3800);
   }
+  /** Edits one screening field of candidate id; saved 800 ms after the last change (and on blur, see saveScr). */
+  setScr(id, key, val) {
+    this.setState(s => {
+      const x = (s.bord.cands || []).find(c => c.id === id), d = s.bord.scr[id] || (x && scrDraft(x.screening));
+      return d ? { bord: { ...s.bord, scr: { ...s.bord.scr, [id]: { ...d, [key]: val } } } } : null;
+    });
+    clearTimeout(this._scrT);
+    this._scrT = setTimeout(() => this.saveScr(id), 800);
+  }
+  /** Saves the screening draft of candidate id when it differs from the server's. No toast; a failure shows its message. */
+  async saveScr(id) {
+    clearTimeout(this._scrT); this._scrT = null;
+    const B = this.state.bord, x = (B.cands || []).find(c => c.id === id), d = B.scr[id];
+    if (!x || !d) return;
+    const clean = cleanScreening(d);
+    if (JSON.stringify(clean) === JSON.stringify(cleanScreening(x.screening))) return;
+    try {
+      const r = await api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, { kind: 'screening', screening: clean });
+      this.setState(s => ({ bord: { ...s.bord, cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
+    } catch (e) { this.flash(e.message); }
+  }
+  /** Selects candidate id (or none): a screening change still waiting for its autosave is saved first, so nothing gets lost. */
+  selBord(id, p = {}) {
+    if (this._scrT) this.saveScr(this.state.bord.sel);
+    this.setBord({ sel: id, mode: null, text: '', at: '', gateTo: '', gc: null, scr: {}, ...p });
+  }
+  /** Moving candidate y out of a call stage to a stage that hands them to the client first asks the contact details and screening (the gate). */
+  openGate(y, to) {
+    const other = this.state.bord.sel !== y.id;
+    if (other && this._scrT) this.saveScr(this.state.bord.sel);
+    this.setBord({ sel: y.id, ...(other ? { scr: {} } : {}), mode: 'gate', gateTo: to, gc: { name: y.name || '', phone: y.phone || '', email: y.email || '' } });
+  }
   /** An action on candidate id, by default the one in the panel (see candidates.act); done: what the toast says afterwards. */
   async bordAct(body, done = '', id = this.state.bord.sel) {
     const B = this.state.bord;
@@ -1850,7 +1884,7 @@ export default class App extends React.Component {
     this.setBord({ busy: true });
     try {
       const r = await api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, body);
-      this.setState(s => ({ bord: { ...s.bord, busy: false, mode: null, text: '', at: '', cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
+      this.setState(s => ({ bord: { ...s.bord, busy: false, mode: null, text: '', at: '', gateTo: '', gc: null, cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
       if (done) this.flash(done);
     } catch (e) { this.setBord({ busy: false }); this.flash(e.message); this.loadBord(); }
   }
@@ -1874,7 +1908,7 @@ export default class App extends React.Component {
         label: [x.name, call && `${x.att || 0} ${x.att === 1 ? 'belpoging' : 'belpogingen'}`, called && 'vandaag gebeld', tbaToday(x) && `TBA ${x.tba.text || ''}`, x.bl && 'op de blacklist'].filter(Boolean).join(', '),
         meta: called ? 'gebeld' : x.stage === 'nieuw' ? x.src : x.stage === 'afgewezen' ? x.reason || '' : '',
         age: x.stage === 'gesprek' && x.gesprek ? when(x.gesprek) : call ? age(x.at) : day(x.lastAt),
-        onClick: () => this.setBord({ sel: x.id === B.sel ? null : x.id, mode: null, text: '', at: '' }),
+        onClick: () => this.selBord(x.id === B.sel ? null : x.id),
         dragging: B.drag === x.id, dragStart: () => this.setBord({ drag: x.id }), dragEnd: () => this.setBord({ drag: null, over: null }) };
     };
     // Call order: who waits longest first, who was called today last.
@@ -1885,6 +1919,10 @@ export default class App extends React.Component {
     });
     const status = (st.live.status || {})[c.boardId], sNow = statusToday(status, now), active = cands.filter(x => x.stage !== 'afgewezen' && x.stage !== 'aangenomen').length;
     const x = cands.find(y => y.id === B.sel), act = (body, done) => this.bordAct(body, done);
+    const gates = (y, to) => CALL_STAGES.includes(y.stage) && STAGE_RANK[to] >= 1;
+    const draft = x && (B.scr[x.id] || scrDraft(x.screening)), missing = x ? screeningMissing(draft) : [];
+    const gc = B.gc || { name: '', phone: '', email: '' }, setGc = k => e => this.setBord({ gc: { ...gc, [k]: e.target.value } });
+    const gateMissing = [...missing, ...(gc.name.trim() ? [] : ['Naam']), ...(gc.phone.trim() || gc.email.trim() ? [] : ['Telefoon of e-mail'])];
     const panel = !x ? null : {
       name: x.name, busy: B.busy, mode: B.mode, text: B.text, at: B.at,
       sub: `${stageName(x.stage)}${x.stage === 'afgewezen' && x.reason ? ` (${x.reason})` : ''} · ${c.vac} · binnen ${day(x.at)} via ${x.src}`,
@@ -1896,17 +1934,30 @@ export default class App extends React.Component {
       canReject: x.stage !== 'afgewezen', canNb: (x.att || 0) >= MAX_ATTEMPTS && x.stage !== 'nb', nbText: 'Naar Niet bereikbaar', toNb: () => act({ kind: 'move', to: 'nb' }, `${x.name} staat nu in Niet bereikbaar`),
       geenGehoor: () => act({ kind: 'geenGehoor' }, 'Geen gehoor gelogd · tot middernacht van de belllijst'),
       startTba: () => this.setBord({ mode: 'tba', text: '' }), submitTba: e => { e.preventDefault(); act({ kind: 'tba', text: B.text }, 'TBA afspraak gelogd'); },
-      bereikt: () => act({ kind: 'move', to: 'gescreend' }, `${x.name} staat nu in Gescreend`),
+      bereikt: () => this.openGate(x, 'gescreend'),
       startReject: () => this.setBord({ mode: 'reject' }),
       reasons: REASONS.map(r => ({ text: r, pick: () => act({ kind: 'reject', reason: r }, `${x.name} afgewezen: ${r}`) })),
       startNote: () => this.setBord({ mode: 'note', text: '' }), submitNote: e => { e.preventDefault(); act({ kind: 'note', text: B.text }, 'Notitie opgeslagen'); },
-      setText: e => this.setBord({ text: e.target.value }), setAt: e => this.setBord({ at: e.target.value }), cancel: () => this.setBord({ mode: null, text: '', at: '' }),
+      setText: e => this.setBord({ text: e.target.value }), setAt: e => this.setBord({ at: e.target.value }), cancel: () => this.setBord({ mode: null, text: '', at: '', gateTo: '', gc: null }),
       moveOpts: STAGES.filter(([k]) => k !== x.stage && k !== 'afgewezen').map(([v, l]) => ({ v, l })),
-      move: e => { const to = e.target.value; if (!to) return; if (to === 'gesprek') this.setBord({ mode: 'gesprek', at: '' }); else act({ kind: 'move', to }, `${x.name} staat nu in ${stageName(to)}`); },
-      submitGesprek: e => { e.preventDefault(); if (B.at) act({ kind: 'move', to: 'gesprek', at: new Date(B.at).toISOString() }, `${x.name} staat nu in Gesprek`); },
+      move: e => { const to = e.target.value; if (!to) return; if (to === 'gesprek') this.setBord({ mode: 'gesprek', at: '' }); else if (gates(x, to)) this.openGate(x, to); else act({ kind: 'move', to }, `${x.name} staat nu in ${stageName(to)}`); },
+      submitGesprek: e => { e.preventDefault(); if (!B.at) return; if (gates(x, 'gesprek')) this.openGate(x, 'gesprek'); else act({ kind: 'move', to: 'gesprek', at: new Date(B.at).toISOString() }, `${x.name} staat nu in Gesprek`); },
+      gate: B.mode !== 'gate' ? null : { name: gc.name, phone: gc.phone, email: gc.email, setName: setGc('name'), setPhone: setGc('phone'), setEmail: setGc('email'),
+        to: stageName(B.gateTo), ok: !gateMissing.length, missing: gateMissing,
+        submit: e => { e.preventDefault(); if (gateMissing.length) return;
+          act({ kind: 'move', to: B.gateTo, ...(B.gateTo === 'gesprek' ? { at: new Date(B.at).toISOString() } : {}), contact: gc, screening: cleanScreening(draft) }, `${x.name} ligt nu bij de klant`); } },
+      canDoorzetten: STAGE_RANK[x.stage] >= 1 && !x.doorgezetOp,
+      doorzetten: () => act({ kind: 'doorzetten' }, `${x.name} ligt nu bij de klant`),
+      screening: {
+        missing,
+        fields: SCREENING.map(f => ({ key: f.key, emoji: f.emoji, label: f.label, kind: f.kind, required: f.required, options: f.options || [], other: f.other, otherLabel: f.otherLabel, placeholder: f.placeholder || '',
+          value: draft[f.key], set: v => this.setScr(x.id, f.key, v) })),
+        save: () => this.saveScr(x.id),
+        copy: () => navigator.clipboard.writeText(screeningText(cleanScreening(draft), x.name)).then(() => this.flash('Screening gekopieerd'), () => this.flash('Kopiëren lukte niet'))
+      },
       answers: (x.answers || []).map(([q, a]) => ({ q, a })),
       log: x.log.map(h => ({ at: when(h.at), what: h.what, by: h.by })),
-      close: () => this.setBord({ sel: null, mode: null })
+      close: () => this.selBord(null)
     };
     return {
       empty: false, today: todayLong(), client: c.client, loading: B.link === c.id && !B.cands, err: B.err,
@@ -1924,8 +1975,9 @@ export default class App extends React.Component {
         const y = cands.find(z => z.id === B.drag);
         this.setBord({ drag: null, over: null });
         if (!y || y.stage === to) return;
-        if (to === 'gesprek' || to === 'afgewezen') { this.setBord({ sel: y.id, mode: to === 'gesprek' ? 'gesprek' : 'reject', text: '', at: '' }); return; }
-        this.setBord({ sel: y.id, mode: null });
+        if (to === 'gesprek' || to === 'afgewezen') { this.selBord(y.id, { mode: to === 'gesprek' ? 'gesprek' : 'reject' }); return; }
+        if (gates(y, to)) { this.openGate(y, to); return; }
+        this.selBord(y.id);
         this.bordAct({ kind: 'move', to }, `${y.name} staat nu in ${stageName(to)}`, y.id);
       },
       panel
