@@ -72,3 +72,83 @@ export function addStats(t, a) {
   const live = Object.fromEntries(['nieuw', 'contact', 'gebeld'].map(k => [k, ((t.live || {})[k] || 0) + (a.live[k] || 0)]));
   return { minW: Math.min(t.minW, a.minW), weeks, live };
 }
+
+/** The screening form a recruiter fills in before passing a candidate on: the fields in order, as in the Trello card. */
+export const SCREENING = [
+  { key: 'talen', emoji: '🗣️', label: 'Talenkennis', kind: 'text', required: true },
+  { key: 'ervaring', emoji: '💼', label: 'Werkervaring / opleiding / vakkennis', kind: 'long', required: true },
+  { key: 'situatie', emoji: '🏢', label: 'Huidige werkgever / situatie', kind: 'text', required: true },
+  { key: 'beschikbaar', emoji: '📅', label: 'Beschikbaarheid', kind: 'text', required: true },
+  { key: 'leeftijd', emoji: '🎂', label: 'Leeftijd', kind: 'age', required: false },
+  { key: 'diplomas', emoji: '🎓', label: 'Diploma\'s / certificaten', kind: 'text', required: false,
+    placeholder: 'Bijv. koksopleiding, SVH Leermeester, Sociale Hygiëne, HACCP, BHV, Allergenenkennis, etc.' },
+  { key: 'woonplaats', emoji: '📍', label: 'Woonplaats', kind: 'text', required: true },
+  { key: 'rijbewijs', emoji: '🚘', label: 'Rijbewijs', kind: 'choice', required: true, options: ['B', 'Nee', 'Anders'], other: 'Anders', otherLabel: 'Anders, namelijk' },
+  { key: 'vervoer', emoji: '🚗', label: 'Eigen vervoer', kind: 'choice', required: true, options: ['Ja', 'Nee'], other: 'Nee', otherLabel: 'Reist met' },
+  { key: 'extra', emoji: '📝', label: 'Extra info / motivatie', kind: 'long', required: false },
+  { key: 'advies', emoji: '➡️', label: 'Advies', kind: 'long', required: true }
+];
+
+/** Only the known screening keys, each cut to its kind: one-line text, multi-line text, age 14-99 or null, choice. */
+export function cleanScreening(input) {
+  const i = input && typeof input === 'object' ? input : {};
+  const one = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+  const out = {};
+  for (const f of SCREENING) {
+    const v = i[f.key];
+    if (f.kind === 'text') out[f.key] = one(v, 200);
+    else if (f.kind === 'long') out[f.key] = String(v ?? '').trim().slice(0, 1000);
+    else if (f.kind === 'age') { const n = Number(v); out[f.key] = v !== '' && v != null && Number.isInteger(n) && n >= 14 && n <= 99 ? n : null; }
+    else {
+      const keuze = v && f.options.includes(v.keuze) ? v.keuze : '';
+      out[f.key] = { keuze, tekst: keuze === f.other ? one(v.tekst, 200) : '' };
+    }
+  }
+  return out;
+}
+
+/** The labels of the required fields still empty (a choice on its "other" option also needs its text), in form order. */
+export function screeningMissing(s) {
+  const x = s || {};
+  return SCREENING.filter(f => {
+    if (!f.required) return false;
+    const v = x[f.key];
+    if (f.kind !== 'choice') return !String(v ?? '').trim();
+    return !v || !v.keuze || (v.keuze === f.other && !String(v.tekst ?? '').trim());
+  }).map(f => f.label);
+}
+
+/** The screening as the recruiters paste it: the name, then a block "emoji label:" plus the value per field. */
+export function screeningText(s, name) {
+  const x = s || {};
+  const blocks = SCREENING.map(f => {
+    const v = x[f.key];
+    let val = '';
+    if (f.kind === 'choice') {
+      if (v && v.keuze) {
+        val = v.keuze;
+        if (v.keuze === f.other) val = f.key === 'vervoer' ? `Nee → reist met: ${v.tekst || ''}` : `${f.otherLabel}: ${v.tekst || ''}`;
+      }
+    } else val = v == null ? '' : String(v);
+    return `${f.emoji} ${f.label}:\n${val}`;
+  });
+  return [name, ...blocks].join('\n\n');
+}
+
+/** The stages a client sees once the recruiter passed the candidate on. */
+export const CLIENT_STAGES = ['gescreend', 'gesprek', 'voorstel', 'aangenomen', 'afgewezen'];
+/** Working days a client may take to react before the candidate counts as waiting too long. */
+export const CLIENT_WAIT_DAYS = 3;
+/** Whether the client portal shows this candidate. */
+export const visibleToClient = c => !!c.doorgezetOp && CLIENT_STAGES.includes(c.stage);
+/** Since when a passed-on candidate waits for the client (doorgezetOp), or null if not waiting (not gescreend, or the client reacted). */
+export const waitingSince = c => (c.stage === 'gescreend' && c.doorgezetOp && !(c.klantAt >= c.doorgezetOp) ? c.doorgezetOp : null);
+/** How many questions of the client the recruiter has not answered yet. */
+export const openQuestions = c => (c.vragen || []).filter(q => !q.antwoord).length;
+/** Mon-Fri days after the calendar day of from, up to and including the day of now. */
+export function workdaysSince(from, now) {
+  const d = new Date(midnight(from)), end = midnight(now);
+  let n = 0;
+  for (d.setDate(d.getDate() + 1); d.getTime() <= end; d.setDate(d.getDate() + 1)) if (d.getDay() % 6) n++;
+  return n;
+}
