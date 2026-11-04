@@ -212,7 +212,7 @@ export default class App extends React.Component {
     this.meterTick();
   }
 
-  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('popstate', this._pop); window.removeEventListener('scroll', this._scroll); clearTimeout(this._yT); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); clearTimeout(this._midT); clearTimeout(this._celT); this.stopMeter(); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('popstate', this._pop); window.removeEventListener('scroll', this._scroll); clearTimeout(this._yT); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); clearTimeout(this._midT); clearTimeout(this._celT); clearTimeout(this._scrT); this.stopMeter(); if (this.sync) this.sync.stop(); }
 
   /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
   navChanged() {
@@ -1822,6 +1822,7 @@ export default class App extends React.Component {
     const list = this.bordCampaigns(), cur = this.state.bord.link;
     const id = [link, cur].find(x => x && list.some(c => c.id === x)) || (list[0] ? list[0].id : null);
     if (id === cur && this.state.bord.cands) { this.loadBord(); return; }
+    if (this._scrT) this.saveScr(this.state.bord.sel); // a campaign switch keeps a pending screening edit, like selBord
     this.setState(s => ({ bord: { ...BORD0, link: id, showRej: s.bord.showRej } }), () => this.loadBord());
   }
   openBord(link) {
@@ -1855,16 +1856,19 @@ export default class App extends React.Component {
     this._scrT = setTimeout(() => this.saveScr(id), 800);
   }
   /** Saves the screening draft of candidate id when it differs from the server's. No toast; a failure shows its message. */
-  async saveScr(id) {
+  saveScr(id) {
     clearTimeout(this._scrT); this._scrT = null;
     const B = this.state.bord, x = (B.cands || []).find(c => c.id === id), d = B.scr[id];
-    if (!x || !d) return;
-    const clean = cleanScreening(d);
-    if (JSON.stringify(clean) === JSON.stringify(cleanScreening(x.screening))) return;
-    try {
-      const r = await api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, { kind: 'screening', screening: clean });
-      this.setState(s => ({ bord: { ...s.bord, cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
-    } catch (e) { this.flash(e.message); }
+    if (!x || !d) return Promise.resolve();
+    const clean = cleanScreening(d), json = JSON.stringify(clean), last = this._scrSent;
+    if (last && last.id === id && last.json === json) return last.p; // same value already sent (or in flight): wait for that one
+    if (json === JSON.stringify(cleanScreening(x.screening))) return Promise.resolve();
+    const sent = this._scrSent = { id, json };
+    sent.p = api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, { kind: 'screening', screening: clean }).then(r => {
+      // Only the screening comes back into the candidate: a slower response must not undo a move that happened meanwhile
+      this.setState(s => ({ bord: { ...s.bord, cands: (s.bord.cands || []).map(c => c.id === id ? { ...c, screening: r.cand.screening } : c) } }));
+    }, e => { if (this._scrSent === sent) this._scrSent = null; this.flash(e.message); });
+    return sent.p;
   }
   /** Selects candidate id (or none): a screening change still waiting for its autosave is saved first, so nothing gets lost. */
   selBord(id, p = {}) {
@@ -1944,10 +1948,10 @@ export default class App extends React.Component {
       submitGesprek: e => { e.preventDefault(); if (!B.at) return; if (gates(x, 'gesprek')) this.openGate(x, 'gesprek'); else act({ kind: 'move', to: 'gesprek', at: new Date(B.at).toISOString() }, `${x.name} staat nu in Gesprek`); },
       gate: B.mode !== 'gate' ? null : { name: gc.name, phone: gc.phone, email: gc.email, setName: setGc('name'), setPhone: setGc('phone'), setEmail: setGc('email'),
         to: stageName(B.gateTo), ok: !gateMissing.length, missing: gateMissing,
-        submit: e => { e.preventDefault(); if (gateMissing.length) return;
+        submit: e => { e.preventDefault(); if (gateMissing.length) return; clearTimeout(this._scrT); this._scrT = null; // the move carries the screening itself
           act({ kind: 'move', to: B.gateTo, ...(B.gateTo === 'gesprek' ? { at: new Date(B.at).toISOString() } : {}), contact: gc, screening: cleanScreening(draft) }, `${x.name} ligt nu bij de klant`); } },
       canDoorzetten: STAGE_RANK[x.stage] >= 1 && !x.doorgezetOp,
-      doorzetten: () => act({ kind: 'doorzetten' }, `${x.name} ligt nu bij de klant`),
+      doorzetten: async () => { await this.saveScr(x.id); act({ kind: 'doorzetten' }, `${x.name} ligt nu bij de klant`); }, // the draft first, or the server may still see the old screening
       screening: {
         missing,
         fields: SCREENING.map(f => ({ key: f.key, emoji: f.emoji, label: f.label, kind: f.kind, required: f.required, options: f.options || [], other: f.other, otherLabel: f.otherLabel, placeholder: f.placeholder || '',
