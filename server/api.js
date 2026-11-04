@@ -461,7 +461,7 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     if (acc === 'answer' && (!['antwoord', 'note'].includes(kind) || !visibleToClient(c))) return forbidden(res);
     const out = candidates.act(req.account, c.id, req.body || {});
     atsChanged();
-    res.json({ cand: view(req.account, out) });
+    res.json({ cand: { ...view(req.account, out), ...(acc === 'answer' ? { readOnly: true } : {}) } });
   }));
   /**
    * The open Trello cards of switched campaign link onto its board (candidates.takeTrello): only their names and

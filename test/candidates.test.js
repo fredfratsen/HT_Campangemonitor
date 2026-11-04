@@ -238,7 +238,7 @@ test('the client: Geen gehoor stays put, Op gesprek / Aangenomen / Afwijzen move
   assert.equal(ats.klantAct('t-b1-kok', c.id, { kind: 'geenGehoor' }, door).stage, 'gescreend');
   assert.equal(c.klantGg, 1);
   assert.deepEqual([c.log[0].by, c.log[0].klant], ['Sojubar · Anna', true]);
-  assert.ok(c.undo, 'Geen gehoor keeps the recruiter\'s undo');
+  assert.equal(c.undo, null, 'any client action clears the recruiter\'s undo');
   const g = ats.klantAct('t-b1-kok', c.id, { kind: 'gesprek', at: '2026-11-12T14:00:00' }, door);
   assert.equal(g.stage, 'gesprek');
   assert.equal(g.undo, null, 'a move by the client clears the recruiter\'s undo');
@@ -260,6 +260,7 @@ test('questions: the RM answers each once; open ones are counted', () => {
   ats.klantAct('t-b1-kok', c.id, { kind: 'vraag', text: 'Weekend?' }, door);
   const [q1] = c.vragen, rm = { id: 'danielle', name: 'Danielle' };
   ats.act(rm, c.id, { kind: 'antwoord', vraagId: q1.id, text: 'Ja, B' });
+  assert.equal(c.undo, null, 'answering clears the undo too');
   assert.equal(openQuestions(c), 1);
   assert.deepEqual([q1.antwoord.door, q1.antwoord.tekst], ['Danielle', 'Ja, B']);
   assert.throws(() => ats.act(rm, c.id, { kind: 'antwoord', vraagId: q1.id, text: 'nog eens' }), /al beantwoord/);

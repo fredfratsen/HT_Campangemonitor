@@ -872,7 +872,7 @@ export default class App extends React.Component {
             // About one client (n.client): the whole notification opens it.
             canClient: !!n.client && n.kind !== 'klantvraag', openClient: e => { e.stopPropagation(); this.openClient(n.client, me); },
             // A question of a client: the whole notification opens the candidate on the Bord.
-            canBord: n.kind === 'klantvraag' && !!n.link && this.viewOk('bord', me), openBord: () => this.openBordLink(n) };
+            canBord: n.kind === 'klantvraag' && !!n.link && this.viewOk('bord', me), openBord: e => { e.stopPropagation(); this.openBordLink(n); } };
         })
       },
       news: { hasNew: st.newsSeen < NEWS[0].id, items: NEWS.map(n => ({ ...n, tagBg: n.tag === 'Nieuw' ? '#FFF8E0' : '#E7E7F0', tagFg: n.tag === 'Nieuw' ? '#B45309' : '#1B1B63' })) },
@@ -1033,7 +1033,7 @@ export default class App extends React.Component {
   /** Opens the link of a notification (#bord=<link>&k=<candidate>) and marks it read. */
   openBordLink(n) {
     const m = /^#bord=([^&]+)(?:&k=(.+))?$/.exec(n.link || '');
-    this.setState(s => ({ panel: null, inbox: s.inbox.map(x => x.id === n.id ? { ...x, read: true } : x) }));
+    this.setState(s => ({ panel: null, ...(this.me().isPreview ? {} : { inbox: s.inbox.map(x => x.id === n.id ? { ...x, read: true } : x) }) }));
     if (m) { this._hashCand = m[2] ? decodeURIComponent(m[2]) : null; this.openBord(decodeURIComponent(m[1])); }
   }
   openPendingBord() {
@@ -1849,8 +1849,8 @@ export default class App extends React.Component {
     try {
       const r = await api('GET', '/api/kandidaten?link=' + encodeURIComponent(link));
       this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: r.cands, err: '' } } : null);
-      const k = this._hashCand; this._hashCand = null; // a link from a notification: open that candidate's panel
-      if (k && this.state.bord.link === link && r.cands.some(x => x.id === k)) this.selBord(k);
+      // a link from a notification: open that candidate's panel (only for the board it names)
+      if (this.state.bord.link === link && this._hashCand) { const k = this._hashCand; this._hashCand = null; if (r.cands.some(x => x.id === k)) this.selBord(k); }
     } catch (e) { this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: s.bord.cands || [], err: e.message } } : null); }
   }
   setBord(p) { this.setState(s => ({ bord: { ...s.bord, ...p } })); }
@@ -1902,7 +1902,7 @@ export default class App extends React.Component {
     this.setBord({ busy: true });
     try {
       const r = await api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, body);
-      this.setState(s => ({ bord: { ...s.bord, busy: false, mode: null, text: '', at: '', gateTo: '', gc: null, ans: {}, cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
+      this.setState(s => ({ bord: { ...s.bord, busy: false, mode: null, text: '', at: '', gateTo: '', gc: null, ans: {}, cands: (s.bord.cands || []).map(c => c.id === id ? { ...r.cand, ...(c.readOnly ? { readOnly: true } : {}) } : c) } }));
       if (done) this.flash(done);
     } catch (e) { this.setBord({ busy: false }); this.flash(e.message); this.loadBord(); }
   }

@@ -290,8 +290,12 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.ok(seen.data.cands.every(c => c.readOnly));
     const mact = body => mkt.api('POST', `/api/kandidaten/${priya.id}/actie`, body);
     assert.equal((await mact({ kind: 'move', to: 'nb' })).status, 403);
-    assert.equal((await mact({ kind: 'note', text: 'Even gebeld' })).status, 200);
-    assert.equal((await mact({ kind: 'antwoord', vraagId: vraag.id, text: 'Ja, in het weekend.' })).status, 200);
+    const noted = await mact({ kind: 'note', text: 'Even gebeld' });
+    assert.equal(noted.status, 200);
+    assert.equal(noted.data.cand.readOnly, true, 'the response stays read-only');
+    const answered = await mact({ kind: 'antwoord', vraagId: vraag.id, text: 'Ja, in het weekend.' });
+    assert.equal(answered.status, 200);
+    assert.equal(answered.data.cand.readOnly, true);
     assert.equal((await S.rec.api('POST', `/api/kandidaten/${priya.id}/actie`, { kind: 'antwoord', vraagId: vraag.id, text: 'x' })).status, 403, 'a recruiter does not answer');
     await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.mkt', set: { b9: 'Een Ander' } }] });
     assert.equal((await mkt.get(`/api/kandidaten?link=${kok.id}`)).status, 403, 'another marketeer’s board');

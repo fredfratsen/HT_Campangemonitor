@@ -233,7 +233,7 @@ export function createCandidates(docs) {
         if (q.antwoord) fail('Deze vraag is al beantwoord.');
         if (!text) fail('Schrijf eerst een antwoord.');
         q.antwoord = { at: now, door: by, tekst: text };
-        log(c, by, `Antwoord aan klant: ${text}`, now); keepUndo = true;
+        log(c, by, `Antwoord aan klant: ${text}`, now); // clears the undo: it would revert the recruiter's move under an open question
         break;
       }
       case 'undo':
@@ -295,6 +295,7 @@ export function createCandidates(docs) {
       }
       default: fail('Onbekende actie.');
     }
+    c.undo = null; // any client action: an undo would revert the recruiter's earlier move
     c.klantAt = now;
     f.save();
     return c;
