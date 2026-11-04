@@ -16,6 +16,7 @@ import { trelloRouter } from './trello.js';
 import { createTrelloSnapshot } from './trelloSnapshot.js';
 import { createTrelloIntake } from './trelloIntake.js';
 import { apiRouter } from './api.js';
+import { portaalRouter } from './portaal.js';
 
 export const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -102,6 +103,9 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
     atsChanged();
     res.status(r.dup ? 200 : 201).json({ id: r.cand.id, ...(r.dup ? { dubbel: true } : {}) });
   });
+
+  // The client portal calls this server to server with a shared key (see portaal.js); no login either.
+  app.use('/api/portaal', portaalRouter({ candidates, secrets, store, accounts, audit, atsChanged }));
 
   app.use(auth.guard);
 

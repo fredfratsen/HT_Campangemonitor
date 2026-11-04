@@ -25,6 +25,13 @@ export const INTEGRATIONS = {
       { key: 'from', label: 'Afzender', env: 'SMTP_FROM', plain: true, pattern: /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/, hint: 'Het adres waar de mail vandaan komt; je mailserver moet het accepteren' },
     ],
   },
+  portaal: {
+    label: 'Klantportaal',
+    desc: 'Het klantportaal haalt hiermee de kandidaten op die bij de klant liggen, en stuurt terug wat de klant doet.',
+    fields: [
+      { key: 'sleutel', label: 'Sleutel', env: 'PORTAAL_SLEUTEL', pattern: /^\S{32,}$/, hint: 'Minimaal 32 tekens; dezelfde als CAMPAGNEMONITOR_SLEUTEL in het portaal' },
+    ],
+  },
 };
 
 /** @param docs  document factory from jsonfile.js (files or Netlify Blobs) */

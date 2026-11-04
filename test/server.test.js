@@ -221,6 +221,48 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.deepEqual(audit.map(e => e.details.actie), ['nieuwe intake-link', 'omgezet naar ATS']);
   });
 
+  if (mode === 'server') test('portaal: the client portal reads handed-over candidates with a shared key and sends back what the client does', async () => {
+    const kok = { id: 't-b7-kok', boardId: 'b7', boardName: 'Restaurant ATS', listId: 'li7', vac: 'Kok', rec: 'Tessa' };
+    const bed = { ...kok, id: 't-b7-bed', listId: 'li6', vac: 'Bediening' };
+    await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.links', set: { [kok.id]: kok, [bed.id]: bed } }] });
+    const url = (await S.dev.api('POST', `/api/kandidaten/intake/${kok.id}`)).data.url;
+    const url2 = (await S.dev.api('POST', `/api/kandidaten/intake/${bed.id}`)).data.url;
+    const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    await post(url, { full_name: 'Priya Ramdin', phone_number: '+31 6 1111 2222', email: 'priya@example.com' });
+    await post(url, { full_name: 'Nina Nieuw', phone_number: '+31 6 3333 4444' });
+    await post(url2, { full_name: 'Bas Bediening', phone_number: '+31 6 5555 6666' });
+    const list = (await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands;
+    const priya = list.find(c => c.name === 'Priya Ramdin');
+    const SCR = { talen: 'NL', ervaring: '3 jaar', situatie: 'Zoekend', beschikbaar: 'Direct', woonplaats: 'Utrecht', rijbewijs: { keuze: 'B' }, vervoer: { keuze: 'Ja' }, advies: 'Doen' };
+    const portaal = (p, o = {}) => fetch(BASE + '/api/portaal' + p, { ...o, headers: { 'content-type': 'application/json', ...(o.key ? { 'x-toppers-sleutel': o.key } : {}) } });
+    const sleutel = 'p'.repeat(40);
+    assert.equal((await portaal('/functies')).status, 503, 'off until the Dev sets a key');
+    assert.equal((await S.dev.api('PUT', '/api/admin/integrations/portaal', { values: { sleutel } })).status, 200);
+    assert.equal((await portaal('/functies')).status, 401);
+    assert.equal((await portaal('/functies', { key: 'q'.repeat(40) })).status, 401);
+    const fn = await (await portaal('/functies', { key: sleutel })).json();
+    assert.ok(fn.functies.some(f => f.linkId === kok.id && f.klant === 'Restaurant ATS' && f.functie === 'Kok'));
+    const get = p => portaal(p, { key: sleutel });
+    assert.deepEqual((await (await get(`/kandidaten?links=${kok.id}`)).json()).kandidaten, [], 'nothing handed over yet');
+    const mv = await S.rec.api('POST', `/api/kandidaten/${priya.id}/actie`, { kind: 'move', to: 'gescreend', screening: SCR });
+    assert.equal(mv.status, 200, mv.text);
+    const k = (await (await get(`/kandidaten?links=${kok.id},${bed.id}`)).json()).kandidaten;
+    assert.deepEqual(k.map(c => c.naam), ['Priya Ramdin'], 'Gescreend, not Nieuw, and not other candidates');
+    assert.equal((await get(`/kandidaten?links=${Array.from({ length: 51 }, (_, i) => 'x' + i).join(',')}`)).status, 400);
+    assert.deepEqual(await (await get('/kandidaten?links=')).json(), { kandidaten: [] });
+
+    const who = { naam: 'Anna', organisatie: 'Restaurant ATS' }, q = 'Is zij beschikbaar in het weekend?';
+    const act = (body, id = priya.id) => fetch(`${BASE}/api/portaal/kandidaten/${id}/actie`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-toppers-sleutel': sleutel }, body: JSON.stringify({ linkId: kok.id, door: who, ...body }) });
+    assert.equal((await act({ kind: 'vraag', text: q })).status, 200);
+    const st = await S.dev.get('/api/state');
+    assert.ok(st.text.includes('klantvraag') && !st.text.includes('Priya') && !st.text.includes(q), 'a notice without candidate data');
+    assert.equal((await act({ kind: 'opmerking', text: 'x', linkId: bed.id })).status, 404, 'other link');
+    assert.equal((await fetch(`${BASE}/api/portaal/kandidaten/${priya.id}/actie`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-toppers-sleutel': sleutel }, body: JSON.stringify({ linkId: bed.id, kind: 'opmerking', text: 'x', door: who }) })).status, 404);
+    assert.equal((await act({ kind: 'opmerking', text: '' })).status, 400);
+    await S.rec.api('POST', `/api/kandidaten/${priya.id}/actie`, { kind: 'move', to: 'contact' });
+    assert.equal((await act({ kind: 'opmerking', text: 'x' })).status, 404, 'no longer with the client');
+  });
+
   test('time in the app: everyone sends it, only Tijdwinst sees the team totals, and they carry no names', async () => {
     assert.equal((await S.rec.api('POST', '/api/timing', { seconds: { feedback: 120, other: 30 } })).status, 200);
     assert.equal((await S.dev.api('POST', '/api/timing', { seconds: { feedback: 60 } })).status, 200);
