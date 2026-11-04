@@ -189,7 +189,8 @@ export function createCandidates(docs) {
         if (to === c.stage) fail(`${c.name} staat al in ${stageName(to)}.`);
         // Checked before anything changes, so a refused move leaves the card as it was
         const contact = a.contact && checkContact(a.contact), screening = a.screening && cleanScreening(a.screening);
-        if (STAGE_RANK[to] >= 1 && CALL_STAGES.includes(c.stage)) needScreening(screening || c.screening);
+        const gated = STAGE_RANK[to] >= 1 && CALL_STAGES.includes(c.stage);
+        if (gated) needScreening(screening || c.screening);
         let at = null;
         if (to === 'gesprek') { at = Date.parse(a.at); if (!a.at || isNaN(at)) fail('Kies de datum en tijd van het gesprek.'); }
         if (contact) setContact(c, by, contact, now);
@@ -197,7 +198,7 @@ export function createCandidates(docs) {
         moveTo(c, to, now);
         if (at) c.gesprek = at;
         log(c, by, `Naar ${stageName(to)}${at ? ` · ${when(at)}` : ''}`, now);
-        if (STAGE_RANK[to] >= 1 && !c.doorgezetOp) { c.doorgezetOp = now; log(c, by, 'Doorgezet naar klant', now); }
+        if (gated && !c.doorgezetOp) { c.doorgezetOp = now; log(c, by, 'Doorgezet naar klant', now); }
         undoable = true;
         break;
       }

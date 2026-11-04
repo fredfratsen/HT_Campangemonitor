@@ -212,3 +212,18 @@ test('contact: the same checks as the intake', () => {
   assert.throws(() => ats.act(kim, c.id, { kind: 'contact', name: 'P', phone: '123' }), /telefoonnummer klopt niet/);
   assert.equal(ats.act(kim, c.id, { kind: 'contact', name: 'Priya Ramdin', phone: priya.phone_number, email: 'priya@example.com' }).log[0].what, 'Gegevens gecontroleerd');
 });
+test('only a move through the gate hands over to the client', () => {
+  const { ats, key } = setup();
+  ats.takeTrello(kim, 't-b1-kok', 'b1', [{ card: { id: 'c1' }, list: 'Gescreend', stage: 'gescreend', at: Date.now(), name: 'Jan', desc: 'Telefoon: 0612345678' }]);
+  const t = ats.ofLink('t-b1-kok')[0];
+  assert.equal(ats.act(kim, t.id, { kind: 'move', to: 'gesprek', at: '2026-11-06T14:00' }).doorgezetOp, undefined);
+  const c = ats.take(key, priya).cand;
+  ats.act(kim, c.id, { kind: 'reject', reason: 'Geen reactie' });
+  assert.equal(ats.act(kim, c.id, { kind: 'move', to: 'gescreend' }).doorgezetOp, undefined);
+});
+test('a refused move changes nothing; doorzetten needs Gescreend or further', () => {
+  const { ats, key } = setup(), c = ats.take(key, priya).cand, n = c.log.length;
+  assert.throws(() => ats.act(kim, c.id, { kind: 'move', to: 'gescreend', contact: { name: 'Nieuwe Naam', phone: '0612345678' } }), /Vul eerst de screening in/);
+  assert.equal(c.stage, 'nieuw'); assert.equal(c.name, 'Priya Ramdin'); assert.equal(c.log.length, n);
+  assert.throws(() => ats.act(kim, c.id, { kind: 'doorzetten' }), /Doorzetten kan pas vanaf Gescreend\./);
+});
