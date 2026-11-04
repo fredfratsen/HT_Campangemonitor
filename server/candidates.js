@@ -13,7 +13,7 @@
 //   reason and the weeks they were called in, so the monitor's numbers stay the same (atsStats).
 import { randomToken, sha256 } from './crypto.js';
 import { normEmail, normPhone } from './blacklist.js';
-import { STAGE_KEYS, STAGE_RANK, CALL_STAGES, END_STAGES, KEEP_MS, stageName } from '../src/lib/ats.js';
+import { STAGE_KEYS, STAGE_RANK, CALL_STAGES, END_STAGES, KEEP_MS, stageName, cleanScreening, screeningMissing } from '../src/lib/ats.js';
 import { REASONS } from '../src/lib/constants.js';
 import { weekOf } from '../src/lib/weeks.js';
 
@@ -31,19 +31,26 @@ const EMAIL_KEYS = ['email', 'e-mail', 'e_mail', 'emailadres'], SRC_KEYS = ['bro
 const pick = (b, keys) => { for (const k of keys) if (b[k] != null && String(b[k]).trim()) return String(b[k]); return ''; };
 const DAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'], MON = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
-/** A lead as Zapier sends it → { name, phone, email, src, answers }. Throws when there's no name or no way to reach them. */
-export function parseLead(body) {
-  const b = Object.fromEntries(Object.entries(body && typeof body === 'object' ? body : {}).map(([k, v]) => [k.trim().toLowerCase(), v]));
-  const name = line(pick(b, NAME_KEYS) || [b.first_name || b.voornaam, b.last_name || b.achternaam].filter(Boolean).join(' '), 80);
-  const phone = line(pick(b, PHONE_KEYS), 30), email = normEmail(pick(b, EMAIL_KEYS)), src = line(pick(b, SRC_KEYS), 40) || 'Meta';
+/** The name, phone and email a recruiter or the intake gives → the cleaned values. Throws when they don't hold up. */
+function checkContact({ name, phone, email }) {
+  name = line(name, 80); phone = line(phone, 30); email = normEmail(email);
   if (!name) fail('Naam ontbreekt (veld naam, name of full_name).');
   if (!phone && !email) fail('Telefoonnummer of e-mailadres ontbreekt.');
   if (phone && normPhone(phone).length < 9) fail('Het telefoonnummer klopt niet.');
   if (email && !validEmail(email)) fail('Het e-mailadres klopt niet.');
+  return { name, phone: phone || null, email: email || null };
+}
+
+/** A lead as Zapier sends it → { name, phone, email, src, answers }. Throws when there's no name or no way to reach them. */
+export function parseLead(body) {
+  const b = Object.fromEntries(Object.entries(body && typeof body === 'object' ? body : {}).map(([k, v]) => [k.trim().toLowerCase(), v]));
+  const name = line(pick(b, NAME_KEYS) || [b.first_name || b.voornaam, b.last_name || b.achternaam].filter(Boolean).join(' '), 80);
+  const src = line(pick(b, SRC_KEYS), 40) || 'Meta';
+  const { phone, email } = checkContact({ name, phone: pick(b, PHONE_KEYS), email: pick(b, EMAIL_KEYS) });
   const used = new Set([...NAME_KEYS, ...PHONE_KEYS, ...EMAIL_KEYS, ...SRC_KEYS, ...SKIP]);
   const answers = Object.entries(body || {}).filter(([k, v]) => !used.has(k.trim().toLowerCase()) && v != null && typeof v !== 'object' && String(v).trim())
     .slice(0, MAX_ANSWERS).map(([k, v]) => [line(k.replace(/_/g, ' '), 120), line(v, 500)]);
-  return { name, phone: phone || null, email: email || null, src, answers };
+  return { name, phone, email, src, answers };
 }
 
 /**
@@ -141,15 +148,28 @@ export function createCandidates(docs) {
     if (to !== 'gesprek') c.gesprek = null;
   };
   const when = s => { const d = new Date(s); return `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  /** Screening draft: one timeline line per half hour from the same person. */
+  const setScreening = (c, by, input, now) => {
+    c.screening = cleanScreening(input);
+    const top = c.log[0];
+    if (top && top.what === 'Screening bijgewerkt' && top.by === by && now - top.at < 30 * 60e3) c.lastAt = now;
+    else log(c, by, 'Screening bijgewerkt', now);
+  };
+  const setContact = (c, by, v, now) => {
+    const ch = [['Naam', c.name, v.name, 'name'], ['Telefoon', c.phone, v.phone, 'phone'], ['E-mail', c.email, v.email, 'email']].filter(x => (x[1] || '') !== (x[2] || ''));
+    for (const x of ch) c[x[3]] = x[2];
+    log(c, by, ch.length ? ch.map(x => `${x[0]}: ${x[1] || '–'} → ${x[2] || '–'}`).join('; ') : 'Gegevens gecontroleerd', now);
+  };
+  const needScreening = s => { const m = screeningMissing(s); if (m.length) fail(`Vul eerst de screening in: ${m.join(', ')}.`); };
   const SNAP = ['stage', 'reached', 'att', 'gg', 'tba', 'gesprek', 'reason', 'endedAt', 'calls'];
 
   /**
    * What a recruiter does with candidate id: { kind: 'geenGehoor' | 'tba' (text) | 'move' (to, at: for Gesprek) |
-   * 'reject' (reason) | 'note' (text) | 'undo' }. A move or reject can be undone until the next action.
+   * 'reject' (reason) | 'note' (text) | 'screening' | 'contact' | 'doorzetten' | 'undo' }. A move or reject can be undone until the next action.
    */
   function act(actor, id, a = {}, now = Date.now()) {
     const c = mustGet(id), by = actor.name, before = Object.fromEntries(SNAP.map(k => [k, structuredClone(c[k])]));
-    let undoable = false;
+    let undoable = false, keepUndo = false;
     switch (a.kind) {
       case 'geenGehoor':
         if (!CALL_STAGES.includes(c.stage)) fail('Geen gehoor kan alleen bij Nieuw, Contactpoging of Niet bereikbaar.');
@@ -167,11 +187,17 @@ export function createCandidates(docs) {
         const to = a.to;
         if (!STAGE_KEYS.includes(to) || to === 'afgewezen') fail('Kies een kolom.');
         if (to === c.stage) fail(`${c.name} staat al in ${stageName(to)}.`);
+        // Checked before anything changes, so a refused move leaves the card as it was
+        const contact = a.contact && checkContact(a.contact), screening = a.screening && cleanScreening(a.screening);
+        if (STAGE_RANK[to] >= 1 && CALL_STAGES.includes(c.stage)) needScreening(screening || c.screening);
         let at = null;
         if (to === 'gesprek') { at = Date.parse(a.at); if (!a.at || isNaN(at)) fail('Kies de datum en tijd van het gesprek.'); }
+        if (contact) setContact(c, by, contact, now);
+        if (screening) setScreening(c, by, screening, now);
         moveTo(c, to, now);
         if (at) c.gesprek = at;
         log(c, by, `Naar ${stageName(to)}${at ? ` · ${when(at)}` : ''}`, now);
+        if (STAGE_RANK[to] >= 1 && !c.doorgezetOp) { c.doorgezetOp = now; log(c, by, 'Doorgezet naar klant', now); }
         undoable = true;
         break;
       }
@@ -188,6 +214,18 @@ export function createCandidates(docs) {
         log(c, by, `Notitie: ${text}`, now);
         break;
       }
+      case 'screening':
+        setScreening(c, by, a.screening, now); keepUndo = true;
+        break;
+      case 'contact':
+        setContact(c, by, checkContact(a), now); keepUndo = true;
+        break;
+      case 'doorzetten':
+        if (!(STAGE_RANK[c.stage] >= 1)) fail('Doorzetten kan pas vanaf Gescreend.');
+        if (c.doorgezetOp) fail(`${c.name} ligt al bij de klant.`);
+        needScreening(c.screening);
+        c.doorgezetOp = now; log(c, by, 'Doorgezet naar klant', now); keepUndo = true;
+        break;
       case 'undo':
         if (!c.undo) fail('Er is niets om ongedaan te maken.');
         Object.assign(c, c.undo); c.undo = null;
@@ -196,7 +234,7 @@ export function createCandidates(docs) {
         return c;
       default: fail('Onbekende actie.');
     }
-    c.undo = undoable ? before : null;
+    if (!keepUndo) c.undo = undoable ? before : null;
     f.save();
     return c;
   }

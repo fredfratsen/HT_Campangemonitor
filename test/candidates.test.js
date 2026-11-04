@@ -11,6 +11,8 @@ const DAY = 864e5;
 const lead = { id: 'robbin', name: 'Robbin' }, kim = { id: 'r-kim', name: 'Kim' };
 const priya = { full_name: 'Priya Ramdin', phone_number: '+31 6 1234 5678', email: 'Priya@Example.com', 'Hoeveel jaar ervaring heb je?': '3 jaar' };
 
+const SCR = { talen: 'NL', ervaring: '3 jaar', situatie: 'Zoekend', beschikbaar: 'Direct', woonplaats: 'Utrecht', rijbewijs: { keuze: 'B' }, vervoer: { keuze: 'Ja' }, advies: 'Doen' };
+
 function setup() {
   const ats = createCandidates(memDocs()), key = ats.newKey(lead, 't-b1-kok');
   return { ats, key };
@@ -68,7 +70,7 @@ test('moves, Gesprek with a moment, rejecting with a reason from the list, and u
   const { ats, key } = setup(), id = ats.take(key, priya).cand.id;
   ats.act(kim, id, { kind: 'tba', text: 'bel 16:00' });
   assert.equal(ats.get(id).tba.text, 'bel 16:00');
-  ats.act(kim, id, { kind: 'move', to: 'gescreend' });
+  ats.act(kim, id, { kind: 'move', to: 'gescreend', screening: SCR });
   assert.throws(() => ats.act(kim, id, { kind: 'move', to: 'gesprek' }), /datum en tijd/);
   ats.act(kim, id, { kind: 'move', to: 'gesprek', at: '2026-11-06T14:00' });
   assert.equal(ats.get(id).reached, 2);
@@ -114,7 +116,7 @@ test('the numbers: per week how far they got, the reasons, and today\'s call lis
   ats.act(kim, ids[1], { kind: 'move', to: 'contact' }, now);
   ats.act(kim, ids[2], { kind: 'move', to: 'contact' }, now);
   ats.act(kim, ids[2], { kind: 'geenGehoor' }, now);
-  ats.act(kim, ids[3], { kind: 'move', to: 'voorstel' }, now);
+  ats.act(kim, ids[3], { kind: 'move', to: 'voorstel', screening: SCR }, now);
   ats.act(kim, ids[4], { kind: 'reject', reason: 'Afstand' }, now);
   const s = atsStats(ats.all(), [], now)['t-b1-kok'];
   assert.deepEqual(s.live, { nieuw: 1, contact: 1, gebeld: 1 });
@@ -172,4 +174,41 @@ test('Trello cards onto the board: open stages only, once, with their numbers; t
   assert.deepEqual([...ats.fromTrello('b1')].sort(), ['c01', 'c02', 'c03', 'c04']);
   assert.equal(ats.takeTrello(kim, 't-b1-kok', 'b1', cards, now), 0, 'not twice');
   assert.equal(ats.takeTrello(kim, 't-b1-kok', 'b1', [card('c07', 'contact', 'Contactpoging'), ...cards], now), 1, 'a card that came into Trello since');
+});
+
+test('the gate: no Gescreend (or further) from a call stage without a complete screening', () => {
+  const { ats, key } = setup(), c = ats.take(key, priya).cand;
+  assert.throws(() => ats.act(kim, c.id, { kind: 'move', to: 'gescreend' }), /Vul eerst de screening in: Talenkennis/);
+  assert.throws(() => ats.act(kim, c.id, { kind: 'move', to: 'aangenomen' }), /Vul eerst de screening in/);
+  const out = ats.act(kim, c.id, { kind: 'move', to: 'gescreend', screening: SCR, contact: { name: 'Priya R. Ramdin', phone: '+31 6 1234 5678', email: 'priya@example.com' } });
+  assert.equal(out.stage, 'gescreend');
+  assert.ok(out.doorgezetOp);
+  assert.deepEqual(out.log.slice(0, 2).map(e => e.what), ['Doorgezet naar klant', 'Naar Gescreend']);
+  assert.ok(out.log.some(e => e.what === 'Naam: Priya Ramdin → Priya R. Ramdin'));
+  assert.ok(out.undo, 'the move itself can be undone');
+});
+test('screening saves as a draft, without touching undo, one timeline line per half hour', () => {
+  const { ats, key } = setup(), c = ats.take(key, priya).cand, t = Date.now();
+  ats.act(kim, c.id, { kind: 'move', to: 'contact' }, t);
+  ats.act(kim, c.id, { kind: 'screening', screening: { talen: 'NL' } }, t + 1000);
+  const out = ats.act(kim, c.id, { kind: 'screening', screening: { talen: 'NL, EN' } }, t + 2000);
+  assert.equal(out.screening.talen, 'NL, EN');
+  assert.ok(out.undo, 'the move to Contactpoging can still be undone');
+  assert.equal(out.log.filter(e => e.what === 'Screening bijgewerkt').length, 1);
+});
+test('doorzetten: a Trello card past the gate goes to the client once its screening is complete', () => {
+  const { ats } = setup();
+  ats.takeTrello(kim, 't-b1-kok', 'b1', [{ card: { id: 'c1' }, list: 'Gesprek', stage: 'gesprek', at: Date.now(), name: 'Jan', desc: 'Telefoon: 0612345678' }]);
+  const c = ats.ofLink('t-b1-kok')[0];
+  assert.equal(c.doorgezetOp, undefined);
+  assert.throws(() => ats.act(kim, c.id, { kind: 'doorzetten' }), /Vul eerst de screening in/);
+  ats.act(kim, c.id, { kind: 'screening', screening: SCR });
+  assert.ok(ats.act(kim, c.id, { kind: 'doorzetten' }).doorgezetOp);
+  assert.throws(() => ats.act(kim, c.id, { kind: 'doorzetten' }), /ligt al bij de klant/);
+});
+test('contact: the same checks as the intake', () => {
+  const { ats, key } = setup(), c = ats.take(key, priya).cand;
+  assert.throws(() => ats.act(kim, c.id, { kind: 'contact', name: '', phone: '0612345678' }), /Naam ontbreekt/);
+  assert.throws(() => ats.act(kim, c.id, { kind: 'contact', name: 'P', phone: '123' }), /telefoonnummer klopt niet/);
+  assert.equal(ats.act(kim, c.id, { kind: 'contact', name: 'Priya Ramdin', phone: priya.phone_number, email: 'priya@example.com' }).log[0].what, 'Gegevens gecontroleerd');
 });
