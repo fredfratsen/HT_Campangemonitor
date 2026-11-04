@@ -1,16 +1,14 @@
 import React from 'react';
-import HaltTag from '../components/HaltTag.jsx';
 
-// Also "Mijn campagnes" (isMine): a recruiter's own campaigns, without the Status, Recruiter and Gem. kwaliteit columns.
 export default function CampaignsView({ v }) {
-  const { campTitle, f, isMine, list, listCount, listEmpty, setSearch, setSort, sortOptions, sortValue, statusTabs, sum, wk } = v;
-  const cols = isMine ? 'minmax(220px,2fr) 150px 130px 100px minmax(180px,1.6fr)' : '136px minmax(220px,2fr) 84px 150px 130px 96px 100px minmax(180px,1.6fr)';
+  const { f, list, listCount, listEmpty, setSearch, setSort, sortOptions, sortValue, statusTabs, sum, wk } = v;
+  const cols = '136px minmax(220px,2fr) 84px 150px 130px 96px 100px minmax(180px,1.6fr)';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: '12px', fontWeight: '500', letterSpacing: '.04em', textTransform: 'uppercase', color: '#5C5C5A' }}>Week {wk.n} · {wk.range}</div>
-          <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>{campTitle}</h1>
+          <h1 style={{ margin: '6px 0 0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '40px', lineHeight: '1.1', letterSpacing: '-.02em' }}>Actieve campagnes</h1>
         </div>
         <div style={{ fontSize: '13px', color: '#5C5C5A' }}>{listCount} van {sum.active} campagnes{sum.scope}</div>
       </header>
@@ -24,26 +22,26 @@ export default function CampaignsView({ v }) {
         </select>
       </div>
       <div style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflowX: 'auto' }}>
-        <div className="m-table" style={{ minWidth: isMine ? '880px' : '1076px' }}>
+        <div className="m-table" style={{ minWidth: '1076px' }}>
           <div className="m-thead" style={{ display: 'grid', gridTemplateColumns: cols, gap: '14px', padding: '12px 20px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#8C8C8A', borderBottom: '1px solid #E4E1DE' }}>
-            {isMine ? null : <div>Status</div>}
+            <div>Status</div>
             <div>Klant · vacature</div>
-            {isMine ? null : <div>Recruiter</div>}
+            <div>Recruiter</div>
             <div>Instroom deze week</div>
             <div>Kwaliteit</div>
-            {isMine ? null : <div>Gem. kwaliteit</div>}
+            <div>Gem. kwaliteit</div>
             <div>Feedback</div>
             <div>Signalen</div>
           </div>
-          {list.map((c, i) => <div key={i} className={isMine ? 'hov-row mine-row' : 'hov-row camp-row'} onClick={c.open} style={{ display: 'grid', gridTemplateColumns: cols, gap: '14px', padding: '14px 20px', alignItems: 'center', borderBottom: '1px solid #F5F2ED', cursor: 'pointer', fontSize: '14px' }}>
-              {isMine ? null : <div>
-                  <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '6px', fontSize: '12px', lineHeight: '1.35', fontWeight: '600', padding: '4px 9px', borderRadius: '6px', background: c.sBg, color: c.sFg }}><span style={{ width: '7px', height: '7px', borderRadius: '50%', background: c.sFg, flex: 'none', transform: 'translateY(-1px)' }} />{c.statusLabel}</span>
-                </div>}
+          {list.map((c, i) => <div key={i} className="hov-row camp-row" onClick={c.open} style={{ display: 'grid', gridTemplateColumns: cols, gap: '14px', padding: '14px 20px', alignItems: 'center', borderBottom: '1px solid #F5F2ED', cursor: 'pointer', fontSize: '14px' }}>
+              <div>
+                <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '6px', fontSize: '12px', lineHeight: '1.35', fontWeight: '600', padding: '4px 9px', borderRadius: '6px', background: c.sBg, color: c.sFg }}><span style={{ width: '7px', height: '7px', borderRadius: '50%', background: c.sFg, flex: 'none', transform: 'translateY(-1px)' }} />{c.statusLabel}</span>
+              </div>
               <div style={{ minWidth: '0' }}>
                 <div style={{ fontWeight: '600' }}>{c.client}</div>
-                <div style={{ color: '#5C5C5A', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>{c.vac}{isMine && c.haltTag ? <HaltTag t={c.haltTag} /> : null}</div>
+                <div style={{ color: '#5C5C5A', fontSize: '13px' }}>{c.vac}</div>
               </div>
-              {isMine ? null : <div data-label="Recruiter" style={{ color: '#3C3C3A' }}>{c.rec}</div>}
+              <div data-label="Recruiter" style={{ color: '#3C3C3A' }}>{c.rec}</div>
               <div data-label="Instroom" style={{ display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '24px' }}>
                   {c.bars.map((b, j) => <div key={j} style={{ width: '6px', height: b.h, background: b.bg, borderRadius: '2px' }} />)}
@@ -59,10 +57,10 @@ export default function CampaignsView({ v }) {
                 <span style={{ fontSize: '12px', color: c.qdColor }}>{c.qdShort}</span>
                 <div style={{ fontSize: '11px', color: '#8C8C8A' }}>vorige week {c.prevQText}</div>
               </div>
-              {isMine ? null : <div data-label="Gem. kwaliteit" style={{ lineHeight: '1.2' }}>
-                  <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px', color: c.avgFg }}>{c.avgQ}</span>
-                  <div style={{ fontSize: '11px', color: '#8C8C8A' }}>{c.avgSub}</div>
-                </div>}
+              <div data-label="Gem. kwaliteit" style={{ lineHeight: '1.2' }}>
+                <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px', color: c.avgFg }}>{c.avgQ}</span>
+                <div style={{ fontSize: '11px', color: '#8C8C8A' }}>{c.avgSub}</div>
+              </div>
               <div data-label="Feedback" style={{ fontSize: '13px', color: c.atColor, fontWeight: c.atWeight }}>{c.lastAt}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                 {c.reasons.map((r, j) => <span key={j} style={{ fontSize: '11px', fontWeight: '500', padding: '2px 7px', borderRadius: '6px', background: r.bg, color: r.fg }}>{r.t}</span>)}

@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import useCenterCurrent from '../lib/useCenterCurrent.js';
 
 export default function CheckinView({ v }) {
-  const { ciNone, ciQ, decLeads, fc, form, goMine, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueDoneTitle, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setCiQ, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
+  const { ciNone, ciQ, decLeads, fc, form, goLive, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueDoneTitle, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setCiQ, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
   const listRef = useCenterCurrent(form.id + '|' + form.w);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -15,7 +15,7 @@ export default function CheckinView({ v }) {
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div className="q-card" style={{ flex: '1 1 260px', maxWidth: '320px', background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '12px', overflow: 'hidden' }}>
           <div style={{ padding: '16px 18px', borderBottom: '1px solid #E4E1DE', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '15px' }}>Mijn campagnes · week {wk.n}</div>
+            <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '15px' }}>Jouw campagnes · week {wk.n}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#5C5C5A' }}>
               <span>{queueDone} van {queueTotal} ingevuld</span>
               <span>{queueOpen} open</span>
@@ -102,7 +102,7 @@ export default function CheckinView({ v }) {
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '17px', color: '#1A7A4A' }}>{queueDoneTitle}</div>
                 <div style={{ fontSize: '13px', color: '#3C3C3A' }}>Je kunt eerdere check-ins nog aanpassen in de lijst.</div>
               </div>
-              <Button variant="accent" onClick={goMine}>Naar mijn campagnes</Button>
+              <Button variant="accent" onClick={goLive}>Naar live campagnes</Button>
             </div> : null}
         </div>
       </div>

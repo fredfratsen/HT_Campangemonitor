@@ -221,11 +221,6 @@ button:focus-visible{outline:2px solid rgba(27,27,99,.45);outline-offset:2px}
   .camp-row > :nth-child(7){grid-area:fb}
   .camp-row > :nth-child(8){grid-column:1 / -1}
   .camp-row > :nth-child(8):empty{display:none}
-  /* Mijn campagnes: name, then instroom · kwaliteit · feedback side by side, then the signals */
-  .mine-row{grid-template-columns:repeat(3,minmax(0,1fr)) !important;gap:12px 10px !important;padding:16px !important;align-items:start !important}
-  .mine-row > :nth-child(1),.mine-row > :nth-child(5){grid-column:1 / -1}
-  .mine-row > :nth-child(2){row-gap:0 !important}
-  .mine-row > :nth-child(5):empty{display:none}
 
   /* Live campagnes: name, the Ermee bezig / Done toggle, then the three numbers, then marketeer · feedback, then the
      bar. Function rows skip the marketeer and the toggle. */

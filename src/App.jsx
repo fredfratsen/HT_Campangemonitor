@@ -82,7 +82,7 @@ export default class App extends React.Component {
       account: null, members: [], viewAs: null, settingsTab: 'account',
       view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null, kQ: '', navOpen: false,
       campaigns: null, rules: { ...DEF_RULES },
-      f: { q: '', status: 'all', sort: 'status', mineSort: 'leadsMost' },
+      f: { q: '', status: 'all', sort: 'status' },
       ci: { rec: 'all' }, ciKeep: [], ciQ: '', form: null,
       hist: { status: 'all', rec: 'all', period: '12' },
       act: { type: 'Advertentie', text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, reply: null, upd: null, fbBar: lsGet(FB_BAR_KEY, false),
@@ -990,7 +990,7 @@ export default class App extends React.Component {
     const r = k => me.rights.has(k), rec = !!me.rec && r('feedback.own'), ov = r('campaigns.all') || r('campaigns.own');
     return ({ week: ov, campaigns: ov, history: HISTORY_ENABLED && ov, rules: ov,
       klant: r('feedback.client'), 'trello-test': r('trello.link') || r('integrations'), toewijzing: r('assign'),
-      live: rec, checkin: rec || r('feedback.all'), mine: rec, detail: ov || rec,
+      live: rec, checkin: rec || r('feedback.all'), detail: ov || rec,
       blacklist: r('blacklist.view') || r('blacklist.manage'), bord: rec || r('candidates.all'), settings: true,
       dev: this.state.account.rights.includes('dev') })[view] || false; // your own right, also in Bekijk als
   }
@@ -1311,7 +1311,7 @@ export default class App extends React.Component {
     // Bord with the recruiter's daily work; Health-regels and Blacklist, seldom needed, at the bottom under Dev.
     const navSections = [
       { title: 'Recruiter', items: [
-        ...(recMode ? [['live', 'Live campagnes'], ['checkin', 'Wekelijkse feedback recruiter', myOpen], ['mine', 'Mijn campagnes']] : []),
+        ...(recMode ? [['live', 'Live campagnes'], ['checkin', 'Wekelijkse feedback recruiter', myOpen]] : []),
         ...(this.viewOk('bord', me) && this.bordCampaigns(me).length ? [['bord', 'Bord']] : [])] },
       { title: 'Campagnemonitor', items: [
         ...(overview ? [['week', 'Weekoverzicht'], ['campaigns', 'Campagnes']] : []),
@@ -1364,32 +1364,28 @@ export default class App extends React.Component {
     }).filter(g => g.n > 0);
 
     // dashboard
-    const q = st.f.q.trim().toLowerCase(), isMine = st.view === 'mine', found = d => !q || (d.client + ' ' + d.vac).toLowerCase().includes(q);
-    // Campagnes: campaigns on Pauze under a tab of their own. Mijn campagnes: also paused and stopped ones while their
-    // candidates still have to be called, with a tag.
-    let list = isMine ? active.filter(c => c.rec === me.rec && recruiterSees(c)).map(c => this.deco(c, me)).filter(found) : D.filter(found);
-    const paused = isMine ? [] : this.visible(active.filter(c => c.halt && c.halt.kind === 'pauze'), me).map(c => this.deco(c, me)).filter(found);
-    // Geen feedback: for the recruiter's own campaigns and for who follows missing feedback up, not for the others.
-    const missTab = isMine || track, fs = st.f.status === 'missing' && !missTab ? 'all' : st.f.status;
+    const q = st.f.q.trim().toLowerCase(), found = d => !q || (d.client + ' ' + d.vac).toLowerCase().includes(q);
+    // Campagnes: campaigns on Pauze under a tab of their own.
+    let list = D.filter(found);
+    const paused = this.visible(active.filter(c => c.halt && c.halt.kind === 'pauze'), me).map(c => this.deco(c, me)).filter(found);
+    // Geen feedback: for who follows missing feedback up, not for the others.
+    const missTab = track, fs = st.f.status === 'missing' && !missTab ? 'all' : st.f.status;
     const tabCount = k => k === 'all' ? list.length : k === 'missing' ? list.filter(d => d.missing).length : k === 'pauze' ? paused.length : list.filter(d => !d.halt && d.ms === k).length;
     const statusTabs = [['all', 'Alle', null], ...MONITOR_KEYS.map(k => [k, MONITOR[k].label, MONITOR[k].fg]), ...(missTab ? [['missing', 'Geen feedback', null]] : []),
-      ...(paused.length || (!isMine && fs === 'pauze') ? [['pauze', HALT.pauze.label, HALT.pauze.fg]] : [])].map(([k, label, dot]) => ({
+      ...(paused.length || fs === 'pauze' ? [['pauze', HALT.pauze.label, HALT.pauze.fg]] : [])].map(([k, label, dot]) => ({
       label, dot, n: tabCount(k), bg: fs === k ? '#FFFFFF' : 'transparent', fg: fs === k ? '#1D1D1B' : '#5C5C5A', sh: fs === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => setF({ status: k })
     }));
     if (fs === 'missing') list = list.filter(d => d.missing);
-    else if (fs === 'pauze') { if (!isMine) list = paused; }
+    else if (fs === 'pauze') list = paused;
     else if (fs !== 'all') list = list.filter(d => !d.halt && d.ms === fs);
     const sorters = {
       status: (a, b) => b.msRank - a.msRank || bySeverity(a, b),
       quality: (a, b) => byPrio(a, b),
-      leadsMost: (a, b) => b.cur.leads - a.cur.leads,
       leads: (a, b) => a.cur.leads - b.cur.leads,
       client: (a, b) => a.client.localeCompare(b.client)
     };
-    // Mijn campagnes (recruiters) sorts on instroom or name only; Campagnes also on priority and quality.
-    const sortKeys = isMine ? [['leadsMost', 'meeste instroom'], ['leads', 'minste instroom'], ['client', 'klant A–Z']]
-      : [['status', 'prioriteit'], ['quality', 'laagste kwaliteit'], ['leads', 'minste instroom'], ['client', 'klant A–Z']];
-    const sortOptions = sortKeys.map(([v, l]) => ({ v, l: 'Sorteer: ' + l })), sortValue = isMine ? st.f.mineSort : st.f.sort;
+    const sortKeys = [['status', 'prioriteit'], ['quality', 'laagste kwaliteit'], ['leads', 'minste instroom'], ['client', 'klant A–Z']];
+    const sortOptions = sortKeys.map(([v, l]) => ({ v, l: 'Sorteer: ' + l })), sortValue = st.f.sort;
     list = list.slice().sort(sorters[sortValue] || sorters[sortKeys[0][0]]);
     const recNames = this.recs(), recOptions = [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: r }))];
 
@@ -1589,9 +1585,8 @@ export default class App extends React.Component {
       navOpen: st.navOpen, openNav: () => this.setState({ navOpen: true }), closeNav: () => this.setState({ navOpen: false }),
       isSettings: st.view === 'settings', settings: this.settingsVals(me),
       isDev: st.view === 'dev' && this.viewOk('dev', me), dev: this.devVals(),
-      recNames, isMine, sortOptions, sortValue,
-      campTitle: isMine ? 'Mijn campagnes' : 'Actieve campagnes',
-      isKlant: st.view === 'klant', goKlant: () => this.go('klant'), goMine: () => this.go('mine'),
+      recNames, sortOptions, sortValue,
+      isKlant: st.view === 'klant', goKlant: () => this.go('klant'), goLive: () => this.go('live'),
       hasKform: !!kC, kform: st.kform || {}, kc, skipKlant: () => this.skipKlant(),
       sourceTabs: !acc.rights.includes('dev') ? [] : [['demo', 'Demo-data'], ['trello', 'Trello live']].map(([k, label]) => ({ label, bg: st.source === k ? '#FFFFFF' : 'transparent', fg: st.source === k ? '#1D1D1B' : '#5C5C5A', sh: st.source === k ? '0 1px 4px rgba(29,29,27,.07)' : 'none', onClick: () => this.setSource(k) })),
       syncText: this.syncInfo().text, syncDot: this.syncInfo().dot,
@@ -1614,9 +1609,9 @@ export default class App extends React.Component {
       setKformText: e => { const v = tv(e); this.setState(s => ({ kform: { ...s.kform, klant: v } })); },
       saveKlant: () => this.saveKlant(), kSaveLabel: kOpen > 1 ? 'Opslaan & volgende' : 'Feedback opslaan',
       sum, fbBar, groups, list, listCount: list.length, listEmpty: list.length === 0, statusTabs, recOptions, f: st.f,
-      isWeek: st.view === 'week', isCampaigns: st.view === 'campaigns' || st.view === 'mine', isCheckin: st.view === 'checkin', isDetail: st.view === 'detail', isHistory: st.view === 'history', isRules: st.view === 'rules',
+      isWeek: st.view === 'week', isCampaigns: st.view === 'campaigns', isCheckin: st.view === 'checkin', isDetail: st.view === 'detail', isHistory: st.view === 'history', isRules: st.view === 'rules',
       goCampaigns: () => { setF({ status: 'all' }); this.go('campaigns'); }, goWeek: () => this.go('week'),
-      goBack: () => this.navBack(), backLabel: { settings: 'Instellingen', toewijzing: 'Toewijzing', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', mine: 'Mijn campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: `Feedback week ${wl(CUR)}`, rules: 'Health-regels' }[st.back] || 'Campagnes',
+      goBack: () => this.navBack(), backLabel: { settings: 'Instellingen', toewijzing: 'Toewijzing', 'trello-test': 'Trello-koppeling testen', week: 'Weekoverzicht', campaigns: 'Campagnes', live: 'Live campagnes', klant: 'Feedback klant', history: 'Historie & analyse', checkin: `Feedback week ${wl(CUR)}`, rules: 'Health-regels' }[st.back] || 'Campagnes',
       // Reminders: only to recruiters who didn't get one in the last 48 hours.
       remind: () => {
         const byRec = {}, now = Date.now();
@@ -1627,7 +1622,7 @@ export default class App extends React.Component {
       },
       canSendRemind: ri.ok.length > 0, remindLabel: ri.ok.length ? 'Herinnering sturen' : 'Herinnering verstuurd ✓',
       remindNote: !ri.wait.length ? '' : `${names(ri.wait)} ${ri.wait.length === 1 ? 'kreeg' : 'kregen'} de afgelopen 48 uur al een herinnering${ri.ok.length ? '' : `. Weer mogelijk vanaf ${when(ri.next)}`}.`,
-      setSearch: e => setF({ q: tv(e) }), setSort: e => setF(isMine ? { mineSort: tv(e) } : { sort: tv(e) }),
+      setSearch: e => setF({ q: tv(e) }), setSort: e => setF({ sort: tv(e) }),
       ci: st.ci, ciRecOptions: [{ v: 'all', l: 'Alle recruiters' }, ...recNames.map(r => ({ v: r, l: 'Ingevuld door ' + r }))],
       setCiRec: e => { const v = tv(e); this.setState(s => ({ ci: { ...s.ci, rec: v } }), () => this.enterCheckin()); },
       ciQ: st.ciQ, setCiQ: e => this.setState({ ciQ: tv(e) }), ciNone: queue.length && !shownQ.length ? noneFor(st.ciQ) : '',

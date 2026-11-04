@@ -11,7 +11,7 @@ test('screens fall into the task they belong to, everything else is "other"', ()
   assert.equal(groupOf('checkin'), 'feedback');
   assert.equal(groupOf('klant'), 'klant');
   for (const v of ['week', 'campaigns', 'detail']) assert.equal(groupOf(v), 'overview', v);
-  for (const v of ['live', 'mine', 'settings', 'blacklist', 'toewijzing']) assert.equal(groupOf(v), 'other', v);
+  for (const v of ['live', 'settings', 'blacklist', 'toewijzing']) assert.equal(groupOf(v), 'other', v);
 });
 
 test('counts time on the screen while someone clicked, typed, scrolled or touched in the last minute', () => {

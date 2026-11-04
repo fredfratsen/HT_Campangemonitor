@@ -121,7 +121,7 @@ export function cardsOf(bd, key, links = []) {
 }
 
 /**
- * Only what the home screens need (Weekoverzicht, Campagnes, Mijn campagnes, Live campagnes): new candidates and
+ * Only what the home screens need (Weekoverzicht, Campagnes, Live campagnes): new candidates and
  * cards called per week from week `from` on (whether a week asks feedback, see checkin.js), and today's call list.
  * No pipeline and no rejection reasons.
  */
