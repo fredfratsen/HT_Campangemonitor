@@ -118,6 +118,17 @@ all; Blacklist, under Dev with Health-regels: right *Blacklist raadplegen*; recr
   sees a change at once (the server counts `meta.ats` up). Live campagnes links to it (*Bord →*); the address bar
   follows it (`#bord=<campaign>`). Personal data is kept **4 weeks** after Afgewezen or Aangenomen, or after the last
   action in an open stage; then only anonymous counts are left (campaign, week, how far they got, reason, call weeks).
+- **Screening and the client portal.** The panel has the **screening form** (the recruiters' emoji format), saved
+  automatically, with *Kopieer als tekst*. Moving a card from Nieuw, Contactpoging or Niet bereikbaar to Gescreend or
+  further first opens the step *Doorzetten naar klant* (check name, phone and email, and the required screening
+  answers). Once passed, the card gets `doorgezetOp` and the client portal sees the candidate. Trello-imported cards
+  past Gescreend get *Doorzetten naar klant* separately. Card labels: *Bij klant*, *Klant reageert niet* (3 working
+  days) and *Vraag van klant*. Every client action (and an RM's answer) ends the recruiter's *Ongedaan maken*.
+  The portal reads and writes through `/api/portaal/*` (`server/portaal.js`, see [Server endpoints](#server-endpoints)).
+  A client's question sends a notification (*Vraag van <klant> over een kandidaat · <functie>*, no candidate data) to
+  the Recruitment Marketeer and the recruiter. With the right *Vragen van klanten over kandidaten beantwoorden*
+  (`candidates.answer`: Marketeer, Teamlead, Dev) the RM sees the handed-over cards of own clients read-only and
+  answers there.
 
 - **Blacklist**: candidates Horeca Toppers doesn't put forward (again), with the reason. Look someone up by name,
   email address or phone number (in any format) before planning an interview or trial day. Each entry has a name
@@ -228,7 +239,7 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 |---|---|---|
 | **Dev** | Eigenaar (owner) | Everything, including **Integraties** (API keys), **Auditlog**, **Privacy** tools and dev tools (*Bekijk als* for everyone, demo reset, the Bugs & ideeën board) |
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, the status of bugs and ideas, managing the blacklist, Tijdwinst |
-| **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, pausing and stopping campaigns, client feedback, logging campaign changes |
+| **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, pausing and stopping campaigns, client feedback, logging campaign changes, answering client questions about candidates |
 | **Account Manager** | Lid (member) | Campaign overview of all clients and asking questions about campaigns; changes nothing except the status toggle on Live campagnes |
 | **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
 
@@ -288,6 +299,9 @@ variable afterwards.
   `DATA_DIR/secrets.json`. For the mail server the test logs in without sending anything.
 - The browser only ever sees the last 4 characters of a key or password; a mail server's address, port, login and
   sender address are shown in full. Every change goes into the audit log.
+- **Klantportaal** is the key the client portal sends in the `x-toppers-sleutel` header to `/api/portaal/*` (at
+  least 32 characters; the `PORTAAL_SLEUTEL` environment variable works as a fallback). Without it the portal API
+  answers 503.
 - `TRELLO_KEY` / `TRELLO_TOKEN` and `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` environment
   variables still work as a fallback when nothing is stored in the app.
 - Any SMTP server works. Brevo (EU, free up to 300 mails a day): `smtp-relay.brevo.com`, port 587, the SMTP login
@@ -440,6 +454,7 @@ shell or in Render's **Environment** tab. `.env.example` lists them all.
 | `APP_URL` | no | Base URL for the setup and recovery links printed at startup. Default: Render's `RENDER_EXTERNAL_URL`, else `http://localhost:PORT` (`npm run dev` sets `http://localhost:5173`). |
 | `TRELLO_KEY`, `TRELLO_TOKEN` | no | Fallback for the Trello keys when none are stored under Instellingen › Integraties. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | no | Fallback for the mail server when none is stored under Instellingen › Integraties. All five are needed. |
+| `PORTAAL_SLEUTEL` | no | Fallback for the Klantportaal key (at least 32 characters) when none is stored under Instellingen › Integraties. |
 | `OWNER_RECOVERY` | only when locked out | `1` prints reset links for the Dev accounts at startup (on Netlify: when you open `/setup`). See [First start](#first-start-the-dev-account). |
 | `PORT` | no | Default `3000`. Render sets it automatically. |
 | `FAKE_TRELLO`, `FAKE_TRELLO_DELAY` | only for trying things | `1`: demo boards instead of Trello, with the server started through `scripts/fake-trello.js`; the delay per board in ms (default 2000). See [Fake Trello](#fake-trello). Never in production. |
@@ -747,5 +762,6 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | POST | `/api/kandidaten/:id/actie` | `{ kind: geenGehoor \| tba \| move \| reject \| note \| undo, … }` |
 | POST | `/api/kandidaten/intake/:linkId` | Switch a campaign to the ATS (with its open Trello cards), or give it a new intake link (*assign*) |
 | POST | `/api/kandidaten/trello/:linkId` | The open Trello cards of a switched campaign onto its board (*assign*) |
+| GET, POST | `/api/portaal/functies`, `/api/portaal/kandidaten?links=`, `/api/portaal/kandidaten/:id/actie` | The client portal (no login; header `x-toppers-sleutel` = the Klantportaal integration; 503 without it, 401 with a wrong key, 120 requests a minute). Only handed-over candidates and allowed fields; action `{ kind: geenGehoor \| gesprek \| aangenomen \| afwijzen \| opmerking \| vraag, … }` |
 | GET | `/api/trello/…` | Read-only Trello proxy (`members/me`, `members/me/boards`, `boards/:id`) |
 | GET | `/api/trello/snapshot` | The [Trello snapshot](#trello-snapshot): `{ boards: { [boardId]: { at, stats } } }` |

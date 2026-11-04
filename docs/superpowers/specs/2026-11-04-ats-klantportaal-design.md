@@ -1,6 +1,6 @@
 # ATS naar het klantportaal
 
-Datum: 2026-11-04 · Status: ontwerp goedgekeurd in gesprek, nog niet gebouwd · Bouwt voort op
+Datum: 2026-11-04 · Status: gebouwd voor de Campagnemonitor (portaaldeel nog te doen) · Bouwt voort op
 [2026-11-04-ats-bord-design.md](2026-11-04-ats-bord-design.md)
 
 ## Doel
