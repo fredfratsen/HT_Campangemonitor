@@ -762,6 +762,8 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | POST | `/api/kandidaten/:id/actie` | `{ kind: geenGehoor \| tba \| move \| reject \| note \| undo, … }` |
 | POST | `/api/kandidaten/intake/:linkId` | Switch a campaign to the ATS (with its open Trello cards), or give it a new intake link (*assign*) |
 | POST | `/api/kandidaten/trello/:linkId` | The open Trello cards of a switched campaign onto its board (*assign*) |
-| GET, POST | `/api/portaal/functies`, `/api/portaal/kandidaten?links=`, `/api/portaal/kandidaten/:id/actie` | The client portal (no login; header `x-toppers-sleutel` = the Klantportaal integration; 503 without it, 401 with a wrong key, 120 requests a minute). Only handed-over candidates and allowed fields; action `{ kind: geenGehoor \| gesprek \| aangenomen \| afwijzen \| opmerking \| vraag, … }` |
+| GET | `/api/portaal/functies` | The client portal's functions (no login; header `x-toppers-sleutel` = the Klantportaal integration; 503 without it, 401 with a wrong key, 120 requests a minute) |
+| GET | `/api/portaal/kandidaten?links=` | The handed-over candidates of those links, allowed fields only (same key) |
+| POST | `/api/portaal/kandidaten/:id/actie` | `{ kind: geenGehoor \| gesprek \| aangenomen \| afwijzen \| opmerking \| vraag, … }` (same key) |
 | GET | `/api/trello/…` | Read-only Trello proxy (`members/me`, `members/me/boards`, `boards/:id`) |
 | GET | `/api/trello/snapshot` | The [Trello snapshot](#trello-snapshot): `{ boards: { [boardId]: { at, stats } } }` |
