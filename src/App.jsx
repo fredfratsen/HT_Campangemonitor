@@ -1877,11 +1877,12 @@ export default class App extends React.Component {
     const clean = cleanScreening(d), json = JSON.stringify(clean), last = this._scrSent;
     if (last && last.id === id && last.json === json) return last.p; // same value already sent (or in flight): wait for that one
     if (json === JSON.stringify(cleanScreening(x.screening))) return Promise.resolve();
-    const sent = this._scrSent = { id, json };
+    const sent = this._scrSent = { id, json }, done = () => { if (this._scrSent === sent) this._scrSent = null; }; // only dedupes while in flight
     sent.p = api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, { kind: 'screening', screening: clean }).then(r => {
       // Only the screening comes back into the candidate: a slower response must not undo a move that happened meanwhile
+      done();
       this.setState(s => ({ bord: { ...s.bord, cands: (s.bord.cands || []).map(c => c.id === id ? { ...c, screening: r.cand.screening } : c) } }));
-    }, e => { if (this._scrSent === sent) this._scrSent = null; this.flash(e.message); });
+    }, e => { done(); this.flash(e.message); });
     return sent.p;
   }
   /** Selects candidate id (or none): a screening change still waiting for its autosave is saved first, so nothing gets lost. */
@@ -1919,11 +1920,14 @@ export default class App extends React.Component {
     const age = t => { const n = Math.round((today0 - new Date(t).setHours(0, 0, 0, 0)) / 864e5); return n <= 0 ? hhmm(t) : n === 1 ? 'gisteren' : `${n}d`; };
     const tbaToday = x => x.tba && x.tba.at >= today0;
     // Labels on a card: a TBA callback, how long the client is silent (replaces Bij klant), an open question of the client.
+    // The newest meeting line (log is newest first) was planned by the client
+    const gesprekKlant = x => x.stage === 'gesprek' && x.gesprek && ((x.log || []).find(h => /^(Op|Nog een) gesprek/.test(h.what)) || {}).klant;
     const tagsOf = x => {
       const w = waitingSince(x), stale = !!w && workdaysSince(w, now) >= CLIENT_WAIT_DAYS;
       return [tbaToday(x) && { text: `TBA${x.tba.text ? ': ' + x.tba.text : ''}`, tone: 'amber' },
         stale ? { text: 'Klant reageert niet', tone: 'red' } : x.stage === 'gescreend' && x.doorgezetOp && { text: 'Bij klant', tone: 'navy' },
-        openQuestions(x) > 0 && { text: 'Vraag van klant', tone: 'amber' }].filter(Boolean);
+        openQuestions(x) > 0 && { text: 'Vraag van klant', tone: 'amber' },
+        gesprekKlant(x) && { text: 'Gesprek bij klant · ' + when(x.gesprek), tone: 'navy' }].filter(Boolean);
     };
     const ro = !(me.rights.has('candidates.all') || (me.rights.has('feedback.own') && me.rec)); // the RM only reads, and sees what the client sees
     const card = x => {

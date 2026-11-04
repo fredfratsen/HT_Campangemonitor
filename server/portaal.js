@@ -45,16 +45,16 @@ export function portaalRouter({ candidates, secrets, store, accounts, audit, ats
   let hits = { since: 0, n: 0 }, deniedAt = 0;
 
   r.use((req, res, next) => {
-    const now = Date.now();
-    if (now - hits.since >= 60000) hits = { since: now, n: 0 };
-    if (++hits.n > PER_MIN) return res.status(429).json({ fout: 'Te veel verzoeken; probeer het over een minuut opnieuw.' });
-    const s = secrets.get('portaal');
-    if (!s) return res.status(503).json({ fout: 'Koppeling met het klantportaal staat uit' });
+    const now = Date.now(), s = secrets.get('portaal');
+    if (!s || String(s.sleutel || '').length < 32) return res.status(503).json({ fout: 'Koppeling met het klantportaal staat uit' }); // a short key counts as not set
     const a = Buffer.from(String(req.get('x-toppers-sleutel') || '')), b = Buffer.from(s.sleutel);
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
       if (now - deniedAt >= 60000) { deniedAt = now; audit.log('portaal.denied', { details: { ip: req.ip } }); }
       return res.status(401).json({ fout: 'Geen toegang' });
     }
+    // Only authorised requests count: keyless noise must not lock the real portal out
+    if (now - hits.since >= 60000) hits = { since: now, n: 0 };
+    if (++hits.n > PER_MIN) return res.status(429).json({ fout: 'Te veel verzoeken; probeer het over een minuut opnieuw.' });
     next();
   });
 

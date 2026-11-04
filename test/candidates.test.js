@@ -247,6 +247,21 @@ test('the client: Geen gehoor stays put, Op gesprek / Aangenomen / Afwijzen move
   assert.equal(ats.klantAct('t-b1-kok', c.id, { kind: 'afwijzen', reason: 'No show' }, door).reason, 'No show');
   assert.throws(() => ats.klantAct('t-b1-kok', c.id, { kind: 'gesprek', at: '2026-11-20T10:00:00' }, door), /alleen bij Gescreend of Gesprek/);
 });
+test('the client: a second meeting is logged as Nog een gesprek', () => {
+  const { ats, key } = setup(), c = atClient(ats, key);
+  ats.klantAct('t-b1-kok', c.id, { kind: 'gesprek', at: '2026-11-12T14:00:00' }, door);
+  assert.match(c.log[0].what, /^Op gesprek · /);
+  ats.klantAct('t-b1-kok', c.id, { kind: 'gesprek', at: '2026-11-19T14:00:00' }, door);
+  assert.match(c.log[0].what, /^Nog een gesprek · /);
+});
+test('rename also anonymises the name on answers to client questions', () => {
+  const { ats, key } = setup(), c = atClient(ats, key);
+  ats.klantAct('t-b1-kok', c.id, { kind: 'vraag', text: 'Weekend?' }, door);
+  ats.act({ id: 'danielle', name: 'Danielle' }, c.id, { kind: 'antwoord', vraagId: c.vragen[0].id, text: 'Ja' });
+  ats.rename(new Set(['Danielle']), 'Oud-teamlid 1');
+  assert.equal(c.vragen[0].antwoord.door, 'Oud-teamlid 1');
+  assert.ok(c.log.every(e => e.by !== 'Danielle'));
+});
 test('the client only reaches visible candidates of the link it names', () => {
   const { ats, key } = setup(), c = atClient(ats, key), fresh = ats.take(key, { naam: 'Mo', telefoon: '0633334444' }).cand;
   assert.equal(ats.klantAct('t-b1-andere', c.id, { kind: 'opmerking', text: 'x' }, door), null);

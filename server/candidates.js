@@ -269,8 +269,9 @@ export function createCandidates(docs) {
         if (!['gescreend', 'gesprek'].includes(c.stage)) fail('Een gesprek plannen kan alleen bij Gescreend of Gesprek.');
         const at = Date.parse(a.at);
         if (!a.at || isNaN(at)) fail('Kies de datum en tijd van het gesprek.');
+        const again = c.stage === 'gesprek';
         moveTo(c, 'gesprek', now); c.gesprek = at; c.undo = null;
-        say(`Op gesprek · ${when(at)}`);
+        say(`${again ? 'Nog een gesprek' : 'Op gesprek'} · ${when(at)}`);
         break;
       }
       case 'aangenomen':
@@ -318,7 +319,10 @@ export function createCandidates(docs) {
   /** Replaces a former team member's name in the timelines (see privacy.anonymise). */
   function rename(names, pseudonym) {
     let hit = false;
-    for (const c of all()) for (const e of c.log) if (names.has(e.by)) { e.by = pseudonym; hit = true; }
+    for (const c of all()) {
+      for (const e of c.log) if (names.has(e.by)) { e.by = pseudonym; hit = true; }
+      for (const q of c.vragen || []) if (q.antwoord && names.has(q.antwoord.door)) { q.antwoord.door = pseudonym; hit = true; }
+    }
     if (hit) f.save();
   }
 

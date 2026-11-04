@@ -239,6 +239,8 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.equal((await portaal('/functies')).status, 503, 'off until the Dev sets a key');
     assert.equal((await S.dev.api('PUT', '/api/admin/integrations/portaal', { values: { sleutel } })).status, 200);
     assert.equal((await portaal('/functies')).status, 401);
+    for (let i = 0; i < 121; i++) await portaal('/functies'); // keyless flood must not lock out the real portal
+    assert.equal((await portaal('/functies', { key: sleutel })).status, 200, 'keyed request survives a keyless flood');
     assert.equal((await portaal('/functies', { key: 'q'.repeat(40) })).status, 401);
     const fn = await (await portaal('/functies', { key: sleutel })).json();
     assert.ok(fn.functies.some(f => f.linkId === kok.id && f.klant === 'Restaurant ATS' && f.functie === 'Kok'));
@@ -273,8 +275,8 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     const priya = (await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands.find(c => c.name === 'Priya Ramdin');
     const SCR = { talen: 'NL', ervaring: '3 jaar', situatie: 'Zoekend', beschikbaar: 'Direct', woonplaats: 'Utrecht', rijbewijs: { keuze: 'B' }, vervoer: { keuze: 'Ja' }, advies: 'Doen' };
     assert.equal((await S.rec.api('POST', `/api/kandidaten/${priya.id}/actie`, { kind: 'move', to: 'gescreend', screening: SCR })).status, 200);
-    // the portal key is set by the portaal test above
     const sleutel = 'p'.repeat(40);
+    assert.equal((await S.dev.api('PUT', '/api/admin/integrations/portaal', { values: { sleutel } })).status, 200);
     const ask = await fetch(`${BASE}/api/portaal/kandidaten/${priya.id}/actie`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-toppers-sleutel': sleutel }, body: JSON.stringify({ linkId: kok.id, kind: 'vraag', text: 'Weekend?', door: { naam: 'Anna', organisatie: 'Restaurant RM' } }) });
     assert.equal(ask.status, 200);
     const vraag = (await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands.find(c => c.id === priya.id).vragen[0];

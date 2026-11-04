@@ -758,8 +758,8 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | POST, GET | `/api/blacklist/:id/approve`, `/api/blacklist/:id/export` | Confirm a proposal, download an entry (*blacklist.manage*) |
 | POST | `/api/intake/:key` | A lead for the campaign of this intake link (no login; at most 60 a minute per link) → `201 { id }`, `200 { id, dubbel }`, `400`, `404` |
 | GET | `/api/kandidaten/stats` | The switched campaigns and their anonymous numbers (`last4` of the key only with *assign*) |
-| GET | `/api/kandidaten?link=` | The candidates of a switched campaign (its recruiter, or *candidates.all*) |
-| POST | `/api/kandidaten/:id/actie` | `{ kind: geenGehoor \| tba \| move \| reject \| note \| undo, … }` |
+| GET | `/api/kandidaten?link=` | The candidates of a switched campaign (its recruiter, or *candidates.all*); with *candidates.answer* only the handed-over cards, read-only (answer mode) |
+| POST | `/api/kandidaten/:id/actie` | `{ kind: geenGehoor \| tba \| move \| reject \| note \| undo \| screening \| contact \| doorzetten \| antwoord, … }` |
 | POST | `/api/kandidaten/intake/:linkId` | Switch a campaign to the ATS (with its open Trello cards), or give it a new intake link (*assign*) |
 | POST | `/api/kandidaten/trello/:linkId` | The open Trello cards of a switched campaign onto its board (*assign*) |
 | GET | `/api/portaal/functies` | The client portal's functions (no login; header `x-toppers-sleutel` = the Klantportaal integration; 503 without it, 401 with a wrong key, 120 requests a minute) |
