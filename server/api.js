@@ -12,7 +12,7 @@ import { testTrello } from './trello.js';
 import { testSmtp } from './mail.js';
 import { BlacklistError, normEmail as blEmail, normPhone } from './blacklist.js';
 import { CandidateError, trelloStage } from './candidates.js';
-import { atsStats } from '../src/lib/ats.js';
+import { atsStats, visibleToClient } from '../src/lib/ats.js';
 import { cardsOf, linkKey } from '../src/lib/boardStats.js';
 import { TimingError } from './timing.js';
 import { MON, stamp } from '../src/lib/weeks.js';
@@ -426,6 +426,9 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   const ats = express.Router();
   const linkOf = id => (store.docs['live.links'] || {})[id] || null;
   const seesLink = (a, link) => !!link && (can(a, 'candidates.all') || (can(a, 'feedback.own') && !!a.recName && link.rec === a.recName));
+  /** 'full' = the recruiter's board, 'answer' = the RM reading along (past the gate only) and answering, else null. */
+  const accessOf = (a, link) => seesLink(a, link) ? 'full'
+    : link && can(a, 'candidates.answer') && (can(a, 'campaigns.all') || (store.docs['live.mkt'] || {})[link.boardId] === a.name) ? 'answer' : null;
   /** On the blacklist? By phone number or email address, never by name alone. Only who may look the list up sees why. */
   function blOf(a, c) {
     const tel = c.phone ? normPhone(c.phone).slice(-9) : '', mail = c.email ? blEmail(c.email) : '';
@@ -445,13 +448,17 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   });
   ats.get('/', wrap(async (req, res) => {
     const id = String(req.query.link || ''), link = linkOf(id);
-    if (!seesLink(req.account, link)) return forbidden(res);
-    res.json({ cands: candidates.ofLink(id).map(c => view(req.account, c)) });
+    const acc = accessOf(req.account, link);
+    if (!acc) return forbidden(res);
+    const all = candidates.ofLink(id);
+    res.json({ cands: acc === 'full' ? all.map(c => view(req.account, c)) : all.filter(visibleToClient).map(c => ({ ...view(req.account, c), readOnly: true })) });
   }));
   ats.post('/:id/actie', json, wrap(async (req, res) => {
     const c = candidates.get(req.params.id);
     if (!c) return bad(res, 'Deze kandidaat bestaat niet (meer).');
-    if (!seesLink(req.account, linkOf(c.link))) return forbidden(res);
+    const acc = accessOf(req.account, linkOf(c.link)), kind = (req.body || {}).kind;
+    if (!acc || (kind === 'antwoord' && !can(req.account, 'candidates.answer'))) return forbidden(res);
+    if (acc === 'answer' && (!['antwoord', 'note'].includes(kind) || !visibleToClient(c))) return forbidden(res);
     const out = candidates.act(req.account, c.id, req.body || {});
     atsChanged();
     res.json({ cand: view(req.account, out) });

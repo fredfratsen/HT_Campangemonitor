@@ -263,6 +263,40 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.equal((await act({ kind: 'opmerking', text: 'x' })).status, 404, 'no longer with the client');
   });
 
+  if (mode === 'server') test('RM: the marketeer of the board reads handed-over candidates (read-only) and answers the client', async () => {
+    const kok = { id: 't-b9-kok', boardId: 'b9', boardName: 'Restaurant RM', listId: 'li10', vac: 'Kok', rec: 'Tessa' };
+    await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.links', set: { [kok.id]: kok } }] });
+    const url = (await S.dev.api('POST', `/api/kandidaten/intake/${kok.id}`)).data.url;
+    const post = body => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    await post({ full_name: 'Priya Ramdin', phone_number: '+31 6 1111 2222' });
+    await post({ full_name: 'Nina Nieuw', phone_number: '+31 6 3333 4444' });
+    const priya = (await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands.find(c => c.name === 'Priya Ramdin');
+    const SCR = { talen: 'NL', ervaring: '3 jaar', situatie: 'Zoekend', beschikbaar: 'Direct', woonplaats: 'Utrecht', rijbewijs: { keuze: 'B' }, vervoer: { keuze: 'Ja' }, advies: 'Doen' };
+    assert.equal((await S.rec.api('POST', `/api/kandidaten/${priya.id}/actie`, { kind: 'move', to: 'gescreend', screening: SCR })).status, 200);
+    // the portal key is set by the portaal test above
+    const sleutel = 'p'.repeat(40);
+    const ask = await fetch(`${BASE}/api/portaal/kandidaten/${priya.id}/actie`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-toppers-sleutel': sleutel }, body: JSON.stringify({ linkId: kok.id, kind: 'vraag', text: 'Weekend?', door: { naam: 'Anna', organisatie: 'Restaurant RM' } }) });
+    assert.equal(ask.status, 200);
+    const vraag = (await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands.find(c => c.id === priya.id).vragen[0];
+
+    const inv = await S.dev.api('POST', '/api/admin/members', { name: 'RM Antwoord', role: 'marketeer' });
+    const mkt = client();
+    await mkt.form(new URL(inv.data.link).pathname, { email: 'rm-antwoord@example.com', password: 'de marketeer die antwoordt', password2: 'de marketeer die antwoordt' });
+    assert.equal((await mkt.get(`/api/kandidaten?link=${kok.id}`)).status, 403, 'not their board yet');
+    await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.mkt', set: { b9: 'RM Antwoord' } }] });
+    const seen = await mkt.get(`/api/kandidaten?link=${kok.id}`);
+    assert.equal(seen.status, 200, seen.text);
+    assert.deepEqual(seen.data.cands.map(c => c.name), ['Priya Ramdin'], 'only past the gate');
+    assert.ok(seen.data.cands.every(c => c.readOnly));
+    const mact = body => mkt.api('POST', `/api/kandidaten/${priya.id}/actie`, body);
+    assert.equal((await mact({ kind: 'move', to: 'nb' })).status, 403);
+    assert.equal((await mact({ kind: 'note', text: 'Even gebeld' })).status, 200);
+    assert.equal((await mact({ kind: 'antwoord', vraagId: vraag.id, text: 'Ja, in het weekend.' })).status, 200);
+    assert.equal((await S.rec.api('POST', `/api/kandidaten/${priya.id}/actie`, { kind: 'antwoord', vraagId: vraag.id, text: 'x' })).status, 403, 'a recruiter does not answer');
+    await S.dev.api('POST', '/api/state/patch', { patches: [{ doc: 'live.mkt', set: { b9: 'Een Ander' } }] });
+    assert.equal((await mkt.get(`/api/kandidaten?link=${kok.id}`)).status, 403, 'another marketeer’s board');
+  });
+
   test('time in the app: everyone sends it, only Tijdwinst sees the team totals, and they carry no names', async () => {
     assert.equal((await S.rec.api('POST', '/api/timing', { seconds: { feedback: 120, other: 30 } })).status, 200);
     assert.equal((await S.dev.api('POST', '/api/timing', { seconds: { feedback: 60 } })).status, 200);

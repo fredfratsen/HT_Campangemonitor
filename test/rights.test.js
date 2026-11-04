@@ -17,6 +17,8 @@ const kim = { id: 'r-kim', name: 'Kim', role: 'recruiter', recName: 'Kim' };
 const am = { id: 'u-am', name: 'Anouk', role: 'accountmanager' };
 
 test('role defaults, grants and revokes', () => {
+  assert.ok(can(mkt, 'candidates.answer') && can(lead, 'candidates.answer'));
+  assert.ok(!can(kim, 'candidates.answer') && !can(am, 'candidates.answer'));
   assert.equal(rightsOf(dev).size, RIGHT_KEYS.length);
   assert.deepEqual([...rightsOf(kim)], ['feedback.own', 'blacklist.view']);
   const k2 = { ...kim, grants: ['feedback.client'], revokes: ['feedback.own'] };
