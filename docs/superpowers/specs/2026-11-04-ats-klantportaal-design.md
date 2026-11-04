@@ -139,9 +139,9 @@ Alleen op een kaart die de klant ziet, en alleen als `c.link === linkId`. Anders
 | `vraag` | `text` verplicht (max. 1000) → `c.vragen`, en een melding voor de RM (Deel C) |
 
 - Elke klantactie zet `c.klantAt = now`. Een regel in de tijdlijn krijgt `klant: true`.
-- De klant heeft geen *ongedaan maken*. Een recruiter kan een kaart altijd zelf terugzetten. Een klantactie die de
-  kaart verplaatst (Op gesprek, Aangenomen, Afwijzen), wist de `undo` van de recruiter. Anders zou *Ongedaan maken*
-  de keuze van de klant stilletjes terugdraaien. Geen gehoor, Opmerking en Vraag laten de undo staan.
+- De klant heeft geen *ongedaan maken*. Een recruiter kan een kaart altijd zelf terugzetten. Elke klantactie, en ook
+  een antwoord van de RM, wist de `undo` van de recruiter. Anders zou *Ongedaan maken* de kaart stilletjes bij de
+  klant weghalen nadat die er al op reageerde (aangepast tijdens de bouw, taak 7).
 - Na elke klantactie hoogt de server `meta.ats` op, zodat open borden opnieuw laden (zoals nu).
 - Fouten: `400 { fout }` met een Nederlandse melding (fase klopt niet meer, reden ontbreekt, enz.). Het portaal laadt
   dan de kandidaat opnieuw.
