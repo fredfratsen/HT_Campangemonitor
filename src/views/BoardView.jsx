@@ -140,6 +140,41 @@ function Panel({ p }) {
   );
 }
 
+/**
+ * Done, clicked on the Bord: the whole screen flashes green with a beam of light rolling across (as a client row does in
+ * Live campagnes), and a winking face gives a thumbs up. Our own drawing, so nothing is loaded from elsewhere. Gone after
+ * 3 seconds (App.celebrate); it never catches clicks.
+ */
+function Celebrate({ client }) {
+  return (
+    <div className="bord-done" role="status" aria-live="polite">
+      <div className="bord-done-flash" aria-hidden="true" />
+      <div className="bord-done-card">
+        <svg className="bord-done-fig" width="220" height="200" viewBox="0 0 220 200" aria-hidden="true">
+          <defs>
+            <linearGradient id="bord-done-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#F9CE00" /><stop offset="1" stopColor="#FB8915" /></linearGradient>
+          </defs>
+          <circle cx="92" cy="100" r="72" fill="url(#bord-done-face)" />
+          <circle cx="52" cy="122" r="11" fill="#FB8915" opacity=".45" />
+          <circle cx="132" cy="122" r="11" fill="#FB8915" opacity=".45" />
+          <ellipse cx="66" cy="86" rx="8" ry="11" fill="#1D1D1B" />
+          <ellipse className="bord-done-wink" cx="118" cy="86" rx="8" ry="11" fill="#1D1D1B" />
+          <path d="M104 64 q14 -8 28 0" fill="none" stroke="#1D1D1B" strokeWidth="5" strokeLinecap="round" />
+          <path d="M56 120 q36 34 72 0" fill="none" stroke="#1D1D1B" strokeWidth="6" strokeLinecap="round" />
+          <g className="bord-done-thumb">
+            <rect x="150" y="160" width="58" height="16" rx="5" fill="#1B1B63" />
+            <rect x="152" y="112" width="54" height="52" rx="13" fill="#FFE2BD" stroke="#1D1D1B" strokeWidth="4" />
+            <rect x="158" y="70" width="20" height="50" rx="10" fill="#FFE2BD" stroke="#1D1D1B" strokeWidth="4" />
+            <path d="M180 128 h24 M180 141 h24 M180 154 h22" stroke="#1D1D1B" strokeWidth="3" strokeLinecap="round" />
+          </g>
+        </svg>
+        <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '26px', color: '#14603A' }}>Done! Top gedaan</div>
+        <div style={{ fontSize: '14px', color: '#3C3C3A' }}>{client} staat op Done voor vandaag</div>
+      </div>
+    </div>
+  );
+}
+
 /** A column (or the Afgewezen tile) a dragged card can be dropped on: not the column it's in. */
 function drop(b, key) {
   const ok = () => b.dragFrom && b.dragFrom !== key;
@@ -202,6 +237,7 @@ export default function BoardView({ b }) {
         </div>
         {b.panel ? <div style={{ flex: '1 1 360px', minWidth: '0', maxWidth: '440px' }}><Panel p={b.panel} /></div> : null}
       </div>
+      {b.celebrate ? <Celebrate key={b.celebrate.at} client={b.celebrate.client} /> : null}
       {/* While dragging, rejecting is always in reach, also when the Afgewezen tile is scrolled out of view. */}
       {b.dragFrom && b.dragFrom !== 'afgewezen' ? <div {...drop(b, 'afgewezen')} style={{ position: 'fixed', left: '50%', bottom: '24px', transform: 'translateX(-50%)', zIndex: '20', width: 'min(420px,calc(100vw - 32px))', boxSizing: 'border-box',
           padding: '18px 20px', borderRadius: '14px', border: '2px dashed #D32F2F', background: b.over === 'afgewezen' ? '#FBD5D2' : '#FDECEA', color: '#D32F2F', fontSize: '14px', fontWeight: '600', textAlign: 'center', boxShadow: '0 8px 32px rgba(29,29,27,.15)' }}>

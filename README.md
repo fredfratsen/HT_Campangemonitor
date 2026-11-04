@@ -107,7 +107,8 @@ have *Eigen klanten bekijken* instead, see the last point)
   Niet bereikbaar*), *TBA afspraak*, *Bereikt · gescreend*, *Niet geschikt* (a reason from `REASONS`), *Verplaatsen
   naar* (Gesprek asks the moment), a note, and *Ongedaan maken* for the last move. Cards can also be dragged to
   another column (with a mouse); while dragging, a drop zone *Sleep hierheen om af te wijzen* shows at the bottom, and
-  dropping on Gesprek or Afgewezen first asks the moment or the reason in the panel. Everyone who has the board open
+  dropping on Gesprek or Afgewezen first asks the moment or the reason in the panel. Setting a client to *Done* on the board flashes
+  the whole screen green, with a winking thumbs-up (our own drawing, `Celebrate` in `BoardView.jsx`). Everyone who has the board open
   sees a change at once (the server counts `meta.ats` up). Live campagnes links to it (*Bord →*); the address bar
   follows it (`#bord=<campaign>`). Personal data is kept **4 weeks** after Afgewezen or Aangenomen, or after the last
   action in an open stage; then only anonymous counts are left (campaign, week, how far they got, reason, call weeks).

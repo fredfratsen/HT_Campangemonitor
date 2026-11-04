@@ -87,7 +87,7 @@ export default class App extends React.Component {
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
       blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null, ctlDlg: null,
-      atsInfo: null, bord: BORD0
+      atsInfo: null, bord: BORD0, celebrate: null
     };
   }
 
@@ -207,7 +207,7 @@ export default class App extends React.Component {
     this.meterTick();
   }
 
-  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('popstate', this._pop); window.removeEventListener('scroll', this._scroll); clearTimeout(this._yT); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); clearTimeout(this._midT); this.stopMeter(); if (this.sync) this.sync.stop(); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this._hash); window.removeEventListener('popstate', this._pop); window.removeEventListener('scroll', this._scroll); clearTimeout(this._yT); window.removeEventListener('keydown', this._k); this._mq.removeEventListener('change', this._mqFn); document.body.classList.remove('nav-locked'); clearInterval(this._seenTimer); clearInterval(this._trTimer); clearTimeout(this._midT); clearTimeout(this._celT); this.stopMeter(); if (this.sync) this.sync.stop(); }
 
   /** Phone menu opened or closed: lock the page behind it and move focus into / out of it. */
   navChanged() {
@@ -1814,6 +1814,12 @@ export default class App extends React.Component {
     } catch (e) { this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: s.bord.cands || [], err: e.message } } : null); }
   }
   setBord(p) { this.setState(s => ({ bord: { ...s.bord, ...p } })); }
+  /** Done on the Bord, by your own click: the screen flashes green and the thumbs-up wink shows (BoardView, Celebrate). */
+  celebrate(client) {
+    clearTimeout(this._celT);
+    this.setState({ celebrate: { at: Date.now(), client } });
+    this._celT = setTimeout(() => this.setState({ celebrate: null }), 3000);
+  }
   /** An action on candidate id, by default the one in the panel (see candidates.act); done: what the toast says afterwards. */
   async bordAct(body, done = '', id = this.state.bord.sel) {
     const B = this.state.bord;
@@ -1885,7 +1891,9 @@ export default class App extends React.Component {
       clientOpts: clients.map(y => ({ v: y.boardId, l: y.client })), clientValue: c.boardId,
       setClient: e => { const f = list.find(y => y.boardId === e.target.value); if (f) this.openBord(f.id); },
       tabs: fns.map(f => { const n = callList(f); return { id: f.id, label: f.vac, n: n.nieuw + n.contact, on: f.id === c.id, onClick: () => this.openBord(f.id) }; }),
-      status: { client: c.client, st: sNow, stBy: sNow ? status.by : '', stAt: sNow ? hhmm(status.at) : '', setSt: () => this.setLiveStatus(c.boardId, nextStatus(sNow)) },
+      status: { client: c.client, st: sNow, stBy: sNow ? status.by : '', stAt: sNow ? hhmm(status.at) : '',
+        setSt: () => { const n = nextStatus(sNow); this.setLiveStatus(c.boardId, n); if (n === 'done') this.celebrate(c.client); } },
+      celebrate: st.celebrate,
       cols, rejected: { n: cands.filter(y => y.stage === 'afgewezen').length, open: B.showRej, toggle: () => this.setBord({ showRej: !B.showRej }) },
       // Dragging a card: dropped on a column it moves there; Gesprek and Afgewezen first ask the moment or the reason, in the panel.
       dragFrom: (cands.find(y => y.id === B.drag) || {}).stage || null, over: B.over, setOver: k => this.setBord({ over: k }),
