@@ -19,7 +19,8 @@ Die staan vóór `auth.guard` en draaien op een gedeelde sleutel. Het Bord (`src
 
 - Werk in `/Users/tsjerk/Webdesign/HT_Campagnemonitor`, branch `CI_Testing`. Er staan niet-gecommitte wijzigingen van de
   gebruiker in `src/App.jsx`, `src/lib/constants.js`, `src/styles/app.css` en andere bestanden: **commit alleen de
-  bestanden van je taak, met expliciete paden** (`git add <pad>` / `git commit -- <paden>`), nooit `git add -A`.
+  bestanden van je taak, met expliciete paden** (`git add <pad>` / `git commit -- <paden>`), nooit `git add -A`. Raakt
+  je taak een bestand dat al wijzigingen van de gebruiker heeft, stop dan en meld het.
 - Elke commit eindigt met `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Commentaar in het Engels, UI-teksten en foutmeldingen in het Nederlands. Volg de stijl van de omliggende code (korte
   JSDoc boven exports, inline styles in views).
@@ -361,7 +362,7 @@ test('questionNotice without an RM goes to whoever has Toewijzing beheren', () =
   - (b) the button disabled with an empty screening, enabled once filled in;
   - (c) after submitting, the card is in Gescreend.
   Expected: no horizontal scroll at 390 px, the error text from the server never shown.
-- [ ] **Step 4: Commit** `-- src/App.jsx src/views/BoardView.jsx`, message `bord: screening en doorzetten naar klant`. `src/App.jsx` has other uncommitted changes by the user: **use `git add -p src/App.jsx`** and stage only your hunks; if that is not possible, stop and ask the user.
+- [ ] **Step 4: Commit** `-- src/App.jsx src/views/BoardView.jsx`, message `bord: screening en doorzetten naar klant`. Before you start the task, check `git diff --stat src/App.jsx src/views/BoardView.jsx`: if it shows changes that aren't yours (the user's work in progress), **stop and report this** instead of committing. Interactive `git add -p` does not work here.
 
 ---
 
@@ -392,7 +393,7 @@ test('questionNotice without an RM goes to whoever has Toewijzing beheren', () =
   - (b) the panel with the client line in the timeline and the question;
   - (c) the marketeer (*Bekijk als* or their own login) sees only the cards from Gescreend onwards, no move buttons, and can answer;
   - (d) a click on the notification opens the board with the panel.
-- [ ] **Step 4: Commit** as in Task 6 (`git add -p src/App.jsx`), with `src/views/BoardView.jsx`, message `bord: klantlabels, vragen en RM-modus`.
+- [ ] **Step 4: Commit** as in Task 6 (same check beforehand), with `src/views/BoardView.jsx`, message `bord: klantlabels, vragen en RM-modus`.
 
 ---
 
