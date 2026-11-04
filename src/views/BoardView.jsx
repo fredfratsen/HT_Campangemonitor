@@ -142,15 +142,26 @@ function Panel({ p }) {
 
 /**
  * Done, clicked on the Bord: the whole screen flashes green with a beam of light rolling across (as a client row does in
- * Live campagnes), and a winking face gives a thumbs up. Our own drawing, so nothing is loaded from elsewhere. Gone after
- * 3 seconds (App.celebrate); it never catches clicks.
+ * Live campagnes), confetti rains down, and a winking face in a party hat gives a thumbs up. Our own drawing, so nothing
+ * is loaded from elsewhere. Gone after a few seconds (App.celebrate); it never catches clicks.
  */
+const CONFETTI_COLORS = ['#F9CE00', '#FB8915', '#1B1B63', '#3CC27F', '#1A7A4A', '#D32F2F', '#7FB8FF'];
+function confetti(n = 90) {
+  return Array.from({ length: n }, (_, i) => {
+    const r = Math.random, round = r() < 0.3, w = 6 + r() * 7;
+    return { key: i, style: { left: `${r() * 100}%`, width: `${w}px`, height: `${round ? w : w * (1.4 + r())}px`, borderRadius: round ? '50%' : '2px',
+      background: CONFETTI_COLORS[i % CONFETTI_COLORS.length], animationDelay: `${r() * 0.6}s`, animationDuration: `${2.2 + r() * 1.2}s`,
+      '--dx': `${(r() - 0.5) * 220}px`, '--rot': `${(r() < 0.5 ? -1 : 1) * (360 + r() * 720)}deg` } };
+  });
+}
 function Celebrate({ client }) {
+  const [bits] = React.useState(confetti);
   return (
     <div className="bord-done" role="status" aria-live="polite">
       <div className="bord-done-flash" aria-hidden="true" />
+      <div className="bord-done-confetti" aria-hidden="true">{bits.map(b => <span key={b.key} style={b.style} />)}</div>
       <div className="bord-done-card">
-        <svg className="bord-done-fig" width="220" height="200" viewBox="0 0 220 200" aria-hidden="true">
+        <svg className="bord-done-fig" width="220" height="250" viewBox="0 -50 220 250" aria-hidden="true">
           <defs>
             <linearGradient id="bord-done-face" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#F9CE00" /><stop offset="1" stopColor="#FB8915" /></linearGradient>
           </defs>
@@ -161,6 +172,13 @@ function Celebrate({ client }) {
           <ellipse className="bord-done-wink" cx="118" cy="86" rx="8" ry="11" fill="#1D1D1B" />
           <path d="M104 64 q14 -8 28 0" fill="none" stroke="#1D1D1B" strokeWidth="5" strokeLinecap="round" />
           <path d="M56 120 q36 34 72 0" fill="none" stroke="#1D1D1B" strokeWidth="6" strokeLinecap="round" />
+          <g className="bord-done-hat">
+            <path d="M62 36 L96 -40 L128 34 Z" fill="#1B1B63" />
+            <path d="M84 -14 L106 -18 M76 4 L114 -2 M68 22 L122 16" stroke="#F9CE00" strokeWidth="6" strokeLinecap="round" />
+            <path d="M58 36 Q95 48 132 34" fill="none" stroke="#FB8915" strokeWidth="8" strokeLinecap="round" />
+            <circle cx="96" cy="-42" r="11" fill="#FB8915" />
+            <circle cx="92" cy="-46" r="4" fill="#FFE2BD" />
+          </g>
           <g className="bord-done-thumb">
             <rect x="150" y="160" width="58" height="16" rx="5" fill="#1B1B63" />
             <rect x="152" y="112" width="54" height="52" rx="13" fill="#FFE2BD" stroke="#1D1D1B" strokeWidth="4" />

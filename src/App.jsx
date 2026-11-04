@@ -1814,11 +1814,11 @@ export default class App extends React.Component {
     } catch (e) { this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: s.bord.cands || [], err: e.message } } : null); }
   }
   setBord(p) { this.setState(s => ({ bord: { ...s.bord, ...p } })); }
-  /** Done on the Bord, by your own click: the screen flashes green and the thumbs-up wink shows (BoardView, Celebrate). */
+  /** Done on the Bord, by your own click: the screen flashes green, confetti, and the thumbs-up wink (BoardView, Celebrate). */
   celebrate(client) {
     clearTimeout(this._celT);
     this.setState({ celebrate: { at: Date.now(), client } });
-    this._celT = setTimeout(() => this.setState({ celebrate: null }), 3000);
+    this._celT = setTimeout(() => this.setState({ celebrate: null }), 3800);
   }
   /** An action on candidate id, by default the one in the panel (see candidates.act); done: what the toast says afterwards. */
   async bordAct(body, done = '', id = this.state.bord.sel) {
