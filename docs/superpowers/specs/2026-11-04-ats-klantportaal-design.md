@@ -84,8 +84,9 @@ waarvan hij het screeningsformulier heeft ingevuld. Cijfers voor de klant komen 
 
 ### Sleutel
 
-- Nieuwe integratie `portaal` in `server/secrets.js`: `url` (env `PORTAAL_URL`, plain) en `sleutel` (env
-  `PORTAAL_SLEUTEL`, minimaal 32 tekens). Het portaal krijgt `CAMPAGNEMONITOR_URL` en `CAMPAGNEMONITOR_SLEUTEL`.
+- Nieuwe integratie `portaal` in `server/secrets.js`: alleen `sleutel` (env `PORTAAL_SLEUTEL`, minimaal 32 tekens).
+  De URL van het portaal komt pas als de Campagnemonitor zelf het portaal aanroept (functieprofiel, later). Het portaal
+  krijgt `CAMPAGNEMONITOR_URL` en `CAMPAGNEMONITOR_SLEUTEL`.
 - Header `x-toppers-sleutel`, vergeleken met `timingSafeEqual`, net als bij de leads-route van het portaal.
 - De routes staan in `server/app.js` vóór `auth.guard`, net als de intake, met een limiet van 120 verzoeken per minuut.
   Zonder geldige sleutel volgt `401 { fout: 'Geen toegang' }`, en een regel in de auditlog (hooguit één per minuut).
@@ -138,8 +139,9 @@ Alleen op een kaart die de klant ziet, en alleen als `c.link === linkId`. Anders
 | `vraag` | `text` verplicht (max. 1000) → `c.vragen`, en een melding voor de RM (Deel C) |
 
 - Elke klantactie zet `c.klantAt = now`. Een regel in de tijdlijn krijgt `klant: true`.
-- De klant heeft geen *ongedaan maken*. Een recruiter kan een kaart altijd zelf terugzetten. Een klantactie wist de
-  `undo` van een recruiter niet.
+- De klant heeft geen *ongedaan maken*. Een recruiter kan een kaart altijd zelf terugzetten. Een klantactie die de
+  kaart verplaatst (Op gesprek, Aangenomen, Afwijzen), wist de `undo` van de recruiter. Anders zou *Ongedaan maken*
+  de keuze van de klant stilletjes terugdraaien. Geen gehoor, Opmerking en Vraag laten de undo staan.
 - Na elke klantactie hoogt de server `meta.ats` op, zodat open borden opnieuw laden (zoals nu).
 - Fouten: `400 { fout }` met een Nederlandse melding (fase klopt niet meer, reden ontbreekt, enz.). Het portaal laadt
   dan de kandidaat opnieuw.
@@ -184,11 +186,14 @@ Alleen op een kaart die de klant ziet, en alleen als `c.link === linkId`. Anders
 - **Klantmenu Kandidaten** (`src/app/(portaal)/kandidaten`): een lijst per vacature, met een kaart per kandidaat:
   contactgegevens, het screeningsformulier, de fase, de acties, opmerkingen, vragen met antwoorden en de tijdlijn.
   Alleen server components en server actions; de sleutel gaat nooit naar de browser.
-- **Herinneringen** (`/api/taken/herinneringen`, dagelijks):
-  - een kandidaat met `wachtSinds` ouder dan 3 werkdagen: één mail per member per dag, met een lijst;
-  - een gesprek dat gisteren was zonder latere klantactie: *"Hoe ging het gesprek met <naam>?"*;
-  - een nieuw antwoord op een vraag: *"Je hebt een antwoord van <RM>"*.
-  Het portaal houdt per member alleen bij wat al gemeld is (id + soort), geen kandidaatgegevens.
+- **Herinneringen** (`/api/taken/herinneringen`, dagelijks), via `emitEvent` per campagne, dus één melding en mail
+  per campagne per soort per ronde, met een aantal en **zonder kandidaatnamen**:
+  - kandidaten met `wachtSinds` ouder dan 3 werkdagen: *"2 kandidaten wachten op je reactie · Kok"*;
+  - een gesprek dat voorbij is zonder latere klantactie: *"Hoe gingen de gesprekken? 1 kandidaat · Kok"*;
+  - een nieuw antwoord op een vraag: *"Je hebt een antwoord op je vraag · Kok"*.
+  Het portaal onthoudt alleen welke kandidaat-id al voor welke soort gemeld is (tabel `KandidaatMelding`), zodat
+  niemand twee keer voor hetzelfde een mail krijgt. Mail naar members gaat alleen naar wie de campagne opvolgt
+  (`MemberCampaign`, of iedereen zonder koppelingen).
 - **Fouten:** is de Campagnemonitor niet bereikbaar (time-out van 5 s of 5xx), dan toont het portaal
   *"Kandidaten zijn even niet te laden. Probeer het over een paar minuten opnieuw."* Er is geen cache.
 - **`Lead`-tabel:** valt buiten deze spec. Zolang Zapier naar beide apps levert, staan de leads dubbel. Vastgelegd
@@ -208,7 +213,7 @@ portaal (het portaal haalt op bij elk bezoek).
 - `test/candidates.test.js`:
   - de poort: naar Gescreend weigert zonder screening; `doorgezetOp` wordt één keer gezet; *Doorzetten naar klant*
     werkt voor een Trello-kaart;
-  - klantacties: elk effect, `klantAt`, Geen gehoor verplaatst niet, de klant-undo raakt de undo van de recruiter niet;
+  - klantacties: elk effect, `klantAt`, Geen gehoor verplaatst niet, een verplaatsing door de klant wist de undo van de recruiter;
   - `antwoord` door de RM.
 - `test/portaal.test.js`:
   - `forClient` geeft **precies** de toegestane sleutels terug, en een lijst met verboden sleutels
