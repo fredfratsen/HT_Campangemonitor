@@ -9,14 +9,17 @@ const plainBtn = { height: '40px', padding: '0 14px', border: '1px solid #E4E1DE
 const outcome = { minHeight: '44px', border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#1D1D1B', cursor: 'pointer', padding: '0 10px' };
 const field = { height: '40px', boxSizing: 'border-box', border: '1px solid #E4E1DE', borderRadius: '10px', padding: '0 12px', fontSize: '14px', background: '#FFFFFF', minWidth: '0' };
 
+const TONES = { amber: ['#B45309', '#FEF3C7'], navy: ['#1B1B63', '#E7E7F0'], red: ['#D32F2F', '#FDECEA'] };
+const tagStyle = tone => ({ alignSelf: 'flex-start', fontSize: '11px', fontWeight: '600', color: TONES[tone][0], background: TONES[tone][1], borderRadius: '6px', padding: '2px 7px' });
+
 function Card({ c }) {
   return (
-    <button type="button" onClick={c.onClick} aria-pressed={c.sel} aria-label={c.label} draggable="true"
+    <button type="button" onClick={c.onClick} aria-pressed={c.sel} aria-label={c.label} draggable={c.draggable ? 'true' : 'false'}
       onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.id); c.dragStart(); }} onDragEnd={c.dragEnd}
-      style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: '12px', cursor: 'grab', background: '#FFFFFF', color: '#1D1D1B',
+      style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: '12px', cursor: c.draggable ? 'grab' : 'pointer', background: '#FFFFFF', color: '#1D1D1B',
       border: c.sel ? '2px solid #1B1B63' : '1px solid #E4E1DE', boxShadow: c.sel ? '0 4px 16px rgba(27,27,99,.16)' : '0 1px 2px rgba(29,29,27,.05)', opacity: c.dragging ? 0.4 : c.dim ? 0.6 : 1 }}>
       <span style={{ fontSize: '14px', fontWeight: '600' }}>{c.name}</span>
-      {c.tag ? <span style={{ alignSelf: 'flex-start', fontSize: '11px', fontWeight: '600', color: '#B45309', background: '#FEF3C7', borderRadius: '6px', padding: '2px 7px' }}>{c.tag}</span> : null}
+      {c.tags.map(t => <span key={t.text} style={tagStyle(t.tone)}>{t.text}</span>)}
       {c.bl ? <span style={{ alignSelf: 'flex-start', fontSize: '11px', fontWeight: '600', color: '#D32F2F', background: '#FDECEA', borderRadius: '6px', padding: '2px 7px' }}>Blacklist</span> : null}
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '12px', color: '#5C5C5A' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: '0' }}>
@@ -51,12 +54,12 @@ function Panel({ p }) {
         <span style={{ alignSelf: 'flex-start', fontSize: '12px', fontWeight: '500', borderRadius: '6px', padding: '3px 8px', color: p.bl ? '#D32F2F' : '#1A7A4A', background: p.bl ? '#FDECEA' : '#E6F4ED' }}>{p.blText}</span>
       </div>
 
-      {p.canUndo ? <div style={{ margin: '14px 24px 0', padding: '10px 14px', background: '#E7E7F0', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', fontSize: '13px', color: '#1B1B63' }}>
+      {p.canUndo && !p.readOnly ? <div style={{ margin: '14px 24px 0', padding: '10px 14px', background: '#E7E7F0', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', fontSize: '13px', color: '#1B1B63' }}>
           <span>{p.undoText}</span>
           <button type="button" onClick={p.undo} disabled={p.busy} style={{ border: '0', background: 'none', padding: '0', fontSize: '13px', fontWeight: '600', color: '#1B1B63', textDecoration: 'underline', cursor: 'pointer' }}>Ongedaan maken</button>
         </div> : null}
 
-      {p.isCall ? <div style={{ margin: '14px 24px 0', padding: '16px', background: '#FFF8E0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {p.isCall && !p.readOnly ? <div style={{ margin: '14px 24px 0', padding: '16px', background: '#FFF8E0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
             <span style={{ ...eyebrow, whiteSpace: 'nowrap' }}>Belpoging loggen</span>
             <span style={{ fontSize: '12px', color: '#5C5C5A', textAlign: 'right' }}>{p.attText}</span>
@@ -83,7 +86,7 @@ function Panel({ p }) {
             </div>}
         </div> : null}
 
-      {p.mode === 'reject' && !p.isCall ? <div style={{ margin: '14px 24px 0', padding: '16px', background: '#FDECEA', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {p.mode === 'reject' && !p.isCall && !p.readOnly ? <div style={{ margin: '14px 24px 0', padding: '16px', background: '#FDECEA', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <span style={{ fontSize: '13px', fontWeight: '600' }}>Waarom afwijzen?</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {p.reasons.map(r => <button key={r.text} type="button" onClick={r.pick} disabled={p.busy} style={{ border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '999px', padding: '7px 12px', fontSize: '12px', fontWeight: '500', color: '#1D1D1B', cursor: 'pointer' }}>{r.text}</button>)}
@@ -111,17 +114,17 @@ function Panel({ p }) {
 
       <div style={{ padding: '14px 24px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #E4E1DE' }}>
         <button type="button" onClick={p.startNote} style={plainBtn}>Notitie</button>
-        {p.canReject && !p.isCall ? <button type="button" onClick={p.startReject} style={{ ...plainBtn, color: '#D32F2F', borderColor: '#F3C2C2' }}>Afwijzen</button> : null}
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#5C5C5A' }}>
+        {p.canReject && !p.isCall && !p.readOnly ? <button type="button" onClick={p.startReject} style={{ ...plainBtn, color: '#D32F2F', borderColor: '#F3C2C2' }}>Afwijzen</button> : null}
+        {p.readOnly ? null : <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#5C5C5A' }}>
           <span style={{ position: 'absolute', left: '-9999px' }}>Verplaatsen naar</span>
           <select value="" onChange={p.move} disabled={p.busy} aria-label="Verplaatsen naar" style={{ ...field, color: '#1B1B63', fontWeight: '500', fontSize: '13px' }}>
             <option value="">Verplaatsen naar…</option>
             {p.moveOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
-        </label>
+        </label>}
       </div>
 
-      {p.gate ? <form onSubmit={p.gate.submit} style={{ margin: '14px 24px 0', padding: '16px', background: '#E7E7F0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {p.gate && !p.readOnly ? <form onSubmit={p.gate.submit} style={{ margin: '14px 24px 0', padding: '16px', background: '#E7E7F0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <span style={{ fontSize: '13px', fontWeight: '600' }}>Naar {p.gate.to}: dan ziet de klant {p.name}</span>
           <span style={{ fontSize: '12px', color: '#3C3C3A' }}>Controleer de gegevens en vul hieronder de screening in.</span>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>Naam
@@ -146,8 +149,9 @@ function Panel({ p }) {
           const id = 'scr-' + f.key, lab = <label htmlFor={id} style={{ fontSize: '12px', color: '#5C5C5A' }}>{f.emoji} {f.label}{f.required ? ' *' : ''}</label>;
           const v = f.value;
           return <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {f.kind === 'choice' ? <span id={id} style={{ fontSize: '12px', color: '#5C5C5A' }}>{f.emoji} {f.label}{f.required ? ' *' : ''}</span> : lab}
-            {f.kind === 'text' ? <input id={id} value={v} onChange={e => f.set(e.target.value)} onBlur={p.screening.save} maxLength={200} placeholder={f.placeholder} style={field} />
+            {f.kind === 'choice' || p.readOnly ? <span id={id} style={{ fontSize: '12px', color: '#5C5C5A' }}>{f.emoji} {f.label}{f.required && !p.readOnly ? ' *' : ''}</span> : lab}
+            {p.readOnly ? <span style={{ fontSize: '13px', fontWeight: '500', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{(f.kind === 'choice' ? [v.keuze, v.keuze === f.other ? v.tekst : ''].filter(Boolean).join(': ') : String(v ?? '')) || '—'}</span>
+              : f.kind === 'text' ? <input id={id} value={v} onChange={e => f.set(e.target.value)} onBlur={p.screening.save} maxLength={200} placeholder={f.placeholder} style={field} />
               : f.kind === 'long' ? <textarea id={id} rows={3} value={v} onChange={e => f.set(e.target.value)} onBlur={p.screening.save} maxLength={1000} style={{ border: '1px solid #E4E1DE', borderRadius: '10px', padding: '10px 12px', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', minWidth: '0' }} />
               : f.kind === 'age' ? <input id={id} type="number" min={14} max={99} value={v} onChange={e => f.set(e.target.value)} onBlur={p.screening.save} style={{ ...field, width: '100px' }} />
               : <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -159,7 +163,7 @@ function Panel({ p }) {
               </div>}
           </div>;
         })}
-        {p.canDoorzetten ? <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+        {p.canDoorzetten && !p.readOnly ? <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
             <button type="button" onClick={p.doorzetten} disabled={p.busy || !!p.screening.missing.length} style={{ ...outcome, background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px', opacity: p.screening.missing.length ? 0.5 : 1, cursor: p.screening.missing.length ? 'not-allowed' : 'pointer' }}>{p.screening.missing.length ? 'Screening invullen' : 'Doorzetten naar klant'}</button>
             {p.screening.missing.length ? <span style={{ fontSize: '12px', color: '#B45309' }}>Nog in te vullen: {p.screening.missing.join(', ')}</span> : null}
           </div> : null}
@@ -173,11 +177,29 @@ function Panel({ p }) {
             </div>)}
         </div> : null}
 
+      {p.questions.length ? <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '14px', borderBottom: '1px solid #E4E1DE' }}>
+          <span style={eyebrow}>Vragen van de klant</span>
+          {p.questions.map(q => <div key={q.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
+              <span style={{ color: '#5C5C5A' }}>{q.at} · <span style={{ color: '#1B1B63', fontWeight: '600' }}>{q.door}</span></span>
+              <span style={{ fontWeight: '500', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{q.tekst}</span>
+              {q.antwoord ? <div style={{ background: '#E6F4ED', borderRadius: '10px', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{q.antwoord}</span>
+                  <span style={{ fontSize: '12px', color: '#1A7A4A' }}>Beantwoord · {q.antwoordBy}</span>
+                </div>
+                : q.canAnswer ? <form onSubmit={q.submit} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label htmlFor={'ans-' + q.id} style={{ position: 'absolute', left: '-9999px' }}>Antwoord aan de klant</label>
+                  <textarea id={'ans-' + q.id} rows={3} value={q.text} onChange={q.setText} maxLength={1000} placeholder="Je antwoord aan de klant…" style={{ border: '1px solid #E4E1DE', borderRadius: '10px', padding: '10px 12px', fontSize: '14px', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', minWidth: '0' }} />
+                  <button type="submit" disabled={p.busy || !q.text.trim()} style={{ ...outcome, alignSelf: 'flex-start', background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px', opacity: q.text.trim() ? 1 : 0.5 }}>Antwoord versturen</button>
+                </form>
+                : <span style={{ fontSize: '12px', color: '#B45309' }}>Nog niet beantwoord</span>}
+            </div>)}
+        </div> : null}
+
       <div style={{ padding: '16px 24px 22px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <span style={eyebrow}>Historie</span>
         {p.log.map((h, i) => <div key={i} style={{ display: 'grid', gridTemplateColumns: '92px minmax(0,1fr)', gap: '12px', fontSize: '13px' }}>
             <span style={{ color: '#5C5C5A' }}>{h.at}</span>
-            <span><span style={{ fontWeight: '600' }}>{h.what}</span> <span style={{ color: '#5C5C5A' }}>· {h.by}</span></span>
+            <span><span style={{ fontWeight: '600' }}>{h.what}</span> <span style={h.klant ? { color: '#1B1B63', fontWeight: '500' } : { color: '#5C5C5A' }}>· {h.by}</span>{h.klant ? <span style={{ marginLeft: '6px', fontSize: '10px', fontWeight: '600', letterSpacing: '.04em', textTransform: 'uppercase', color: '#1B1B63', background: '#E7E7F0', borderRadius: '4px', padding: '1px 5px' }}>klant</span> : null}</span>
           </div>)}
       </div>
     </aside>

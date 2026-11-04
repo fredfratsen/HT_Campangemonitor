@@ -7,7 +7,7 @@ import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, HALT, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED, REASONS
 } from './lib/constants.js';
-import { STAGES, CALL_STAGES, MAX_ATTEMPTS, STAGE_RANK, SCREENING, stageName, calledToday, cleanScreening, screeningMissing, screeningText } from './lib/ats.js';
+import { STAGES, CALL_STAGES, MAX_ATTEMPTS, STAGE_RANK, SCREENING, stageName, calledToday, cleanScreening, screeningMissing, screeningText, waitingSince, workdaysSince, openQuestions, CLIENT_WAIT_DAYS } from './lib/ats.js';
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
 import { clientTarget } from './lib/clientLink.js';
@@ -67,7 +67,7 @@ const pausedText = n => `${n} nieuwe ${n === 1 ? 'campagne' : 'campagnes'} op Pa
 
 class TrelloError extends Error {}
 /** Recruiter › Bord: the open campaign (link), its candidates, the one in the panel (sel) and what the panel asks (mode). */
-const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null, scr: {}, gateTo: '', gc: null };
+const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null, scr: {}, gateTo: '', gc: null, ans: {} };
 /** A saved screening as the panel edits it: raw strings (the age as text), so typing a space or a half number survives. */
 const scrDraft = s => { const c = cleanScreening(s); return { ...c, leeftijd: c.leeftijd == null ? '' : String(c.leeftijd) }; };
 // The open Trello cards of a switched campaign come onto the Bord (server/candidates.js takeTrello).
@@ -858,7 +858,7 @@ export default class App extends React.Component {
       inbox: {
         unread: mineN.filter(n => !n.read).length, hasUnread: mineN.some(n => !n.read), empty: mineN.length === 0,
         items: mineN.map(n => {
-          const qa = n.kind === 'question' || n.kind === 'answer' || n.kind === 'update', isQ = n.kind === 'question', replying = !!st.reply && st.reply.id === n.id;
+          const qa = n.kind === 'question' || n.kind === 'answer' || n.kind === 'update' || n.kind === 'klantvraag', isQ = n.kind === 'question', replying = !!st.reply && st.reply.id === n.id;
           return { from: `Van ${n.from}`, at: n.at, title: n.title, bg: n.read ? '#FFFFFF' : '#FFF8E0',
             lines: (n.items || []).map((t, j) => n.kind === 'reminder' ? fbLine(t, feedbackWeek(sentAt(n))) : { t, fg: qa && j === 0 ? '#1D1D1B' : '#5C5C5A' }),
             ...(n.kind === 'blacklist'
@@ -870,7 +870,9 @@ export default class App extends React.Component {
             startReply: () => this.setState({ reply: { id: n.id, text: '' } }), cancelReply: () => this.setState({ reply: null }), sendReply: () => this.answer(n),
             canOpen: qa && this.viewOk('detail', me) && st.campaigns.some(c => c.id === n.campaign), openCampaign: () => { this.setState({ panel: null }); this.open(n.campaign); },
             // About one client (n.client): the whole notification opens it.
-            canClient: !!n.client, openClient: e => { e.stopPropagation(); this.openClient(n.client, me); } };
+            canClient: !!n.client && n.kind !== 'klantvraag', openClient: e => { e.stopPropagation(); this.openClient(n.client, me); },
+            // A question of a client: the whole notification opens the candidate on the Bord.
+            canBord: n.kind === 'klantvraag' && !!n.link && this.viewOk('bord', me), openBord: () => this.openBordLink(n) };
         })
       },
       news: { hasNew: st.newsSeen < NEWS[0].id, items: NEWS.map(n => ({ ...n, tagBg: n.tag === 'Nieuw' ? '#FFF8E0' : '#E7E7F0', tagFg: n.tag === 'Nieuw' ? '#B45309' : '#1B1B63' })) },
@@ -993,7 +995,7 @@ export default class App extends React.Component {
     return ({ week: ov, campaigns: ov, history: HISTORY_ENABLED && ov, rules: ov,
       klant: r('feedback.client'), 'trello-test': r('trello.link') || r('integrations'), toewijzing: r('assign'),
       live: rec, checkin: rec || r('feedback.all'), detail: ov || rec,
-      blacklist: r('blacklist.view') || r('blacklist.manage'), bord: rec || r('candidates.all'), settings: true,
+      blacklist: r('blacklist.view') || r('blacklist.manage'), bord: rec || r('candidates.all') || r('candidates.answer'), settings: true,
       dev: this.state.account.rights.includes('dev') })[view] || false; // your own right, also in Bekijk als
   }
   /** Can `me` fill in the recruiter feedback of campaign c? */
@@ -1023,7 +1025,17 @@ export default class App extends React.Component {
     this.open(id);
   }
   /** A function's board from a link like #bord=<id>, once the switched campaigns are known. */
-  bordHash() { const m = /^#bord=(.+)$/.exec(window.location.hash); return m ? decodeURIComponent(m[1]) : null; }
+  bordHash() {
+    const m = /^#bord=([^&]+)(?:&k=(.+))?$/.exec(window.location.hash);
+    this._hashCand = m && m[2] ? decodeURIComponent(m[2]) : null; // the candidate to select once the board is loaded
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  /** Opens the link of a notification (#bord=<link>&k=<candidate>) and marks it read. */
+  openBordLink(n) {
+    const m = /^#bord=([^&]+)(?:&k=(.+))?$/.exec(n.link || '');
+    this.setState(s => ({ panel: null, inbox: s.inbox.map(x => x.id === n.id ? { ...x, read: true } : x) }));
+    if (m) { this._hashCand = m[2] ? decodeURIComponent(m[2]) : null; this.openBord(decodeURIComponent(m[1])); }
+  }
   openPendingBord() {
     const id = this._hashBord;
     if (!id || !this.state.loaded) return;
@@ -1811,11 +1823,11 @@ export default class App extends React.Component {
       if (again.length) await this.loadBoards(again.map(id => ({ id, dateLastActivity: ((this._seen || {})[id] || {}).activity })), this._run, true);
     } catch (e) { /* keeps what it has; the next change tries again */ }
   }
-  /** The switched campaigns `me` has a board of: their own as a recruiter, all of them with candidates.all. */
+  /** The switched campaigns `me` has a board of: their own as a recruiter, their clients' as the RM (read-only), all of them with candidates.all. */
   bordCampaigns(me = this.me()) {
     if (this.sync.mode !== 'server' || this.state.source !== 'trello') return [];
-    const all = me.rights.has('candidates.all'), mine = me.rights.has('feedback.own') && !!me.rec;
-    return this.state.campaigns.filter(c => c.ats && !c.ended && (all || (mine && c.rec === me.rec && recruiterSees(c))));
+    const all = me.rights.has('candidates.all'), mine = me.rights.has('feedback.own') && !!me.rec, rm = me.rights.has('candidates.answer'), allC = me.rights.has('campaigns.all');
+    return this.state.campaigns.filter(c => c.ats && !c.ended && (all || (mine && c.rec === me.rec && recruiterSees(c)) || (rm && (allC || this.mktOf(c) === me.name))));
   }
   /** Opens the board of campaign link (else the one open before, else the first) and loads its candidates. */
   enterBord(link) {
@@ -1837,6 +1849,8 @@ export default class App extends React.Component {
     try {
       const r = await api('GET', '/api/kandidaten?link=' + encodeURIComponent(link));
       this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: r.cands, err: '' } } : null);
+      const k = this._hashCand; this._hashCand = null; // a link from a notification: open that candidate's panel
+      if (k && this.state.bord.link === link && r.cands.some(x => x.id === k)) this.selBord(k);
     } catch (e) { this.setState(s => s.bord.link === link ? { bord: { ...s.bord, cands: s.bord.cands || [], err: e.message } } : null); }
   }
   setBord(p) { this.setState(s => ({ bord: { ...s.bord, ...p } })); }
@@ -1873,7 +1887,7 @@ export default class App extends React.Component {
   /** Selects candidate id (or none): a screening change still waiting for its autosave is saved first, so nothing gets lost. */
   selBord(id, p = {}) {
     if (this._scrT) this.saveScr(this.state.bord.sel);
-    this.setBord({ sel: id, mode: null, text: '', at: '', gateTo: '', gc: null, scr: {}, ...p });
+    this.setBord({ sel: id, mode: null, text: '', at: '', gateTo: '', gc: null, scr: {}, ans: {}, ...p });
   }
   /** Moving candidate y out of a call stage to a stage that hands them to the client first asks the contact details and screening (the gate). */
   openGate(y, to) {
@@ -1888,7 +1902,7 @@ export default class App extends React.Component {
     this.setBord({ busy: true });
     try {
       const r = await api('POST', `/api/kandidaten/${encodeURIComponent(id)}/actie`, body);
-      this.setState(s => ({ bord: { ...s.bord, busy: false, mode: null, text: '', at: '', gateTo: '', gc: null, cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
+      this.setState(s => ({ bord: { ...s.bord, busy: false, mode: null, text: '', at: '', gateTo: '', gc: null, ans: {}, cands: (s.bord.cands || []).map(c => c.id === id ? r.cand : c) } }));
       if (done) this.flash(done);
     } catch (e) { this.setBord({ busy: false }); this.flash(e.message); this.loadBord(); }
   }
@@ -1904,12 +1918,20 @@ export default class App extends React.Component {
     const today0 = new Date(now).setHours(0, 0, 0, 0);
     const age = t => { const n = Math.round((today0 - new Date(t).setHours(0, 0, 0, 0)) / 864e5); return n <= 0 ? hhmm(t) : n === 1 ? 'gisteren' : `${n}d`; };
     const tbaToday = x => x.tba && x.tba.at >= today0;
+    // Labels on a card: a TBA callback, how long the client is silent (replaces Bij klant), an open question of the client.
+    const tagsOf = x => {
+      const w = waitingSince(x), stale = !!w && workdaysSince(w, now) >= CLIENT_WAIT_DAYS;
+      return [tbaToday(x) && { text: `TBA${x.tba.text ? ': ' + x.tba.text : ''}`, tone: 'amber' },
+        stale ? { text: 'Klant reageert niet', tone: 'red' } : x.stage === 'gescreend' && x.doorgezetOp && { text: 'Bij klant', tone: 'navy' },
+        openQuestions(x) > 0 && { text: 'Vraag van klant', tone: 'amber' }].filter(Boolean);
+    };
+    const ro = !(me.rights.has('candidates.all') || (me.rights.has('feedback.own') && me.rec)); // the RM only reads, and sees what the client sees
     const card = x => {
-      const call = CALL_STAGES.includes(x.stage), called = (x.stage === 'nieuw' || x.stage === 'contact') && calledToday(x, now);
+      const tags = tagsOf(x), call = CALL_STAGES.includes(x.stage), called = (x.stage === 'nieuw' || x.stage === 'contact') && calledToday(x, now);
       return { id: x.id, name: x.name, sel: x.id === B.sel, dim: called, bl: !!x.bl,
-        tag: tbaToday(x) ? `TBA${x.tba.text ? ': ' + x.tba.text : ''}` : '',
+        tags, draggable: !x.readOnly,
         dots: call ? [0, 1, 2].map(i => i < (x.att || 0)) : [],
-        label: [x.name, call && `${x.att || 0} ${x.att === 1 ? 'belpoging' : 'belpogingen'}`, called && 'vandaag gebeld', tbaToday(x) && `TBA ${x.tba.text || ''}`, x.bl && 'op de blacklist'].filter(Boolean).join(', '),
+        label: [x.name, call && `${x.att || 0} ${x.att === 1 ? 'belpoging' : 'belpogingen'}`, called && 'vandaag gebeld', ...tags.map(t => t.text), x.bl && 'op de blacklist'].filter(Boolean).join(', '),
         meta: called ? 'gebeld' : x.stage === 'nieuw' ? x.src : x.stage === 'afgewezen' ? x.reason || '' : '',
         age: x.stage === 'gesprek' && x.gesprek ? when(x.gesprek) : call ? age(x.at) : day(x.lastAt),
         onClick: () => this.selBord(x.id === B.sel ? null : x.id),
@@ -1917,7 +1939,7 @@ export default class App extends React.Component {
     };
     // Call order: who waits longest first, who was called today last.
     const order = (a, b) => ((calledToday(a, now) ? 1 : 0) - (calledToday(b, now) ? 1 : 0)) || a.at - b.at;
-    const cols = STAGES.filter(([k]) => k !== 'afgewezen' || B.showRej).map(([key, label]) => {
+    const cols = STAGES.filter(([k]) => (k !== 'afgewezen' || B.showRej) && !(ro && CALL_STAGES.includes(k))).map(([key, label]) => {
       const xs = cands.filter(x => x.stage === key).sort(key === 'afgewezen' ? (a, b) => b.lastAt - a.lastAt : order);
       return { key, label, n: xs.length, cards: xs.map(card) };
     });
@@ -1928,7 +1950,7 @@ export default class App extends React.Component {
     const gc = B.gc || { name: '', phone: '', email: '' }, setGc = k => e => this.setBord({ gc: { ...gc, [k]: e.target.value } });
     const gateMissing = [...missing, ...(gc.name.trim() ? [] : ['Naam']), ...(gc.phone.trim() || gc.email.trim() ? [] : ['Telefoon of e-mail'])];
     const panel = !x ? null : {
-      name: x.name, busy: B.busy, mode: B.mode, text: B.text, at: B.at,
+      name: x.name, busy: B.busy, mode: B.mode, text: B.text, at: B.at, readOnly: !!x.readOnly,
       sub: `${stageName(x.stage)}${x.stage === 'afgewezen' && x.reason ? ` (${x.reason})` : ''} · ${c.vac} · binnen ${day(x.at)} via ${x.src}`,
       phone: x.phone, tel: x.phone ? 'tel:' + x.phone.replace(/[^\d+]/g, '') : '', email: x.email, mailto: x.email ? 'mailto:' + x.email : '',
       copy: () => navigator.clipboard.writeText(x.phone).then(() => this.flash('Telefoonnummer gekopieerd'), () => this.flash('Kopiëren lukte niet')),
@@ -1960,7 +1982,10 @@ export default class App extends React.Component {
         copy: () => navigator.clipboard.writeText(screeningText(cleanScreening(draft), x.name)).then(() => this.flash('Screening gekopieerd'), () => this.flash('Kopiëren lukte niet'))
       },
       answers: (x.answers || []).map(([q, a]) => ({ q, a })),
-      log: x.log.map(h => ({ at: when(h.at), what: h.what, by: h.by })),
+      questions: (x.vragen || []).map(q => ({ id: q.id, at: when(q.at), door: q.door || 'Klant', tekst: q.tekst, antwoord: q.antwoord ? q.antwoord.tekst : '', antwoordBy: q.antwoord ? `${q.antwoord.door} · ${when(q.antwoord.at)}` : '',
+        canAnswer: me.rights.has('candidates.answer') && !q.antwoord, text: B.ans[q.id] || '', setText: e => { const v = e.target.value; this.setBord({ ans: { ...B.ans, [q.id]: v } }); },
+        submit: e => { e.preventDefault(); if ((B.ans[q.id] || '').trim()) act({ kind: 'antwoord', vraagId: q.id, text: B.ans[q.id] }, 'Antwoord verstuurd naar de klant'); } })),
+      log: x.log.map(h => ({ at: when(h.at), what: h.what, by: h.by, klant: !!h.klant })),
       close: () => this.selBord(null)
     };
     return {

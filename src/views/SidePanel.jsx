@@ -14,7 +14,7 @@ export default function SidePanel({ v }) {
         <div style={{ flex: '1', overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {isInbox ? <>
               <div style={{ fontSize: '13px', color: '#5C5C5A', lineHeight: '1.5' }}>Herinneringen, vragen en meldingen voor {user.name}.</div>
-              {inbox.items.map((n, i) => <div key={i} onClick={n.canClient ? n.openClient : undefined} className={n.canClient ? 'inbox-link' : undefined} style={{ border: '1px solid #E4E1DE', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px', background: n.bg }}>
+              {inbox.items.map((n, i) => <div key={i} onClick={n.canBord ? n.openBord : n.canClient ? n.openClient : undefined} className={n.canBord || n.canClient ? 'inbox-link' : undefined} style={{ border: '1px solid #E4E1DE', borderRadius: '12px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px', background: n.bg }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', fontSize: '12px', color: '#8C8C8A' }}>
                     <span>{n.from}</span>
                     <span>{n.at}</span>
@@ -31,11 +31,12 @@ export default function SidePanel({ v }) {
                         <button onClick={n.cancelReply} className="link-btn">Annuleren</button>
                       </div>
                     </div> : null}
-                  {n.canReply || n.answered || n.canOpen || n.canClient ? <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {n.canReply || n.answered || n.canOpen || n.canClient || n.canBord ? <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
                       {n.canReply ? <button onClick={n.startReply} style={{ border: '0', background: '#1B1B63', color: '#FFFFFF', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Beantwoorden</button> : null}
                       {n.answered ? <span style={{ fontSize: '12px', fontWeight: '600', color: '#1A7A4A' }}>✓ Beantwoord</span> : null}
                       {n.canOpen ? <button onClick={n.openCampaign} className="link-btn">Campagne openen</button> : null}
                       {n.canClient ? <button onClick={n.openClient} className="link-btn">Klant openen</button> : null}
+                      {n.canBord ? <button onClick={n.openBord} className="link-btn">Kandidaat openen</button> : null}
                     </div> : null}
                 </div>)}
               {inbox.empty ? <div style={{ padding: '24px 0', textAlign: 'center', fontSize: '14px', color: '#8C8C8A' }}>Geen meldingen.</div> : null}
