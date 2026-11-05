@@ -80,7 +80,7 @@ function Panel({ p }) {
             <button type="button" onClick={p.copy} className="link-btn" style={{ textDecoration: 'underline' }}>Kopieer</button>
           </div> : null}
         {p.email ? <a href={p.mailto} style={{ fontSize: '14px', overflowWrap: 'anywhere' }}>{p.email}</a> : null}
-        <span style={{ alignSelf: 'flex-start', fontSize: '12px', fontWeight: '500', borderRadius: '6px', padding: '3px 8px', color: p.bl ? '#D32F2F' : '#1A7A4A', background: p.bl ? '#FDECEA' : '#E6F4ED' }}>{p.blText}</span>
+        {p.blText ? <span style={{ alignSelf: 'flex-start', fontSize: '12px', fontWeight: '500', borderRadius: '6px', padding: '3px 8px', color: p.bl ? '#D32F2F' : '#1A7A4A', background: p.bl ? '#FDECEA' : '#E6F4ED' }}>{p.blText}</span> : null}
       </div>
 
       {p.canUndo && !p.readOnly ? <div style={{ margin: '14px 24px 0', padding: '10px 14px', background: '#E7E7F0', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', fontSize: '13px', color: '#1B1B63' }}>

@@ -20,18 +20,20 @@ test('role defaults, grants and revokes', () => {
   assert.ok(can(mkt, 'candidates.answer') && can(lead, 'candidates.answer'));
   assert.ok(!can(kim, 'candidates.answer') && !can(am, 'candidates.answer'));
   assert.equal(rightsOf(dev).size, RIGHT_KEYS.length);
-  assert.deepEqual([...rightsOf(kim)], ['feedback.own', 'blacklist.view']);
+  assert.deepEqual([...rightsOf(kim)], ['feedback.own']);
   const k2 = { ...kim, grants: ['feedback.client'], revokes: ['feedback.own'] };
-  assert.deepEqual([...rightsOf(k2)], ['blacklist.view', 'feedback.client']);
+  assert.deepEqual([...rightsOf(k2)], ['feedback.client']);
   assert.equal(can({ ...mkt, grants: ['nonsense'] }, 'nonsense'), false);
-  assert.deepEqual(overridesFor('recruiter', ['feedback.client', 'blacklist.view']), { grants: ['feedback.client'], revokes: ['feedback.own'] });
+  assert.deepEqual(overridesFor('recruiter', ['feedback.client']), { grants: ['feedback.client'], revokes: ['feedback.own'] });
 });
 
-test('blacklist: recruiters look candidates up and propose them, the teamlead decides', () => {
-  assert.ok(can(kim, 'blacklist.view') && !can(kim, 'blacklist.manage'));
+test('blacklist: only Teamlead and Dev, never a recruiter', () => {
   assert.ok(can(lead, 'blacklist.view') && can(lead, 'blacklist.manage'));
-  for (const who of [mkt, am]) assert.ok(!can(who, 'blacklist.view') && !can(who, 'blacklist.manage'), who.role);
-  assert.equal(manageError(lead, kim, { role: 'recruiter', rights: ['feedback.own', 'blacklist.view', 'blacklist.manage'] }), '', 'a teamlead can let a recruiter decide too');
+  assert.ok(can(dev, 'blacklist.view') && can(dev, 'blacklist.manage'));
+  for (const who of [kim, mkt, am]) assert.ok(!can(who, 'blacklist.view') && !can(who, 'blacklist.manage'), who.role);
+  assert.ok(!can({ ...kim, grants: ['blacklist.view', 'blacklist.manage'] }, 'blacklist.view'), 'an old grant does nothing');
+  assert.match(manageError(lead, kim, { role: 'recruiter', rights: ['feedback.own', 'blacklist.view'] }), /alleen voor Teamlead en Dev/);
+  assert.match(manageError(dev, kim, { role: 'marketeer', rights: ['campaigns.own', 'blacklist.manage'] }), /alleen voor Teamlead en Dev/);
 });
 
 test('who may manage whom', () => {

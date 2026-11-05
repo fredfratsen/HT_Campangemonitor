@@ -78,3 +78,38 @@ test('correcting, extending, expiring, and a former team member renamed', () => 
   assert.deepEqual(bl.prune(Date.now() + 25 * 31 * DAY).map(x => x.id), [e.id]);
   assert.deepEqual(bl.all(), []);
 });
+
+test('other spellings and phone numbers: checked, searched, and counted as the same person', () => {
+  const bl = createBlacklist(memDocs()), add = b => () => bl.add(lead, { ...jan, ...b }, { direct: true });
+  assert.throws(add({ altPhones: ['123'] }), /telefoonnummer 123 klopt niet/);
+  assert.throws(add({ phone: '', email: 'jan@example.com', altPhones: ['0687654321'] }), /eerst het telefoonnummer/);
+  assert.throws(add({ altNames: Array.from({ length: 11 }, (_, i) => 'Naam ' + i) }), /Maximaal 10/);
+  const e = add({ altNames: ['J. de Vries', 'jan de vries', ' '], altPhones: ['0687654321', '06 8765 4321'] })();
+  assert.deepEqual(e.altNames, ['J. de Vries'], 'the name itself and empty lines are left out');
+  assert.deepEqual(e.altPhones, ['0687654321', '06 8765 4321']);
+  assert.throws(() => bl.add(lead, { ...zoe, phone: '+31 6 87654321' }, { direct: true }), /Jan de Vries staat al op de blacklist/, 'an other number counts too');
+  assert.deepEqual(bl.search('0687654321').map(x => x.id), [e.id]);
+  assert.deepEqual(bl.search('j. de vries').map(x => x.id), [e.id]);
+  assert.deepEqual(bl.update(lead, e.id, { ...jan, altNames: ['J. de Vries'], altPhones: ['0687654321', '06 8765 4321'] }).changed, [], 'nothing changed');
+  assert.deepEqual(bl.update(lead, e.id, { ...jan }).changed, ['andere schrijfwijzen', 'andere telefoonnummers']);
+});
+
+test('off the boards only when name and phone number both match an active entry', () => {
+  const bl = createBlacklist(memDocs());
+  const e = bl.add(lead, { ...jan, altNames: ['J. de Vries'], altPhones: ['0687654321'] }, { direct: true });
+  for (const c of [{ name: 'Jan de Vries', phone: '+31 6 12345678' }, { name: 'jan  DE vries', phone: '0031612345678' }, { name: 'J de Vries', phone: '06-87654321' }])
+    assert.ok(bl.hides(c), JSON.stringify(c));
+  assert.ok(!bl.hides({ name: 'Jan de Vries', phone: '0611112222' }), 'another number');
+  assert.ok(!bl.hides({ name: 'Piet de Vries', phone: '0612345678' }), 'another name');
+  assert.ok(!bl.hides({ name: 'Jan de Vries', email: 'jan@example.com' }), 'no phone number');
+  assert.equal(bl.hitOf({ name: 'Piet', phone: '0612345678' }).id, e.id, 'the flag for the teamlead still goes by phone number alone');
+
+  bl.update(lead, e.id, { ...jan, altNames: ['J. de Vries'], altPhones: ['0687654321'], client: 'Hotel X', scope: 'client' });
+  assert.ok(bl.hides({ name: 'Jan de Vries', phone: '0612345678' }, 'Hotel X'));
+  assert.ok(!bl.hides({ name: 'Jan de Vries', phone: '0612345678' }, 'Hotel Y'), 'only at that client');
+
+  const p = bl.add(kim, { name: 'Zoë Bakker', phone: '0699998888', reason: 'Ongepast of agressief gedrag' }, { direct: false });
+  assert.ok(!bl.hides({ name: 'Zoe Bakker', phone: '0699998888' }), 'a proposal hides nothing yet');
+  bl.approve(lead, p.id);
+  assert.ok(bl.hides({ name: 'Zoe Bakker', phone: '0699998888' }), 'without accents');
+});

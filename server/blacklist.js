@@ -5,6 +5,8 @@
 // - With blacklist.manage you put a candidate on it directly. With only blacklist.view you propose one
 //   (voordragen); someone with blacklist.manage confirms or rejects it, so a second person always looks at it.
 // - Next to the name an entry needs an email address or phone number, so nobody is mixed up with a namesake.
+//   Other spellings of the name and other phone numbers can go with it (altNames, altPhones).
+// - A candidate whose name and phone number both match an active entry is kept off the boards (hides).
 // - Every entry ends: after the term chosen for it (BL_MONTHS), a proposal after BL_PROPOSAL_DAYS. Housekeeping
 //   deletes it then (prune).
 // - The audit log gets the entry id and initials, not the full name (auditDetails), so once an entry is deleted
@@ -25,26 +27,38 @@ export function normPhone(s) {
   return d.startsWith('00') ? d.slice(2) : d.length === 10 && d.startsWith('0') ? '31' + d.slice(1) : d;
 }
 /** The last 9 digits: the same for a number with or without country code or leading 0. */
-const phoneKey = s => normPhone(s).slice(-9);
+export const phoneKey = s => normPhone(s).slice(-9);
+/** For comparing names: also without dots, hyphens and the like, so "Jan-Willem de V." is "jan willem de v". */
+const nameKey = s => normName(s).replace(/[^\p{L}\p{N} ]/gu, ' ').replace(/ +/g, ' ').trim();
+const namesOf = e => [e.name, ...(e.altNames || [])];
+const phonesOf = e => [e.phone, ...(e.altPhones || [])].filter(Boolean);
+const MAX_ALT = 10;
 const validEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const addMonths = (t, m) => { const d = new Date(t); d.setMonth(d.getMonth() + m); return d.getTime(); };
 export const initials = name => line(name, 80).split(' ').filter(Boolean).map(w => w[0] + '.').join(' ');
 
-const FIELDS = { name: 'naam', email: 'e-mailadres', phone: 'telefoonnummer', reason: 'reden', note: 'toelichting', client: 'klant', vac: 'functie', scope: 'geldt voor' };
+const FIELDS = { name: 'naam', altNames: 'andere schrijfwijzen', email: 'e-mailadres', phone: 'telefoonnummer', altPhones: 'andere telefoonnummers', reason: 'reden', note: 'toelichting', client: 'klant', vac: 'functie', scope: 'geldt voor' };
 
 /** Checks and tidies what someone filled in; throws a BlacklistError with a message for the app. */
 function clean(b) {
   const name = line(b.name, 80), email = normEmail(b.email), phone = line(b.phone, 30), reason = line(b.reason, 100);
   const note = String(b.note ?? '').trim().slice(0, 500), client = line(b.client, 120), vac = client ? line(b.vac, 120) : '';
-  const scope = b.scope === 'client' ? 'client' : 'all', digits = normPhone(phone).length;
+  const scope = b.scope === 'client' ? 'client' : 'all', digits = p => normPhone(p).length;
+  const list = (v, max) => [...new Set((Array.isArray(v) ? v : []).map(x => line(x, max)).filter(Boolean))];
+  const altNames = list(b.altNames, 80).filter(n => nameKey(n) !== nameKey(name)), altPhones = list(b.altPhones, 30);
   if (name.length < 2) fail('Vul de naam van de kandidaat in.');
+  if (altNames.length > MAX_ALT || altPhones.length > MAX_ALT) fail(`Maximaal ${MAX_ALT} andere schrijfwijzen en ${MAX_ALT} andere telefoonnummers.`);
+  if (altNames.some(n => n.length < 2)) fail('Een andere schrijfwijze van de naam is te kort.');
   if (email && !validEmail(email)) fail('Dat e-mailadres klopt niet.');
-  if (phone && (digits < 9 || digits > 15)) fail('Dat telefoonnummer klopt niet.');
+  if (phone && (digits(phone) < 9 || digits(phone) > 15)) fail('Dat telefoonnummer klopt niet.');
+  const badAlt = altPhones.find(p => digits(p) < 9 || digits(p) > 15);
+  if (badAlt) fail(`Het telefoonnummer ${badAlt} klopt niet.`);
+  if (altPhones.length && !phone) fail('Vul eerst het telefoonnummer in, daarna andere nummers.');
   if (!email && !phone) fail('Vul ook een e-mailadres of telefoonnummer in, zodat de kandidaat niet met een naamgenoot wordt verward.');
   if (!BL_REASONS.includes(reason)) fail('Kies een reden.');
   if (reason === 'Overig' && !note) fail('Licht de reden ‘Overig’ kort toe.');
   if (scope === 'client' && !client) fail('Kies de klant waarvoor dit geldt.');
-  return { name, email: email || null, phone: phone || null, reason, note, client: client || null, vac: vac || null, scope };
+  return { name, altNames, email: email || null, phone: phone || null, altPhones, reason, note, client: client || null, vac: vac || null, scope };
 }
 /** The term in months, or null when none was chosen. */
 function term(m) {
@@ -64,10 +78,10 @@ export function createBlacklist(docs) {
   const get = id => { const e = Object.prototype.hasOwnProperty.call(E(), id) ? E()[id] : null; return e && e.until > Date.now() ? e : null; };
   const mustGet = id => get(id) || fail('Deze vermelding bestaat niet (meer).');
 
-  /** Another entry for the same person: the same email address or phone number. */
+  /** Another entry for the same person: the same email address or one of the same phone numbers. */
   function duplicate(v, exceptId = null) {
-    const key = v.phone && phoneKey(v.phone);
-    const dup = live().find(e => e.id !== exceptId && ((v.email && e.email === v.email) || (key && e.phone && phoneKey(e.phone) === key)));
+    const keys = new Set(phonesOf(v).map(phoneKey));
+    const dup = live().find(e => e.id !== exceptId && ((v.email && e.email === v.email) || phonesOf(e).some(p => keys.has(phoneKey(p)))));
     if (dup) fail(dup.status === 'voorstel' ? `${dup.name} is al voorgedragen voor de blacklist.` : `${dup.name} staat al op de blacklist.`);
   }
 
@@ -98,7 +112,7 @@ export function createBlacklist(docs) {
     let months = term(b.months);
     if (e.status === 'voorstel' && months === e.months) months = null;
     duplicate(v, e.id);
-    const changed = Object.keys(v).filter(k => v[k] !== e[k]).map(k => FIELDS[k]);
+    const changed = Object.keys(v).filter(k => JSON.stringify(v[k]) !== JSON.stringify(e[k] ?? (Array.isArray(v[k]) ? [] : null))).map(k => FIELDS[k]);
     if (months != null) changed.push('bewaartermijn');
     if (!changed.length) return { entry: e, changed };
     Object.assign(e, v, { updatedBy: actor.name, updatedAt: now });
@@ -112,9 +126,26 @@ export function createBlacklist(docs) {
   function search(q) {
     const words = normName(q).split(' ').filter(Boolean), email = normEmail(q);
     const digits = String(q).replace(/\D/g, ''), tel = digits.length >= 9 ? digits.slice(-9) : digits;
-    return live().filter(e => (words.length > 0 && words.every(w => normName(e.name).includes(w)))
+    return live().filter(e => (words.length > 0 && namesOf(e).some(n => words.every(w => normName(n).includes(w))))
       || (e.email && email.length >= 3 && e.email.includes(email))
-      || (e.phone && tel.length >= 6 && normPhone(e.phone).includes(tel))).sort(order);
+      || (tel.length >= 6 && phonesOf(e).some(p => normPhone(p).includes(tel)))).sort(order);
+  }
+
+  const active = () => live().filter(e => e.status === 'actief');
+  /** The active entry with the phone number or email address of candidate c ({ name, phone, email }), or null. */
+  function hitOf(c) {
+    const tel = c.phone ? phoneKey(c.phone) : '', mail = c.email ? normEmail(c.email) : '';
+    return active().find(e => (tel && phonesOf(e).some(p => phoneKey(p) === tel)) || (mail && e.email === mail)) || null;
+  }
+  /**
+   * Whether candidate c stays off the boards at client: an active entry for all clients, or for this one, with both
+   * a matching name (or other spelling) and a matching phone number.
+   */
+  function hides(c, client = null) {
+    if (!c.phone || !c.name) return false;
+    const tel = phoneKey(c.phone), name = nameKey(c.name);
+    return active().some(e => (e.scope !== 'client' || e.client === client)
+      && phonesOf(e).some(p => phoneKey(p) === tel) && namesOf(e).some(n => nameKey(n) === name));
   }
 
   /** Deletes the entries whose term has ended, and returns them (for the audit log). */
@@ -139,7 +170,7 @@ export function createBlacklist(docs) {
   const exportOf = e => ({
     toelichting: 'Alle gegevens die Horeca Toppers in de Campagnemonitor over deze kandidaat bewaart.',
     geexporteerdOp: iso(Date.now()),
-    naam: e.name, eMailadres: e.email, telefoonnummer: e.phone,
+    naam: e.name, andereSchrijfwijzen: e.altNames || [], eMailadres: e.email, telefoonnummer: e.phone, andereTelefoonnummers: e.altPhones || [],
     status: e.status === 'voorstel' ? 'voorgedragen, nog niet bevestigd' : 'op de blacklist',
     reden: e.reason, toelichtingOpDeReden: e.note || null,
     sollicitatieBij: e.client ? [e.client, e.vac].filter(Boolean).join(' – ') : null,
@@ -147,5 +178,5 @@ export function createBlacklist(docs) {
     vastgelegdOp: iso(e.addedAt), bevestigdOp: iso(e.approvedAt), laatstGewijzigdOp: iso(e.updatedAt), bewaardTot: iso(e.until),
   });
 
-  return { all: () => live().sort(order), get, add, approve, update, remove, search, prune, rename, counts, auditDetails, exportOf };
+  return { all: () => live().sort(order), get, add, approve, update, remove, search, hitOf, hides, prune, rename, counts, auditDetails, exportOf };
 }

@@ -105,7 +105,7 @@ export function createServer({ docs, audit, secretsKey, secure, hosting = 'rende
   });
 
   // The client portal calls this server to server with a shared key (see portaal.js); no login either.
-  app.use('/api/portaal', portaalRouter({ candidates, secrets, store, accounts, audit, atsChanged }));
+  app.use('/api/portaal', portaalRouter({ candidates, blacklist, secrets, store, accounts, audit, atsChanged }));
 
   app.use(auth.guard);
 

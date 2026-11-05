@@ -1966,7 +1966,7 @@ export default class App extends React.Component {
       sub: `${stageName(x.stage)}${x.stage === 'afgewezen' && x.reason ? ` (${x.reason})` : ''} · ${c.vac} · binnen ${day(x.at)} via ${x.src}`,
       phone: x.phone, tel: x.phone ? 'tel:' + x.phone.replace(/[^\d+]/g, '') : '', email: x.email, mailto: x.email ? 'mailto:' + x.email : '',
       copy: () => navigator.clipboard.writeText(x.phone).then(() => this.flash('Telefoonnummer gekopieerd'), () => this.flash('Kopiëren lukte niet')),
-      bl: !!x.bl, blText: x.bl ? `Op de blacklist${x.bl.reason ? ': ' + x.bl.reason : ''}` : 'Niet op de blacklist',
+      bl: !!x.bl, blText: !this.viewOk('blacklist', me) ? '' : x.bl ? `Op de blacklist${x.bl.reason ? ': ' + x.bl.reason : ''}` : 'Niet op de blacklist',
       canUndo: x.canUndo, undoText: x.log[0] ? `${x.log[0].what} · ${x.log[0].by}` : '', undo: () => act({ kind: 'undo' }, 'Ongedaan gemaakt'),
       isCall: CALL_STAGES.includes(x.stage), attText: x.att >= MAX_ATTEMPTS ? `${x.att}× geen gehoor` : `poging ${(x.att || 0) + 1} van ${MAX_ATTEMPTS}`,
       canReject: x.stage !== 'afgewezen', canNb: (x.att || 0) >= MAX_ATTEMPTS && x.stage !== 'nb', nbText: 'Naar Niet bereikbaar', toNb: () => act({ kind: 'move', to: 'nb' }, `${x.name} staat nu in Niet bereikbaar`),

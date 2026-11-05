@@ -40,8 +40,10 @@ export function questionNotice(store, accounts, link, cand, now = Date.now()) {
 
 const str = v => (typeof v === 'string' ? v : undefined);
 
-export function portaalRouter({ candidates, secrets, store, accounts, audit, atsChanged }) {
+export function portaalRouter({ candidates, blacklist, secrets, store, accounts, audit, atsChanged }) {
   const r = express.Router(), links = () => store.docs['live.links'] || {};
+  /** Name and phone number on the blacklist: the client never sees the candidate either (see blacklist.hides). */
+  const hidden = c => blacklist.hides(c, (links()[c.link] || {}).boardName);
   let hits = { since: 0, n: 0 }, deniedAt = 0;
 
   r.use((req, res, next) => {
@@ -68,7 +70,7 @@ export function portaalRouter({ candidates, secrets, store, accounts, audit, ats
   r.get('/kandidaten', (req, res) => {
     const ids = String(req.query.links || '').split(',').map(s => s.trim()).filter(Boolean);
     if (ids.length > MAX_LINKS) return res.status(400).json({ fout: 'Maximaal 50 functies per verzoek.' });
-    const kandidaten = ids.flatMap(id => candidates.ofLink(id)).filter(visibleToClient)
+    const kandidaten = ids.flatMap(id => candidates.ofLink(id)).filter(c => visibleToClient(c) && !hidden(c))
       .sort((a, b) => b.doorgezetOp - a.doorgezetOp).map(forClient);
     res.json({ kandidaten });
   });
@@ -89,6 +91,8 @@ export function portaalRouter({ candidates, secrets, store, accounts, audit, ats
   r.post('/kandidaten/:id/actie', express.json({ limit: '20kb' }), (req, res) => {
     const b = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const d = b.door && typeof b.door === 'object' ? b.door : {};
+    const found = candidates.get(req.params.id);
+    if (found && hidden(found)) return res.status(404).json({ fout: 'Kandidaat niet gevonden' });
     let c;
     try {
       c = candidates.klantAct(String(b.linkId || ''), req.params.id, { kind: String(b.kind || ''), at: str(b.at), reason: str(b.reason), text: str(b.text) },

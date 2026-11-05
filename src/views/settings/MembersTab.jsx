@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Button from '../../components/Button.jsx';
 import { api, fmtDate, fmtDateTime } from '../../lib/api.js';
-import { ROLES, ROLE_KEYS, LEVELS, RIGHTS, RIGHT_GROUPS, rightsOf, manageError } from '../../lib/permissions.js';
+import { ROLES, ROLE_KEYS, LEVELS, RIGHTS, RIGHT_GROUPS, rightsOf, manageError, roleAllows } from '../../lib/permissions.js';
 import { Section, Badge, Notice, Toggle, CopyLink, Err, useAction, input, select, label, muted, row, linkBtn, dangerBtn, eyebrow } from './ui.jsx';
 
 const STATUS = { active: ['Actief', 'green'], invited: ['Uitgenodigd', 'gold'], deactivated: ['Gedeactiveerd', 'neutral'] };
@@ -74,7 +74,7 @@ function Editor({ s, m, reload }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: '14px' }}>
         {Object.entries(RIGHT_GROUPS).map(([g, gl]) => <div key={g} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={eyebrow}>{gl}</div>
-            {RIGHTS.filter(r => r.group === g).map(r => { const on = rights.has(r.key), custom = on !== defaults.has(r.key), locked = !own.has(r.key) && !before.has(r.key);
+            {RIGHTS.filter(r => r.group === g).map(r => { const on = rights.has(r.key), custom = on !== defaults.has(r.key), locked = (!own.has(r.key) && !before.has(r.key)) || !roleAllows(role, r.key);
               return <div key={r.key} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }} title={r.desc}>
                 <Toggle on={on} onChange={v => toggle(r.key, v)} disabled={locked} label={r.label} />
                 <span style={{ fontSize: '13px', lineHeight: 1.35, color: on ? '#1D1D1B' : '#8C8C8A' }}>{r.label}{custom ? <> <Badge tone="amber">{on ? 'extra' : 'uit'}</Badge></> : null}</span>

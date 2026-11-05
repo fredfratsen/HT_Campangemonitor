@@ -10,7 +10,7 @@ import { announceResumed } from './announce.js';
 import { INTEGRATIONS } from './secrets.js';
 import { testTrello } from './trello.js';
 import { testSmtp } from './mail.js';
-import { BlacklistError, normEmail as blEmail, normPhone } from './blacklist.js';
+import { BlacklistError } from './blacklist.js';
 import { CandidateError, trelloStage } from './candidates.js';
 import { atsStats, visibleToClient } from '../src/lib/ats.js';
 import { cardsOf, linkKey } from '../src/lib/boardStats.js';
@@ -429,13 +429,14 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
   /** 'full' = the recruiter's board, 'answer' = the RM reading along (past the gate only) and answering, else null. */
   const accessOf = (a, link) => seesLink(a, link) ? 'full'
     : link && can(a, 'candidates.answer') && (can(a, 'campaigns.all') || (store.docs['live.mkt'] || {})[link.boardId] === a.name) ? 'answer' : null;
-  /** On the blacklist? By phone number or email address, never by name alone. Only who may look the list up sees why. */
+  /** On the blacklist? By phone number or email address, never by name alone. Only who may look the list up sees it at all. */
   function blOf(a, c) {
-    const tel = c.phone ? normPhone(c.phone).slice(-9) : '', mail = c.email ? blEmail(c.email) : '';
-    const hit = blacklist.all().find(e => e.status === 'actief' && ((tel && e.phone && normPhone(e.phone).slice(-9) === tel) || (mail && e.email === mail)));
-    if (!hit) return null;
-    return can(a, 'blacklist.view') || can(a, 'blacklist.manage') ? { reason: hit.reason } : { reason: null };
+    if (!can(a, 'blacklist.view') && !can(a, 'blacklist.manage')) return null;
+    const hit = blacklist.hitOf(c);
+    return hit ? { reason: hit.reason } : null;
   }
+  /** Name and phone number on the blacklist: the card is on nobody's board (see blacklist.hides). */
+  const hidden = c => blacklist.hides(c, (linkOf(c.link) || {}).boardName);
   const view = (a, c) => { const { undo, ...rest } = c; return { ...rest, canUndo: !!undo, bl: blOf(a, c) }; };
 
   ats.get('/stats', (req, res) => {
@@ -450,12 +451,12 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     const id = String(req.query.link || ''), link = linkOf(id);
     const acc = accessOf(req.account, link);
     if (!acc) return forbidden(res);
-    const all = candidates.ofLink(id);
+    const all = candidates.ofLink(id).filter(c => !hidden(c));
     res.json({ cands: acc === 'full' ? all.map(c => view(req.account, c)) : all.filter(visibleToClient).map(c => ({ ...view(req.account, c), readOnly: true })) });
   }));
   ats.post('/:id/actie', json, wrap(async (req, res) => {
     const c = candidates.get(req.params.id);
-    if (!c) return bad(res, 'Deze kandidaat bestaat niet (meer).');
+    if (!c || hidden(c)) return bad(res, 'Deze kandidaat bestaat niet (meer).');
     const acc = accessOf(req.account, linkOf(c.link)), kind = (req.body || {}).kind;
     if (!acc || (kind === 'antwoord' && !can(req.account, 'candidates.answer'))) return forbidden(res);
     if (acc === 'answer' && (!['antwoord', 'note'].includes(kind) || !visibleToClient(c))) return forbidden(res);

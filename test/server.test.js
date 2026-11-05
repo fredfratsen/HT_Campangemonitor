@@ -96,7 +96,7 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     const rec = client(), link = new URL(r.data.link).pathname;
     const ok = await rec.form(link, { email: 'tessa@example.com', password: 'de recruiter haar wachtwoord', password2: 'de recruiter haar wachtwoord' });
     assert.equal(ok.loc, '/');
-    assert.deepEqual((await rec.get('/api/me')).data.account.rights, ['feedback.own', 'blacklist.view']);
+    assert.deepEqual((await rec.get('/api/me')).data.account.rights, ['feedback.own']);
     const p = await rec.api('POST', '/api/state/patch', { patches: [{ doc: 'rules', set: { qRed: 9 } }, { doc: 'seen', set: { [S.recId]: { last: 1 } } }] });
     assert.deepEqual(p.data.rejected, [{ doc: 'rules', key: 'qRed' }]);
     assert.equal((await rec.get('/api/admin/members')).status, 403);
@@ -120,29 +120,28 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.equal(ideas.c1.by, 'Tsjerk', 'author filled in by the server');
   });
 
-  test('blacklist: a recruiter proposes, the Dev confirms, and the candidate never reaches the shared data', async () => {
+  test('blacklist: only Teamlead and Dev, and the candidate never reaches the shared data', async () => {
     const cand = { name: 'Jan de Vries', phone: '06 1234 5678', reason: 'No-show bij gesprek of proefdag', client: 'Hotel X', vac: 'Kok' };
-    const p = await S.rec.api('POST', '/api/blacklist', cand);
+    const p = await S.dev.api('POST', '/api/blacklist', cand);
     assert.equal(p.status, 200, p.text);
-    assert.equal(p.data.entry.status, 'voorstel', 'without blacklist.manage it is a proposal');
+    assert.equal(p.data.entry.status, 'actief', 'with blacklist.manage it goes on directly');
     const id = p.data.entry.id;
-    assert.equal((await S.rec.api('POST', '/api/blacklist', { ...cand, phone: '+31612345678' })).data.message, 'Jan de Vries is al voorgedragen voor de blacklist.');
-    assert.deepEqual((await S.rec.get('/api/blacklist?q=vries')).data.entries.map(e => e.id), [id], 'your own proposal');
-    assert.equal((await S.rec.get('/api/blacklist?q=ja')).status, 400, 'at least 3 characters');
-    assert.equal((await S.rec.api('POST', `/api/blacklist/${id}/approve`)).status, 403);
-    assert.equal((await S.rec.api('PATCH', `/api/blacklist/${id}`, cand)).status, 403);
+    assert.equal((await S.dev.get('/api/blacklist?q=ja')).status, 400, 'at least 3 characters');
 
     const state = (await S.dev.get('/api/state')).text;
     assert.ok(!state.includes('Vries') && !state.includes('12345678'), 'not in /api/state');
-    assert.match(state, /Voordracht voor de blacklist/, 'the Dev got a notification');
-    assert.equal((await S.dev.get('/api/blacklist/summary')).data.pending, 1);
-    const ok = await S.dev.api('POST', `/api/blacklist/${id}/approve`);
-    assert.equal(ok.data.entry.status, 'actief');
-    assert.equal(ok.data.entry.approvedBy, 'Tsjerk');
-    assert.equal((await S.rec.api('DELETE', `/api/blacklist/${id}`)).status, 403, 'a confirmed entry is not the recruiter\'s to remove');
     assert.equal((await S.dev.get(`/api/blacklist/${id}/export`)).data.naam, 'Jan de Vries');
 
-    // A Recruitment Marketeer has no blacklist rights.
+    // A recruiter has no blacklist rights, and can't be given them.
+    assert.equal((await S.rec.get('/api/blacklist?q=vries')).status, 403);
+    assert.equal((await S.rec.get('/api/blacklist/summary')).status, 403);
+    assert.equal((await S.rec.api('POST', '/api/blacklist', { ...cand, phone: '0687654321' })).status, 403);
+    assert.equal((await S.rec.api('DELETE', `/api/blacklist/${id}`)).status, 403);
+    const grant = await S.dev.api('PATCH', `/api/admin/members/${S.recId}`, { rights: ['feedback.own', 'blacklist.view'] });
+    assert.equal(grant.status, 400);
+    assert.match(grant.data.message, /alleen voor Teamlead en Dev/);
+
+    // A Recruitment Marketeer neither.
     const inv = await S.dev.api('POST', '/api/admin/members', { name: 'Test Marketeer', role: 'marketeer' });
     const mkt = client();
     await mkt.form(new URL(inv.data.link).pathname, { email: 'mkt@example.com', password: 'de marketeer haar wachtwoord', password2: 'de marketeer haar wachtwoord' });
@@ -151,9 +150,8 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.equal((await mkt.api('POST', '/api/blacklist', { ...cand, phone: '0687654321' })).status, 403);
 
     assert.equal((await S.dev.api('DELETE', `/api/blacklist/${id}`)).status, 200);
-    assert.deepEqual((await S.rec.get('/api/blacklist?q=vries')).data.entries, []);
     const audit = JSON.stringify((await S.dev.get('/api/admin/audit?type=blacklist')).data.entries);
-    for (const t of ['blacklist.proposed', 'blacklist.approved', 'blacklist.export', 'blacklist.removed']) assert.ok(audit.includes(t), t);
+    for (const t of ['blacklist.added', 'blacklist.export', 'blacklist.removed']) assert.ok(audit.includes(t), t);
     assert.ok(!audit.includes('Vries'), 'the audit log has initials, not the name');
   });
 
@@ -204,7 +202,16 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
 
     await S.dev.api('POST', '/api/blacklist', { name: 'Priya R.', phone: '0611112222', reason: 'No-show bij gesprek of proefdag' });
     const hit = (await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands.find(c => c.id === priya.id);
-    assert.deepEqual(hit.bl, { reason: 'No-show bij gesprek of proefdag' }, 'checked by phone number');
+    assert.equal(hit.bl, null, 'a recruiter never sees the blacklist, not even as a flag');
+    const seen = (await S.dev.get(`/api/kandidaten?link=${kok.id}`)).data.cands.find(c => c.id === priya.id);
+    assert.deepEqual(seen.bl, { reason: 'No-show bij gesprek of proefdag' }, 'checked by phone number');
+    // Name and phone number both on the blacklist: the card is on nobody's board, and can't be acted on.
+    const entry = (await S.dev.get('/api/blacklist?q=0611112222')).data.entries[0];
+    await S.dev.api('PATCH', `/api/blacklist/${entry.id}`, { ...entry, altNames: ['Priya Ramdin'] });
+    for (const who of [S.rec, S.dev]) assert.ok(!(await who.get(`/api/kandidaten?link=${kok.id}`)).data.cands.some(c => c.id === priya.id));
+    assert.equal((await act({ kind: 'geenGehoor' })).status, 400);
+    await S.dev.api('PATCH', `/api/blacklist/${entry.id}`, { ...entry, altNames: [] });
+    assert.ok((await S.rec.get(`/api/kandidaten?link=${kok.id}`)).data.cands.some(c => c.id === priya.id), 'back once the name no longer matches');
 
     const inv = await S.dev.api('POST', '/api/admin/members', { name: 'ATS Marketeer', role: 'marketeer' });
     const mkt = client();

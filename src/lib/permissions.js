@@ -17,7 +17,7 @@ export const RIGHTS = [
   { key: 'questions.ask', group: 'werk', label: 'Vragen stellen over campagnes', desc: 'Een vraag over een campagne sturen aan de Recruitment Marketeer en recruiter. Vraag en antwoord komen binnen onder Meldingen.' },
   { key: 'candidates.all', group: 'werk', label: 'Alle kandidaten bekijken', desc: 'Het bord met kandidaten van alle campagnes die naar het ATS zijn omgezet, niet alleen die van je eigen campagnes. Zonder dit recht ziet een recruiter alleen de kandidaten van de eigen campagnes.' },
   { key: 'candidates.answer', group: 'werk', label: 'Vragen van klanten over kandidaten beantwoorden', desc: 'De kandidaten die bij de klant liggen (vanaf Gescreend) van je eigen klanten bekijken, alleen lezen, en vragen van de klant daarover beantwoorden. Met Alle campagnes bekijken: van alle klanten.' },
-  { key: 'blacklist.view', group: 'werk', label: 'Blacklist raadplegen', desc: 'Opzoeken of een kandidaat op de blacklist staat, en waarom. Een kandidaat voordragen; wie de blacklist beheert, beslist.' },
+  { key: 'blacklist.view', group: 'werk', label: 'Blacklist raadplegen', desc: 'Opzoeken of een kandidaat op de blacklist staat, en waarom. Een kandidaat voordragen; wie de blacklist beheert, beslist. Alleen voor Teamlead en Dev.' },
   { key: 'rules.edit', group: 'beheer', label: 'Health-regels aanpassen', desc: 'Regels aan- en uitzetten en drempels wijzigen. Geldt voor het hele team.' },
   { key: 'trello.link', group: 'beheer', label: 'Trello-koppeling testen', desc: 'Op de testpagina nagaan of de borden uit Trello goed binnenkomen.' },
   { key: 'assign', group: 'beheer', label: 'Toewijzing beheren', desc: 'Klanten uit Trello toewijzen: recruiter en Recruitment Marketeer per klant kiezen, nieuwe functies toevoegen, een klant op Niet actief zetten, of een bord op Geen klant.' },
@@ -43,18 +43,22 @@ export const ROLES = {
   teamlead: { label: 'Teamlead', level: 'admin', rights: [...WORK, ...ADMIN], desc: 'Al het werk (ook alle kandidaten), plus leden, toewijzing, Trello, regels, de blacklist en tijdwinst.' },
   marketeer: { label: 'Recruitment Marketeer', level: 'member', rights: ['campaigns.own', 'feedback.client', 'campaign.changes', 'campaigns.monitor', 'campaigns.pause', 'candidates.answer'], desc: 'Campagnes, monitorstatus, klantfeedback, campagnewijzigingen, en pauzeren en stopzetten, voor de eigen klanten, en vragen van klanten over kandidaten beantwoorden.' },
   accountmanager: { label: 'Account Manager', level: 'member', rights: ['campaigns.all', 'questions.ask'], desc: 'Ziet de campagnes van alle klanten, maar wijzigt niets, behalve de status op Live campagnes. Kan vragen stellen over campagnes.' },
-  recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own', 'blacklist.view'], desc: 'Eigen campagnes, wekelijkse feedback, Live campagnes en de blacklist raadplegen.' },
+  recruiter: { label: 'Recruiter', level: 'member', rights: ['feedback.own'], desc: 'Eigen campagnes, wekelijkse feedback en Live campagnes.' },
 };
 export const ROLE_KEYS = Object.keys(ROLES);
 
 export const levelOf = a => (ROLES[a && a.role] || {}).level || 'member';
 export const rankOf = a => LEVELS[levelOf(a)].rank;
 
+/** The blacklist is only for Teamlead and Dev: never a right of a Lid (member) role, not even as an extra. */
+const BLACKLIST = ['blacklist.view', 'blacklist.manage'];
+export const roleAllows = (role, right) => !BLACKLIST.includes(right) || (ROLES[role] && ROLES[role].level !== 'member');
+
 /** Effective rights of an account: role defaults + grants − revokes. */
 export function rightsOf(a) {
   if (!a || !ROLES[a.role]) return new Set();
   const s = new Set(ROLES[a.role].rights);
-  for (const r of a.grants || []) if (RIGHT_KEYS.includes(r)) s.add(r);
+  for (const r of a.grants || []) if (RIGHT_KEYS.includes(r) && roleAllows(a.role, r)) s.add(r);
   for (const r of a.revokes || []) s.delete(r);
   return s;
 }
@@ -102,6 +106,7 @@ export function manageError(actor, target, next = null) {
     if (!ROLES[next.role]) return 'Onbekende rol.';
     if (LEVELS[ROLES[next.role].level].rank > ownRank || (ROLES[next.role].level === 'admin' && levelOf(actor) !== 'owner')) return `Je kunt de rol ${ROLES[next.role].label} niet toekennen.`;
     const before = target ? rightsOf(target) : new Set();
+    for (const r of next.rights || []) if (!roleAllows(next.role, r)) return `De blacklist is alleen voor Teamlead en Dev, niet voor een ${ROLES[next.role].label}.`;
     for (const r of next.rights || ROLES[next.role].rights) if (!own.has(r) && !before.has(r)) return `Je kunt het recht “${RIGHTS.find(x => x.key === r)?.label || r}” niet toekennen, omdat je het zelf niet hebt.`;
   }
   return '';

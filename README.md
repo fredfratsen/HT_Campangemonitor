@@ -107,7 +107,7 @@ all; Blacklist, under Dev with Health-regels: right *Blacklist raadplegen*; recr
   twice. *Kaarten uit Trello halen* in Toewijzing does it again for cards that came into Trello since. Trello's and the
   ATS's numbers of the campaign are added up (`addStats` in `src/lib/ats.js`), so Weekoverzicht, Live campagnes and
   the weekly feedback keep working.
-  Click a card and a panel opens next to the board: phone and email, an automatic blacklist check on phone and email,
+  Click a card and a panel opens next to the board: phone and email, an automatic blacklist check on phone and email (only shown with a blacklist right; a candidate whose name and phone number both match an active entry, including its other spellings and numbers, is on nobody's board and never reaches the client),
   and one click per outcome: *Geen gehoor* (counts an attempt and takes the card off today's call list until
   midnight, like the Trello button; it never moves the card, also not the third time: then the panel offers *Naar
   Niet bereikbaar*), *TBA afspraak*, *Bereikt · gescreend*, *Niet geschikt* (a reason from `REASONS`), *Verplaatsen
@@ -241,7 +241,7 @@ roles and rights are defined once in `src/lib/permissions.js`, which both the se
 | **Teamlead** | Beheerder (admin) | All work rights, plus members and rights, Toewijzing, Trello linking, health rules, the status of bugs and ideas, managing the blacklist, Tijdwinst |
 | **Recruitment Marketeer** | Lid (member) | Campaign overview of their own clients, monitor status and updates for the recruiter, pausing and stopping campaigns, client feedback, logging campaign changes, answering client questions about candidates |
 | **Account Manager** | Lid (member) | Campaign overview of all clients and asking questions about campaigns; changes nothing except the status toggle on Live campagnes |
-| **Recruiter** | Lid (member) | Own weekly feedback, Live campagnes, and looking up and proposing candidates for the blacklist |
+| **Recruiter** | Lid (member) | Own weekly feedback and Live campagnes |
 
 The rules for managing people:
 
@@ -249,6 +249,7 @@ The rules for managing people:
 - Owners manage everyone. Admins manage members only, not other admins or owners.
 - You can only hand out rights (and roles) you have yourself.
 - There is always at least one active Dev.
+- The blacklist rights are only for Teamlead and Dev: a Lid (member) role never gets them, not even as an extra.
 
 **The server checks every change.** The app hides what you can't use, but `server/authorize.js` checks each
 saved change against the rights of whoever is logged in. For example, a recruiter can only fill in feedback on

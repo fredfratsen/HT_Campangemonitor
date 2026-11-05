@@ -15,6 +15,9 @@ const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200
 // Client and function in one select value.
 const SEP = '\u001f';
 const at = (client, vac) => client ? `${client}${SEP}${vac || ''}` : '';
+// Other spellings and phone numbers: one per line in the form, a list on the server.
+const lines = t => t.split('\n').map(x => x.trim()).filter(Boolean);
+const area = { ...input, height: 'auto', padding: '10px 12px', lineHeight: 1.5, resize: 'vertical' };
 
 /** A new entry from what was searched: an email address, a phone number or a name. */
 function seedFrom(q) {
@@ -25,8 +28,8 @@ function seedFrom(q) {
 /** Add or propose an entry (no entry), or correct one. */
 function EntryForm({ b, entry, seed, propose, onSaved, onCancel }) {
   const [f, setF] = useState(() => entry
-    ? { name: entry.name, email: entry.email || '', phone: entry.phone || '', reason: entry.reason, note: entry.note || '', at: at(entry.client, entry.vac), only: entry.scope === 'client', months: entry.status === 'voorstel' ? entry.months : '' }
-    : { name: '', email: '', phone: '', reason: '', note: '', at: '', only: false, months: BL_DEF_MONTHS, ...seed });
+    ? { name: entry.name, altNames: (entry.altNames || []).join('\n'), email: entry.email || '', phone: entry.phone || '', altPhones: (entry.altPhones || []).join('\n'), reason: entry.reason, note: entry.note || '', at: at(entry.client, entry.vac), only: entry.scope === 'client', months: entry.status === 'voorstel' ? entry.months : '' }
+    : { name: '', altNames: '', email: '', phone: '', altPhones: '', reason: '', note: '', at: '', only: false, months: BL_DEF_MONTHS, ...seed });
   const a = useAction(b.flash);
   const set = k => e => { const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value; setF(x => ({ ...x, [k]: v })); };
   const opts = b.campaigns.map(c => ({ v: at(c.client, c.vac), l: `${c.client} – ${c.vac}` }));
@@ -35,7 +38,7 @@ function EntryForm({ b, entry, seed, propose, onSaved, onCancel }) {
   const save = async e => {
     e.preventDefault();
     const [client = '', vac = ''] = f.at ? f.at.split(SEP) : [];
-    const body = { name: f.name, email: f.email, phone: f.phone, reason: f.reason, note: f.note, client, vac, scope: client && f.only ? 'client' : 'all', months: f.months, propose };
+    const body = { name: f.name, altNames: lines(f.altNames), email: f.email, phone: f.phone, altPhones: lines(f.altPhones), reason: f.reason, note: f.note, client, vac, scope: client && f.only ? 'client' : 'all', months: f.months, propose };
     const r = await a.run(() => entry ? api('PATCH', `/api/blacklist/${entry.id}`, body) : api('POST', '/api/blacklist', body));
     if (r) onSaved(r, entry ? `${r.entry.name} bijgewerkt` : r.entry.status === 'voorstel' ? `${r.entry.name} voorgedragen; de teamlead krijgt een melding` : `${r.entry.name} staat op de blacklist`);
   };
@@ -47,6 +50,11 @@ function EntryForm({ b, entry, seed, propose, onSaved, onCancel }) {
         <label style={label}>Telefoonnummer<input type="tel" value={f.phone} onChange={set('phone')} maxLength={30} autoComplete="off" style={input} /></label>
       </div>
       <div style={{ fontSize: '12px', color: '#8C8C8A', marginTop: '-6px' }}>Vul naast de naam een e-mailadres of telefoonnummer in, zodat niemand met een naamgenoot wordt verward.</div>
+      <div style={grid}>
+        <label style={label}>Andere schrijfwijzen van de naam (optioneel)<textarea value={f.altNames} onChange={set('altNames')} rows="2" placeholder={'Eén per regel, bijv. J. de Vries'} style={area} /></label>
+        <label style={label}>Andere telefoonnummers (optioneel)<textarea value={f.altPhones} onChange={set('altPhones')} rows="2" placeholder="Eén per regel" style={area} /></label>
+      </div>
+      <div style={{ fontSize: '12px', color: '#8C8C8A', marginTop: '-6px' }}>Komt een kandidaat binnen met een van deze namen én een van deze telefoonnummers, dan verschijnt de kaart niet op het Bord en niet bij de klant. +31 6, 0031 6 en 06 zijn hetzelfde nummer; die hoef je niet apart in te vullen.</div>
       <div style={grid}>
         <label style={label}>Reden
           <select value={f.reason} onChange={set('reason')} required style={select}>
@@ -72,7 +80,7 @@ function EntryForm({ b, entry, seed, propose, onSaved, onCancel }) {
         Geldt alleen voor deze klant; bij andere klanten mag de kandidaat wel solliciteren
       </label>
       <label style={label}>{f.reason === 'Overig' ? 'Toelichting' : 'Toelichting (optioneel)'}
-        <textarea value={f.note} onChange={set('note')} rows="3" maxLength={500} placeholder="Wat gebeurde er, en wanneer?" style={{ ...input, height: 'auto', padding: '10px 12px', lineHeight: 1.5, resize: 'vertical' }} />
+        <textarea value={f.note} onChange={set('note')} rows="3" maxLength={500} placeholder="Wat gebeurde er, en wanneer?" style={area} />
       </label>
       <Notice tone="warn">Schrijf alleen op wat er feitelijk gebeurde. Geen gegevens over gezondheid, afkomst, geloof of andere gevoelige zaken, en geen vermoedens van strafbare feiten. De kandidaat kan deze gegevens opvragen.</Notice>
       <div style={row}>
@@ -101,11 +109,12 @@ function EntryRow({ b, e, first, onChanged }) {
   const meta = [where && `Sollicitatie bij ${where}`, `${prop || e.approvedBy ? 'Voorgedragen' : 'Toegevoegd'} door ${e.addedBy} op ${fmtDate(e.addedAt)}`,
     e.approvedBy && `bevestigd door ${e.approvedBy}`, e.updatedBy && `gewijzigd door ${e.updatedBy}`,
     prop ? `vervalt ${fmtDate(e.until)} als niemand beslist` : `staat erop tot ${fmtDate(e.until)}`].filter(Boolean).join(' · ');
-  const contact = [e.email, e.phone].filter(Boolean).join(' · ');
+  const contact = [e.email, e.phone, ...(e.altPhones || [])].filter(Boolean).join(' · ');
   return (
     <div style={{ borderTop: first ? 0 : '1px solid #F5F2ED', padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: '6px', background: prop ? '#FFFDF5' : '#FFFFFF' }}>
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 600, fontSize: '15px' }}>{e.name}</span>
+        {e.altNames && e.altNames.length ? <span style={{ fontSize: '13px', color: '#5C5C5A' }}>ook {e.altNames.join(', ')}</span> : null}
         {prop ? <Badge tone="gold">Voorgedragen · nog niet bevestigd</Badge> : null}
         {e.scope === 'client' ? <Badge tone="navy">Alleen bij {e.client}</Badge> : <Badge>Alle klanten</Badge>}
       </div>
