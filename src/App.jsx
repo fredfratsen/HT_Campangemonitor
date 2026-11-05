@@ -44,6 +44,7 @@ import SettingsView from './views/settings/SettingsView.jsx';
 import DevView from './views/DevView.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import CtlDialog from './components/CtlDialog.jsx';
+import BugCharge from './components/BugCharge.jsx';
 
 // Per-browser settings (chosen data source, news read, "Bekijk als")
 const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as', ACTIE_VIEW_KEY = 'ht-cm-actie-view', LIVE_SORT_KEY = 'ht-cm-live-sort', FB_BAR_KEY = 'ht-cm-fb-bar', NAV_MINI_KEY = 'ht-cm-nav-mini';
@@ -92,7 +93,7 @@ export default class App extends React.Component {
       assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
       blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null, ctlDlg: null,
-      atsInfo: null, bord: BORD0, celebrate: null
+      atsInfo: null, bord: BORD0, celebrate: null, bugCharge: null
     };
   }
 
@@ -894,6 +895,7 @@ export default class App extends React.Component {
         if (!I.text.trim()) { this.flash('Beschrijf eerst wat je wilt melden'); return; }
         saveIdeas([{ id: Date.now(), type: I.type, text: I.text.trim(), by: au, at: stamp(), page: VIEW_NAMES[st.view] || st.view, status: 'nieuw', voters: [] }, ...st.ideas]);
         this.setState(s => ({ idea: { ...s.idea, text: '', filter: 'all' } })); this.flash('Bedankt, je melding is doorgestuurd naar de ontwikkelaar');
+        if (I.type === 'bug') this.bugCharge();
       }
     };
   }
@@ -1692,7 +1694,7 @@ export default class App extends React.Component {
       },
       saveOffline: st.saveState === 'offline', isLocal: this.sync.mode === 'local',
       ...this.panelVals(me),
-      hasToast: !!st.toast, toast: st.toast,
+      hasToast: !!st.toast, toast: st.toast, bugCharge: st.bugCharge,
       hasConfirm: !!st.confirm, confirm: st.confirm ? { ...st.confirm, onCancel: () => this.setState({ confirm: null }) } : null,
       hasCtlDlg: !!st.ctlDlg, ctlDlg: !st.ctlDlg ? null : {
         title: st.ctlDlg.title, value: st.ctlDlg.days, onOk: () => this.saveCtl(), onCancel: () => this.setState({ ctlDlg: null }),
@@ -1862,6 +1864,12 @@ export default class App extends React.Component {
     clearTimeout(this._celT);
     this.setState({ celebrate: { at: Date.now(), client } });
     this._celT = setTimeout(() => this.setState({ celebrate: null }), 3800);
+  }
+  /** A bug sent via "Bug of idee melden": the anime power-up easter egg (components/BugCharge). */
+  bugCharge() {
+    clearTimeout(this._bugT);
+    this.setState({ bugCharge: Date.now() });
+    this._bugT = setTimeout(() => this.setState({ bugCharge: null }), 4900);
   }
   /** Edits one screening field of candidate id; saved 800 ms after the last change (and on blur, see saveScr). */
   setScr(id, key, val) {
@@ -2071,6 +2079,7 @@ export default class App extends React.Component {
         {v.hasPanel ? <SidePanel v={v} /> : null}
         {v.hasConfirm ? <ConfirmDialog {...v.confirm} /> : null}
         {v.hasCtlDlg ? <CtlDialog {...v.ctlDlg} /> : null}
+        {v.bugCharge ? <BugCharge key={v.bugCharge} /> : null}
         {v.hasToast ? <div role="status" className="toast" style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', background: '#1B1B63', color: '#FFFFFF', padding: '12px 18px', borderRadius: '10px', fontSize: '14px', boxShadow: '0 8px 32px rgba(29,29,27,.15)', zIndex: 25 }}>{v.toast}</div> : null}
       </>
     );
