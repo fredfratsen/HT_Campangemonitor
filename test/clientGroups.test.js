@@ -74,16 +74,20 @@ test('today\'s call list comes from Trello; a demo campaign gets made-up numbers
   assert.deepEqual(Object.keys(callList(demo)), ['nieuw', 'contact', 'gebeld']);
 });
 
-test('a recruiter keeps a paused or stopped campaign until all its candidates are called', () => {
+test('a recruiter keeps a paused or stopped campaign until Nieuw and Contactpoging are empty, until midnight', () => {
   const c = (halt, nieuw, contact, gebeld = 0) => ({ id: 'k', live: { nieuw, contact, gebeld }, weeks: [{ leads: 0 }], ...(halt ? { halt: { kind: halt } } : {}) });
   assert.equal(recruiterSees(c(null, 0, 0)), true, 'a running campaign always');
   assert.equal(recruiterSees(c('pauze', 2, 0)), true);
   assert.equal(recruiterSees(c('stop', 0, 1)), true, 'contact attempts count too');
   assert.equal(recruiterSees(c('pauze', 0, 0)), false);
   assert.equal(recruiterSees(c('stop', 0, 0)), false);
-  assert.equal(recruiterSees(c('stop', 0, 0, 2)), false, 'a ‘Geen gehoor’ today is off the call list, so it goes too');
-  assert.equal(recruiterSees(c('pauze', 0, 0, 1)), false);
+  assert.equal(recruiterSees(c('stop', 0, 0, 2)), true, 'a card called today is still in its column');
   assert.equal(recruiterSees(c(null, 0, 0, 1)), true, 'a running one stays');
+  const now = new Date(2026, 10, 5, 15).getTime(), today = new Date(2026, 10, 5, 9).getTime(), yesterday = new Date(2026, 10, 4, 23).getTime();
+  assert.equal(recruiterSees({ ...c('pauze', 0, 0), uit: today }, now), true, 'the last card left today: stays until midnight');
+  assert.equal(recruiterSees({ ...c('pauze', 0, 0), uit: yesterday }, now), false, 'gone after midnight');
+  assert.equal(recruiterSees({ ...c('pauze', 0, 0), halt: { kind: 'pauze', at: today } }, now), true, 'paused today while empty: until midnight too');
+  assert.equal(recruiterSees({ ...c('pauze', 0, 0), halt: { kind: 'pauze', at: yesterday } }, now), false);
 });
 
 test('a new campaign waiting for its ads stays out of sight of the recruiter, candidates or not', () => {

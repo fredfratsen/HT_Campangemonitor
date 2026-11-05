@@ -1,8 +1,8 @@
 import React from 'react';
 import { StatusPill } from './LiveView.jsx';
 
-// Recruiter › Bord: the candidates of one campaign switched to the ATS, in columns like the Trello board, with a panel
-// next to it for the candidate you clicked. Every action goes to the server (App.bordAct); see lib/ats.js. Cards can
+// Recruiter › Bord: the candidates of one campaign switched to the ATS, in columns like the Trello board, with a search
+// on name, e-mail or phone, and a drawer over it for the candidate you clicked. Every action goes to the server (App.bordAct); see lib/ats.js. Cards can
 // be dragged to another column, or onto the Afgewezen tile (with a mouse; on a phone Verplaatsen naar does the same).
 const eyebrow = { fontSize: '11px', fontWeight: '600', letterSpacing: '.08em', textTransform: 'uppercase', color: '#5C5C5A' };
 const plainBtn = { height: '40px', padding: '0 14px', border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '10px', fontSize: '13px', fontWeight: '500', color: '#1B1B63', cursor: 'pointer' };
@@ -32,15 +32,44 @@ function Card({ c }) {
   );
 }
 
+/**
+ * The candidate you clicked, in a drawer over the board: the cross, a click beside it or Escape closes it and the focus
+ * goes back to the cards. Escape in an open step (TBA, reject, note…) first cancels that step.
+ */
 function Panel({ p }) {
-  return (
-    <aside aria-label={`Kandidaat ${p.name}`} style={{ background: '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '16px', display: 'flex', flexDirection: 'column', position: 'sticky', top: '16px', maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}>
-      <div style={{ padding: '22px 24px 18px', display: 'flex', justifyContent: 'space-between', gap: '12px', borderBottom: '1px solid #E4E1DE' }}>
+  const box = React.useRef(null), cur = React.useRef(p);
+  cur.current = p;
+  React.useEffect(() => {
+    const prev = document.activeElement;
+    if (box.current) box.current.focus();
+    const key = e => { if (e.key !== 'Escape') return; if (cur.current.mode) cur.current.cancel(); else cur.current.close(); };
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('keydown', key); if (prev && prev.isConnected && prev.focus) prev.focus(); };
+  }, []);
+  const gate = p.gate && !p.readOnly ? <form onSubmit={p.gate.submit} style={{ margin: p.gate.low ? '0' : '14px 24px 0', padding: '16px', background: '#E7E7F0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <span style={{ fontSize: '13px', fontWeight: '600' }}>Naar {p.gate.to}: dan ziet de klant {p.name}</span>
+      <span style={{ fontSize: '12px', color: '#3C3C3A' }}>Controleer de gegevens en vul {p.gate.low ? 'hierboven' : 'hieronder'} de screening in.</span>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>Naam
+        <input value={p.gate.name} onChange={p.gate.setName} maxLength={80} style={{ ...field, color: '#1D1D1B' }} /></label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>Telefoon
+        <input type="tel" value={p.gate.phone} onChange={p.gate.setPhone} maxLength={30} style={{ ...field, color: '#1D1D1B' }} /></label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>E-mail
+        <input type="email" value={p.gate.email} onChange={p.gate.setEmail} style={{ ...field, color: '#1D1D1B' }} /></label>
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <button type="submit" disabled={p.busy || !p.gate.ok} style={{ ...outcome, background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px', opacity: p.gate.ok ? 1 : 0.5, cursor: p.gate.ok ? 'pointer' : 'not-allowed' }}>Doorzetten naar klant</button>
+        <button type="button" onClick={p.cancel} className="link-btn">Annuleren</button>
+      </div>
+      {p.gate.ok ? null : <span style={{ fontSize: '12px', color: '#B45309' }}>Nog in te vullen: {p.gate.missing.join(', ')}</span>}
+    </form> : null;
+  return (<>
+    <div onClick={p.close} className="panel-backdrop" aria-hidden="true" style={{ position: 'fixed', inset: '0', background: 'rgba(29,29,27,.38)', zIndex: '20' }} />
+    <aside ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Kandidaat ${p.name}`} className="side-panel" style={{ position: 'fixed', top: '16px', right: '16px', bottom: '16px', width: 'min(480px,calc(100vw - 32px))', zIndex: '21', background: '#FFFFFF', borderRadius: '16px', boxShadow: '0 8px 32px rgba(29,29,27,.18)', display: 'flex', flexDirection: 'column', overflowY: 'auto', overscrollBehavior: 'contain', outline: 'none' }}>
+      <div style={{ position: 'sticky', top: '0', zIndex: '1', background: '#FFFFFF', padding: '22px 24px 18px', display: 'flex', justifyContent: 'space-between', gap: '12px', borderBottom: '1px solid #E4E1DE' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '0' }}>
           <h2 style={{ margin: '0', fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '22px', lineHeight: '1.2' }}>{p.name}</h2>
           <div style={{ fontSize: '13px', color: '#5C5C5A' }}>{p.sub}</div>
         </div>
-        <button type="button" onClick={p.close} aria-label="Paneel sluiten" style={{ flex: 'none', alignSelf: 'flex-start', width: '36px', height: '36px', border: '0', background: 'none', borderRadius: '8px', cursor: 'pointer', color: '#5C5C5A' }}>
+        <button type="button" onClick={p.close} aria-label="Paneel sluiten" title="Sluiten (Esc)" style={{ flex: 'none', alignSelf: 'flex-start', width: '36px', height: '36px', border: '0', background: '#F5F2ED', borderRadius: '8px', cursor: 'pointer', color: '#1D1D1B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
@@ -77,10 +106,9 @@ function Panel({ p }) {
               </div>
               <button type="button" onClick={p.cancel} className="link-btn" style={{ alignSelf: 'flex-start' }}>Annuleren</button>
             </div>
-            : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: '8px' }}>
+            : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(112px,1fr))', gap: '8px' }}>
               <button type="button" onClick={p.geenGehoor} disabled={p.busy} style={outcome}>Geen gehoor</button>
               <button type="button" onClick={p.startTba} disabled={p.busy} style={outcome}>TBA afspraak</button>
-              <button type="button" onClick={p.bereikt} disabled={p.busy} style={{ ...outcome, background: '#1B1B63', color: '#FFFFFF', border: '0' }}>Bereikt · gescreend</button>
               <button type="button" onClick={p.startReject} disabled={p.busy} style={{ ...outcome, color: '#D32F2F', borderColor: '#F3C2C2' }}>Niet geschikt</button>
               {p.canNb ? <button type="button" onClick={p.toNb} disabled={p.busy} style={{ ...outcome, gridColumn: '1 / -1', borderColor: '#FB8915', color: '#B45309' }}>{p.nbText}</button> : null}
             </div>}
@@ -124,21 +152,7 @@ function Panel({ p }) {
         </label>}
       </div>
 
-      {p.gate && !p.readOnly ? <form onSubmit={p.gate.submit} style={{ margin: '14px 24px 0', padding: '16px', background: '#E7E7F0', borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <span style={{ fontSize: '13px', fontWeight: '600' }}>Naar {p.gate.to}: dan ziet de klant {p.name}</span>
-          <span style={{ fontSize: '12px', color: '#3C3C3A' }}>Controleer de gegevens en vul hieronder de screening in.</span>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>Naam
-            <input value={p.gate.name} onChange={p.gate.setName} maxLength={80} style={{ ...field, color: '#1D1D1B' }} /></label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>Telefoon
-            <input type="tel" value={p.gate.phone} onChange={p.gate.setPhone} maxLength={30} style={{ ...field, color: '#1D1D1B' }} /></label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px', color: '#5C5C5A' }}>E-mail
-            <input type="email" value={p.gate.email} onChange={p.gate.setEmail} style={{ ...field, color: '#1D1D1B' }} /></label>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="submit" disabled={p.busy || !p.gate.ok} style={{ ...outcome, background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px', opacity: p.gate.ok ? 1 : 0.5, cursor: p.gate.ok ? 'pointer' : 'not-allowed' }}>Doorzetten naar klant</button>
-            <button type="button" onClick={p.cancel} className="link-btn">Annuleren</button>
-          </div>
-          {p.gate.ok ? null : <span style={{ fontSize: '12px', color: '#B45309' }}>Nog in te vullen: {p.gate.missing.join(', ')}</span>}
-        </form> : null}
+      {p.gate && !p.gate.low ? gate : null}
 
       <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px', borderBottom: '1px solid #E4E1DE' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
@@ -167,6 +181,9 @@ function Panel({ p }) {
             <button type="button" onClick={p.doorzetten} disabled={p.busy || !!p.screening.missing.length} style={{ ...outcome, background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px', opacity: p.screening.missing.length ? 0.5 : 1, cursor: p.screening.missing.length ? 'not-allowed' : 'pointer' }}>{p.screening.missing.length ? 'Screening invullen' : 'Doorzetten naar klant'}</button>
             {p.screening.missing.length ? <span style={{ fontSize: '12px', color: '#B45309' }}>Nog in te vullen: {p.screening.missing.join(', ')}</span> : null}
           </div> : null}
+        {/* Reached: only here, once every required question is answered; it first checks the contact details (gate). */}
+        {p.gate && p.gate.low ? gate
+          : p.isCall && !p.readOnly && !p.gate && !p.screening.missing.length ? <button type="button" onClick={p.toGescreend} disabled={p.busy} style={{ ...outcome, alignSelf: 'flex-start', background: '#1B1B63', color: '#FFFFFF', border: '0', padding: '0 16px' }}>Bereikt · gescreend</button> : null}
       </div>
 
       {p.answers.length ? <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '10px', borderBottom: '1px solid #E4E1DE' }}>
@@ -203,7 +220,7 @@ function Panel({ p }) {
           </div>)}
       </div>
     </aside>
-  );
+  </>);
 }
 
 /**
@@ -261,6 +278,12 @@ export default function BoardView({ b }) {
           <div style={{ color: '#5C5C5A', fontSize: '15px' }}>{b.subline}</div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ position: 'relative', display: 'flex', flex: '1 1 200px', minWidth: '0' }}>
+            <span style={{ position: 'absolute', left: '-9999px' }}>Zoek een kandidaat op dit bord</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C8C8A" strokeWidth="2" strokeLinecap="round" aria-hidden="true" style={{ position: 'absolute', left: '12px', top: '12px', pointerEvents: 'none' }}><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            <input type="search" value={b.search.q} onChange={b.search.set} onKeyDown={e => { if (e.key === 'Escape' && b.search.q) { e.preventDefault(); b.search.clear(); } }}
+              placeholder="Zoek kandidaat…" style={{ ...field, width: '100%', paddingLeft: '36px', fontSize: '14px' }} />
+          </label>
           {b.clientOpts.length > 1 ? <select value={b.clientValue} onChange={b.setClient} aria-label="Klant" style={{ ...field, fontSize: '14px' }}>
               {b.clientOpts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select> : null}
@@ -276,8 +299,13 @@ export default function BoardView({ b }) {
 
       {b.err ? <div style={{ background: '#FDECEA', color: '#D32F2F', borderRadius: '12px', padding: '12px 16px', fontSize: '14px' }}>{b.err}</div> : null}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
-        <div style={{ flex: '999 1 480px', minWidth: '0', overflowX: 'auto', paddingBottom: '8px' }}>
+      {b.search.text ? <div role="status" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', fontSize: '13px', color: '#3C3C3A' }}>
+          <span>{b.search.text}</span>
+          <button type="button" onClick={b.search.clear} className="link-btn" style={{ textDecoration: 'underline' }}>Zoeken wissen</button>
+        </div> : null}
+
+      <div>
+        <div style={{ minWidth: '0', overflowX: 'auto', paddingBottom: '8px' }}>
           {b.loading ? <div style={{ fontSize: '14px', color: '#5C5C5A', padding: '12px 0' }}>Kandidaten laden…</div> : null}
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', width: 'max-content' }}>
             {b.cols.map(col => <section key={col.key} aria-label={`${col.label}, ${col.n}`} {...drop(b, col.key)}
@@ -295,8 +323,8 @@ export default function BoardView({ b }) {
             </button>
           </div>
         </div>
-        {b.panel ? <div style={{ flex: '1 1 360px', minWidth: '0', maxWidth: '440px' }}><Panel p={b.panel} /></div> : null}
       </div>
+      {b.panel ? <Panel p={b.panel} /> : null}
       {b.celebrate ? <Celebrate key={b.celebrate.at} client={b.celebrate.client} /> : null}
       {/* While dragging, rejecting is always in reach, also when the Afgewezen tile is scrolled out of view. */}
       {b.dragFrom && b.dragFrom !== 'afgewezen' ? <div {...drop(b, 'afgewezen')} style={{ position: 'fixed', left: '50%', bottom: '24px', transform: 'translateX(-50%)', zIndex: '20', width: 'min(420px,calc(100vw - 32px))', boxSizing: 'border-box',

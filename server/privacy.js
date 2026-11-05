@@ -20,7 +20,7 @@ export function createPrivacy({ accounts, store, audit, blacklist, candidates })
     for (const [id, weeks] of Object.entries(fb)) {
       const l = links[id], name = l ? `${l.boardName} – ${l.vac}` : id;
       for (const [w, e] of Object.entries(weeks || {})) {
-        if (eq(names, e.recBy)) recFb.push({ bron: 'trello', campagne: name, week: +w, kwaliteit: e.q, feedback: e.rec, notitie: e.note, bijsturing: !!e.needsAction });
+        if (eq(names, e.recBy)) recFb.push({ bron: 'trello', campagne: name, week: +w, kwaliteit: e.nvt ? 'n.v.t.' : e.q, feedback: e.rec, notitie: e.note, bijsturing: !!e.needsAction });
         if (eq(names, e.klantBy)) klantFb.push({ bron: 'trello', campagne: name, week: +w, klantfeedback: e.klant });
         mon('trello', name, +w, e);
       }

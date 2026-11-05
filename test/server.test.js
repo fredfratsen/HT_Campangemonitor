@@ -252,6 +252,10 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     assert.deepEqual(k.map(c => c.naam), ['Priya Ramdin'], 'Gescreend, not Nieuw, and not other candidates');
     assert.equal((await get(`/kandidaten?links=${Array.from({ length: 51 }, (_, i) => 'x' + i).join(',')}`)).status, 400);
     assert.deepEqual(await (await get('/kandidaten?links=')).json(), { kandidaten: [] });
+    assert.deepEqual((await (await get(`/cijfers?links=${kok.id},${bed.id},onbekend`)).json()).cijfers, {
+      [kok.id]: { sollicitanten: 2, gescreend: 1 }, [bed.id]: { sollicitanten: 1, gescreend: 0 }, onbekend: { sollicitanten: 0, gescreend: 0 },
+    }, 'counts only, per function');
+    assert.equal((await portaal(`/cijfers?links=${kok.id}`)).status, 401);
 
     const who = { naam: 'Anna', organisatie: 'Restaurant ATS' }, q = 'Is zij beschikbaar in het weekend?';
     const act = (body, id = priya.id) => fetch(`${BASE}/api/portaal/kandidaten/${id}/actie`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-toppers-sleutel': sleutel }, body: JSON.stringify({ linkId: kok.id, door: who, ...body }) });

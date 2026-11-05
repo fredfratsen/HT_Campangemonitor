@@ -2,7 +2,7 @@
 // views show; the views in ./views are plain markup. Shared data is kept in sync with the server by ./lib/sync.js.
 import React from 'react';
 import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, isoDate, mondayOf, feedbackWeek, fbOpenWeek, fbLastDay } from './lib/weeks.js';
-import { checkinQueue, openWeeks, needsFeedback, openByRecruiter } from './lib/checkin.js';
+import { checkinQueue, openWeeks, needsFeedback, openByRecruiter, fbDone } from './lib/checkin.js';
 import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, HALT, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
   NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED, REASONS
@@ -46,7 +46,7 @@ import ConfirmDialog from './components/ConfirmDialog.jsx';
 import CtlDialog from './components/CtlDialog.jsx';
 
 // Per-browser settings (chosen data source, news read, "Bekijk als")
-const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as', ACTIE_VIEW_KEY = 'ht-cm-actie-view', LIVE_SORT_KEY = 'ht-cm-live-sort', FB_BAR_KEY = 'ht-cm-fb-bar';
+const SRC_KEY = 'ht-cm-source', NEWS_KEY = 'ht-cm-news-seen', VIEW_AS_KEY = 'ht-cm-view-as', ACTIE_VIEW_KEY = 'ht-cm-actie-view', LIVE_SORT_KEY = 'ht-cm-live-sort', FB_BAR_KEY = 'ht-cm-fb-bar', NAV_MINI_KEY = 'ht-cm-nav-mini';
 // Below this width the sidebar is a slide-in menu (keep in sync with the media query in styles/app.css).
 const PHONE_MQ = '(max-width: 900px)';
 // How often the open app loads the Trello boards that changed (as the server does, see server/trello.js).
@@ -67,7 +67,7 @@ const pausedText = n => `${n} nieuwe ${n === 1 ? 'campagne' : 'campagnes'} op Pa
 
 class TrelloError extends Error {}
 /** Recruiter › Bord: the open campaign (link), its candidates, the one in the panel (sel) and what the panel asks (mode). */
-const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null, scr: {}, gateTo: '', gc: null, ans: {} };
+const BORD0 = { link: null, cands: null, err: '', sel: null, mode: null, text: '', at: '', showRej: false, busy: false, drag: null, over: null, scr: {}, gateTo: '', gc: null, ans: {}, q: '' };
 /** A saved screening as the panel edits it: raw strings (the age as text), so typing a space or a half number survives. */
 const scrDraft = s => { const c = cleanScreening(s); return { ...c, leeftijd: c.leeftijd == null ? '' : String(c.leeftijd) }; };
 // The open Trello cards of a switched campaign come onto the Bord (server/candidates.js takeTrello).
@@ -82,7 +82,7 @@ export default class App extends React.Component {
     return {
       loaded: false, saveState: 'ok', config: { trello: false, auth: false },
       account: null, members: [], viewAs: null, settingsTab: 'account',
-      view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null, kQ: '', navOpen: false,
+      view: this.props.startView || 'week', sel: 'c1', back: 'week', kform: null, kQ: '', navOpen: false, navMini: lsGet(NAV_MINI_KEY, false),
       campaigns: null, rules: { ...DEF_RULES },
       f: { q: '', status: 'all', sort: 'status' },
       ci: { rec: 'all' }, ciKeep: [], ciQ: '', form: null,
@@ -119,7 +119,8 @@ export default class App extends React.Component {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); this.saveForm(); return; }
       const t = e.target.tagName;
       if (t === 'TEXTAREA' || t === 'INPUT' || t === 'SELECT') return;
-      if (/^[0-9]$/.test(e.key)) this.setForm({ q: e.key === '0' ? 10 : +e.key, err: false });
+      if (/^[0-9]$/.test(e.key)) this.setForm({ q: e.key === '0' ? 10 : +e.key, nvt: false, err: false });
+      if (e.key === 'n' || e.key === 'N') this.setForm({ q: null, nvt: true, err: false });
     };
     window.addEventListener('keydown', this._k);
     this._mq = window.matchMedia(PHONE_MQ);
@@ -376,7 +377,7 @@ export default class App extends React.Component {
       const o = {};
       c.weeks.forEach(w => {
         const e = {};
-        if (w.q != null) e.q = w.q; if (w.rec) e.rec = w.rec; if (w.klant) e.klant = w.klant; if (w.note) e.note = w.note;
+        if (w.q != null) e.q = w.q; if (w.nvt) e.nvt = true; if (w.rec) e.rec = w.rec; if (w.klant) e.klant = w.klant; if (w.note) e.note = w.note;
         if (w.needsAction) e.needsAction = true; if (w.leads !== w.tr.nieuw) e.leads = w.leads; if (w.at) e.at = w.at;
         if (w.recBy) e.recBy = w.recBy; if (w.klantBy) e.klantBy = w.klantBy;
         MON_FIELDS.forEach(k => { if (w[k] !== undefined) e[k] = w[k]; });
@@ -758,7 +759,7 @@ export default class App extends React.Component {
    * linked and keeps its feedback; the server stamps who did it.
    */
   setHalt(c, kind) {
-    const put = o => { const n = { ...o }; if (kind) n.halt = { kind, by: this.author(), w: CUR }; else delete n.halt; return n; };
+    const put = o => { const n = { ...o }; if (kind) n.halt = { kind, by: this.author(), w: CUR, at: Date.now() }; else delete n.halt; return n; };
     if (this.state.source === 'trello') this.setState(s => ({ live: { ...s.live, links: s.live.links.map(k => k.id === c.id ? put(k) : k) } }), () => this.rebuildLive());
     else this.setState(s => ({ campaigns: s.campaigns.map(x => x.id === c.id ? put(x) : x) }));
     this.flash(`${c.client} – ${c.vac} ${kind ? HALT[kind].done : c.halt && c.halt.kind === 'stop' ? 'weer actief' : 'hervat'}`);
@@ -837,7 +838,7 @@ export default class App extends React.Component {
     // A reminder is about the feedback week it was sent in: ○ still open, ✓ filled in, – expired or gone.
     const fbLine = (t, w) => {
       const c = st.campaigns.find(x => `${x.client} – ${x.vac}` === t), wk = c && c.weeks.find(x => x.w === w);
-      return wk && wk.q != null ? { t: '✓ ' + t, fg: '#8C8C8A' } : c && openWeeks(c).includes(w) ? { t: '○ ' + t, fg: '#1D1D1B' } : { t: '– ' + t, fg: '#8C8C8A' };
+      return wk && fbDone(wk) ? { t: '✓ ' + t, fg: '#8C8C8A' } : c && openWeeks(c).includes(w) ? { t: '○ ' + t, fg: '#1D1D1B' } : { t: '– ' + t, fg: '#8C8C8A' };
     };
     const setP = p => () => {
       const upd = { panel: st.panel === p ? null : p, navOpen: false };
@@ -1160,19 +1161,19 @@ export default class App extends React.Component {
   /** The form for week w of campaign id (its last week if w is not given). */
   loadForm(id, w) {
     const c = this.state.campaigns.find(x => x.id === id), wk = c.weeks.find(x => x.w === w) || c.weeks[c.weeks.length - 1];
-    this.setState({ form: { id, w: wk.w, leads: wk.leads, trello: wk.tr.nieuw, q: wk.q, rec: wk.rec, note: wk.note, needsAction: wk.needsAction, err: false } });
+    this.setState({ form: { id, w: wk.w, leads: wk.leads, trello: wk.tr.nieuw, q: wk.q, nvt: !!wk.nvt, rec: wk.rec, note: wk.note, needsAction: wk.needsAction, err: false } });
   }
   setForm(p) { this.setState(s => ({ form: { ...s.form, ...p } })); }
   saveForm() {
     const f = this.state.form;
     if (!f) return;
-    if (f.q == null) { this.setForm({ err: true }); return; }
+    if (f.q == null && !f.nvt) { this.setForm({ err: true }); return; }
     const campaigns = this.state.campaigns.map(c => c.id !== f.id ? c : { ...c, weeks: c.weeks.map(w => w.w !== f.w ? w
-      : { ...w, leads: +f.leads || 0, q: f.q, rec: f.rec.trim(), recBy: this.author(), note: f.note.trim(), needsAction: f.needsAction, at: stamp() }) });
+      : { ...w, leads: +f.leads || 0, q: f.nvt ? null : f.q, nvt: !!f.nvt, rec: f.rec.trim(), recBy: this.author(), note: f.note.trim(), needsAction: f.needsAction, at: stamp() }) });
     // Last week's feedback, caught up: it stays in the list (with ✓) for the rest of this visit.
     const c = campaigns.find(x => x.id === f.id), late = f.w < c.weeks[c.weeks.length - 1].w, key = f.id + '|' + f.w;
     this.setState(s => ({ campaigns, ...(late && !s.ciKeep.includes(key) ? { ciKeep: [...s.ciKeep, key] } : {}) }), () => {
-      this.flash(`Opgeslagen · ${late ? `week ${wl(f.w)} · ` : ''}${c.client} – ${c.vac}`);
+      this.flash(`Opgeslagen${f.nvt ? ' als n.v.t.' : ''} · ${late ? `week ${wl(f.w)} · ` : ''}${c.client} – ${c.vac}`);
       const next = this.queue().find(i => i.open && !(i.c.id === f.id && i.w === f.w) && matchesQ(i.c, this.state.ciQ));
       if (next) this.loadForm(next.c.id, next.w); else this.loadForm(f.id, f.w);
     });
@@ -1247,7 +1248,7 @@ export default class App extends React.Component {
     if (this.state.campaigns.some(c => c.quick)) { this.flash('Trello wordt nog geladen; probeer het zo opnieuw'); return; }
     const period = +this.state.hist.period, first = CUR - period + 1;
     const rows = [['klant', 'vacature', 'recruiter', 'week', 'week_start', 'nieuwe_kandidaten', 'kwaliteit', 'feedback_recruitment', 'feedback_klant', 'actie_notitie', 'bijsturing_nodig', 'monitorstatus_gezet', 'update_recruiter', 'trello_voorgesteld', 'trello_gesprek', 'trello_geplaatst']];
-    this.visible(this.state.campaigns).forEach(c => c.weeks.forEach(w => rows.push([c.client, c.vac, c.rec, wl(w.w), isoDate(mondayOf(w.w)), w.leads, w.q ?? '', w.rec, w.klant, w.note, w.needsAction ? 'ja' : 'nee', MONITOR[w.mon] ? MONITOR[w.mon].label : '', w.upd || '', w.tr.voorgesteld, w.tr.gesprek, w.tr.geplaatst])));
+    this.visible(this.state.campaigns).forEach(c => c.weeks.forEach(w => rows.push([c.client, c.vac, c.rec, wl(w.w), isoDate(mondayOf(w.w)), w.leads, w.q ?? (w.nvt ? 'n.v.t.' : ''), w.rec, w.klant, w.note, w.needsAction ? 'ja' : 'nee', MONITOR[w.mon] ? MONITOR[w.mon].label : '', w.upd || '', w.tr.voorgesteld, w.tr.gesprek, w.tr.geplaatst])));
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = `campagnefeedback-week-${wl(first)}-${wl(CUR)}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -1264,8 +1265,8 @@ export default class App extends React.Component {
     // On Niet actief there is no recruiter, so no feedback is missing; on Pauze or stopped none is asked. Those show
     // their halt instead of the monitor status. A week without new candidates and without calls asks none either (noFb).
     // Open feedback shows as missing only to who sees that (seesMissing); the others get the last feedback given.
-    const H = c.halt && HALT[c.halt.kind], S = H || MONITOR[m.s], ina = !!c.inactive, noQ = cur.q == null;
-    const noFb = noQ && !ina && !H && !needsFeedback(cur), open = noQ && !ina && !H && !noFb, missing = open && this.seesMissing(c, me);
+    const H = c.halt && HALT[c.halt.kind], S = H || MONITOR[m.s], ina = !!c.inactive, noQ = cur.q == null, nvt = noQ && !!cur.nvt;
+    const noFb = noQ && !nvt && !ina && !H && !needsFeedback(cur), open = noQ && !nvt && !ina && !H && !noFb, missing = open && this.seesMissing(c, me);
     const qd = (!noQ && prev && prev.q != null) ? cur.q - prev.q : null;
     const ld = prev ? cur.leads - prev.leads : null;
     const l8 = ws.slice(-8), pts = [];
@@ -1282,11 +1283,11 @@ export default class App extends React.Component {
       ctl, ctlTag: ctlT, ctlDue: !!ctl && ctl.due,
       href: '#campagne=' + encodeURIComponent(c.id),
       reasons: H ? [] : h.reasons.map(r => ({ t: r.t, fg: STAT[r.l].fg, bg: STAT[r.l].bg })),
-      missing, noFb, qText: noQ ? '—' : cur.q + '/10', qFg: qc(cur.q),
-      qdText: noQ ? (ina ? 'geen recruiter' : noFb ? 'geen feedback nodig' : 'nog niet beoordeeld') : qd == null ? 'eerste week' : qd === 0 ? 'gelijk aan vorige week' : `${qd > 0 ? '▲' : '▼'} ${Math.abs(qd)} t.o.v. vorige week`,
+      missing, noFb, qText: nvt ? 'n.v.t.' : noQ ? '—' : cur.q + '/10', qFg: qc(cur.q),
+      qdText: noQ ? (ina ? 'geen recruiter' : nvt ? 'n.v.t. volgens recruiter' : noFb ? 'geen feedback nodig' : 'nog niet beoordeeld') : qd == null ? 'eerste week' : qd === 0 ? 'gelijk aan vorige week' : `${qd > 0 ? '▲' : '▼'} ${Math.abs(qd)} t.o.v. vorige week`,
       qdShort: qd == null || qd === 0 ? '' : `${qd > 0 ? '▲' : '▼'}${Math.abs(qd)}`,
       qdColor: qd == null || qd === 0 ? '#8C8C8A' : qd > 0 ? '#1A7A4A' : '#D32F2F',
-      prevQText: prev && prev.q != null ? prev.q + '/10' : '—',
+      prevQText: prev && prev.q != null ? prev.q + '/10' : prev && prev.nvt ? 'n.v.t.' : '—',
       ldText: ld == null ? '' : ld === 0 ? 'gelijk aan vorige week' : `${sgn(ld)} t.o.v. vorige week`,
       ldShort: ld == null ? '' : sgn(ld), ldColor: ld == null || ld === 0 ? '#8C8C8A' : ld > 0 ? '#1A7A4A' : '#B45309',
       spark: pts.join(' '),
@@ -1417,7 +1418,7 @@ export default class App extends React.Component {
         noNeed: !needsFeedback(fw), noNeedText: `Geen feedback nodig: ${late ? `in week ${wl(fw.w)}` : 'deze week'} zijn er geen nieuwe kandidaten binnengekomen en is er niet gebeld. Invullen mag wel.`,
         leadsLabel: late ? `Nieuwe kandidaten week ${wl(fw.w)}` : 'Nieuwe kandidaten deze week', rejLabel: late ? `Afgewezen week ${wl(fw.w)} · uit Trello` : 'Afgewezen deze week · uit Trello',
         prevLabel: late ? `Week ${wl(fw.w - 1)}` : 'Vorige week',
-        prevLine: prev ? `${prev.leads} kandidaten · kwaliteit ${prev.q ?? '—'}/10${prev.rec ? ` · “${prev.rec}”` : ''}` : 'eerste week van deze campagne',
+        prevLine: prev ? `${prev.leads} kandidaten · kwaliteit ${prev.nvt ? 'n.v.t.' : `${prev.q ?? '—'}/10`}${prev.rec ? ` · “${prev.rec}”` : ''}` : 'eerste week van deze campagne',
         trText: edited ? `Handmatig aangepast · Trello telde ${f.trello}` : `Automatisch uit Trello · ${f.trello} nieuwe kaarten ${range(fw.w)}`,
         trBg: edited ? '#FEF3C7' : '#E7E7F0', trFg: edited ? '#B45309' : '#1B1B63',
         rej, hasRej: rej.length > 0
@@ -1428,7 +1429,7 @@ export default class App extends React.Component {
     const isForm = i => !!f && i.c.id === f.id && i.w === f.w;
     const scoreBtns = Array.from({ length: 10 }, (_, i) => {
       const n = i + 1, on = f && f.q === n;
-      return { n, onClick: () => this.setForm({ q: n, err: false }), bg: on ? qc(n) : '#FFFFFF', fg: on ? '#FFFFFF' : '#1D1D1B', border: on ? qc(n) : '#E4E1DE' };
+      return { n, onClick: () => this.setForm({ q: n, nvt: false, err: false }), bg: on ? qc(n) : '#FFFFFF', fg: on ? '#FFFFFF' : '#1D1D1B', border: on ? qc(n) : '#E4E1DE' };
     });
 
     // detail
@@ -1472,12 +1473,12 @@ export default class App extends React.Component {
       qDots: ws.map((w, i) => w.q == null ? null : { x: ((i + 0.5) / n * 100) + '%', y: (w.q * 10) + '%', q: w.q, fg: qc(w.q) }).filter(Boolean),
       story: ws.slice().reverse().map(w => ({
         w: w.w, wl: wl(w.w), range: range(w.w), leads: w.leads, qBg: qb(w.q), qFg: qc(w.q),
-        qText: w.q != null ? `Kwaliteit ${w.q}/10` : w.w < FB_START ? 'Voor start monitor' : !needsFeedback(w) ? 'Geen feedback nodig' : 'Geen score',
+        qText: w.q != null ? `Kwaliteit ${w.q}/10` : w.nvt ? 'N.v.t. volgens recruiter' : w.w < FB_START ? 'Voor start monitor' : !needsFeedback(w) ? 'Geen feedback nodig' : 'Geen score',
         // Missing feedback can still be given until the end of the week after; older weeks have expired. A week without
         // new candidates and without calls asks none. Only who sees missing feedback (seesMissing) gets these lines.
-        missing: seeMiss && w.q == null && w.w >= FB_START && !selC.inactive && !halt && fbOpenWeek(w.w) && needsFeedback(w),
-        expired: seeMiss && w.q == null && w.w >= FB_START && !selC.inactive && !fbOpenWeek(w.w) && needsFeedback(w),
-        missText: `Recruiter heeft voor deze week nog geen feedback ingevuld.${w.w < CUR ? ` Dat kan nog tot en met ${dueTxt(w.w)}.` : ''}`, hasFb: w.q != null, rec: w.rec || '—',
+        missing: seeMiss && !fbDone(w) && w.w >= FB_START && !selC.inactive && !halt && fbOpenWeek(w.w) && needsFeedback(w),
+        expired: seeMiss && !fbDone(w) && w.w >= FB_START && !selC.inactive && !fbOpenWeek(w.w) && needsFeedback(w),
+        missText: `Recruiter heeft voor deze week nog geen feedback ingevuld.${w.w < CUR ? ` Dat kan nog tot en met ${dueTxt(w.w)}.` : ''}`, hasFb: fbDone(w), rec: w.rec || '—',
         klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A',
         canFill: canFb && fbOpenWeek(w.w) && !off, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !off, addKlant: () => this.startKlant(selC.id),
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
@@ -1535,7 +1536,7 @@ export default class App extends React.Component {
       return {
         client: c.client, vac: c.vac + (c.ended ? ' (afgerond)' : ''),
         dot: c.ended ? '#C0BDB9' : MONITOR[monitor(c, health(c, R)).s].fg,
-        cells: hw.map(w => { const e = c.weeks.find(x => x.w === w); return e ? { t: e.q ?? (w < FB_START ? '–' : '?'), bg: qb(e.q), fg: qc(e.q), act: aw.has(w) } : { t: '', bg: 'transparent', fg: '#8C8C8A', act: false }; }),
+        cells: hw.map(w => { const e = c.weeks.find(x => x.w === w); return e ? { t: e.q ?? (e.nvt ? 'nvt' : w < FB_START ? '–' : '?'), bg: qb(e.q), fg: qc(e.q), act: aw.has(w) } : { t: '', bg: 'transparent', fg: '#8C8C8A', act: false }; }),
         total: inP.reduce((s, w) => s + w.leads, 0), avgN: a ?? 0, avg: a == null ? '—' : nl(a), avgFg: qc(a == null ? null : Math.round(a)),
         placed: inP.reduce((s, w) => s + w.tr.geplaatst, 0), acts: c.actions.filter(x => hw.includes(x.w)).length,
         open: () => this.open(c.id)
@@ -1587,7 +1588,7 @@ export default class App extends React.Component {
     let kc = {};
     if (kC) {
       const cw = kC.weeks[kC.weeks.length - 1], pw = kC.weeks[kC.weeks.length - 2];
-      kc = { client: kC.client, vac: kC.vac, rec: kC.inactive ? 'Niet actief' : kC.rec, leads: cw.leads, qText: cw.q != null ? `kwaliteit ${cw.q}/10` : 'nog geen score',
+      kc = { client: kC.client, vac: kC.vac, rec: kC.inactive ? 'Niet actief' : kC.rec, leads: cw.leads, qText: cw.q != null ? `kwaliteit ${cw.q}/10` : cw.nvt ? 'kwaliteit n.v.t.' : 'nog geen score',
         recText: cw.rec || (kC.inactive ? 'Niet actief: geen recruiterfeedback.' : this.seesMissing(kC, me) ? `${kC.rec} heeft nog geen feedback ingevuld.` : 'Geen recruiterfeedback deze week.'), recColor: cw.rec ? '#1D1D1B' : '#8C8C8A',
         prevKlant: pw && pw.klant ? `“${pw.klant}”` : 'geen' };
     }
@@ -1597,6 +1598,8 @@ export default class App extends React.Component {
       account: { name: acc.name, roleLabel: ROLES[acc.role].label, levelLabel: LEVELS[ROLES[acc.role].level].label },
       viewAs: this.viewAsVals(), navSections, goSettings: () => { this.setState({ settingsTab: 'account' }); this.go('settings'); },
       navOpen: st.navOpen, openNav: () => this.setState({ navOpen: true }), closeNav: () => this.setState({ navOpen: false }),
+      // Desktop: the menu folds away for full-screen work (on the Bord), and the browser remembers it.
+      navMini: st.navMini, toggleNavMini: () => { const m = !st.navMini; lsSet(NAV_MINI_KEY, m); this.setState({ navMini: m }, () => { const b = document.querySelector(m ? '.nav-expand' : '.nav-collapse'); if (b) b.focus(); }); },
       isSettings: st.view === 'settings', settings: this.settingsVals(me),
       isDev: st.view === 'dev' && this.viewOk('dev', me), dev: this.devVals(),
       recNames, sortOptions, sortValue,
@@ -1644,17 +1647,17 @@ export default class App extends React.Component {
       // that need no feedback this week come last, greyed, under their own heading; they can still be filled in.
       queue: shownQ.map((i, k) => {
         const part = x => x.late ? 'late' : x.needed ? 'now' : 'none';
-        const wk = i.c.weeks.find(x => x.w === i.w), filled = wk.q != null, doneQ = !i.open, sel = isForm(i), first = k === 0 || part(shownQ[k - 1]) !== part(i);
+        const wk = i.c.weeks.find(x => x.w === i.w), filled = fbDone(wk), doneQ = !i.open, sel = isForm(i), first = k === 0 || part(shownQ[k - 1]) !== part(i);
         const head = !first ? '' : i.late ? `Nog open van week ${wl(i.w)} · vervalt ${dueTxt(i.w)}` : !i.needed ? 'Geen feedback nodig · geen nieuwe kandidaten, niet gebeld' : shownQ[0].late ? `Week ${wl(CUR)}` : '';
         return { sel, client: i.c.client, vac: i.late ? `${i.c.vac} · week ${wl(i.w)}` : i.c.vac, vacFg: i.late ? '#B45309' : !i.needed ? '#8C8C8A' : '#5C5C5A', head,
-          qText: filled ? wk.q + '/10' : '', qFg: qc(wk.q), bg: sel ? '#FFF8E0' : '#FFFFFF',
+          qText: wk.q != null ? wk.q + '/10' : wk.nvt ? 'n.v.t.' : '', qFg: qc(wk.q), bg: sel ? '#FFF8E0' : '#FFFFFF',
           mark: filled ? '✓' : !i.needed ? '–' : '', markBg: filled ? '#E6F4ED' : !i.needed ? '#F5F2ED' : '#FFFFFF', markFg: filled ? '#1A7A4A' : '#8C8C8A',
           markBorder: doneQ ? '0' : `1.5px solid ${i.late ? '#F9A800' : '#C0BDB9'}`, onClick: () => this.loadForm(i.c.id, i.w) };
       }),
       queueTotal: nowQ.length, queueOpen: qOpen, queueDone: nowQ.length - qOpen, queuePct: ((nowQ.length - qOpen) / Math.max(nowQ.length, 1) * 100) + '%',
       queueComplete: queue.length > 0 && qOpen === 0 && lateOpen === 0, queueDoneTitle: nowQ.length ? `Alles ingevuld voor week ${wl(CUR)}` : `Geen feedback nodig voor week ${wl(CUR)}`,
       hasLate: lateOpen > 0, lateText: `+ ${lateOpen} van week ${wl(CUR - 1)} · vervalt ${dueTxt(CUR - 1)}`,
-      hasForm: !!fcC, form: f || {}, fc, scoreBtns,
+      hasForm: !!fcC, form: f || {}, fc, scoreBtns, nvtOn: !!(f && f.nvt), setNvt: () => this.setForm({ q: null, nvt: true, err: false }),
       saveLabel: shownQ.some(i => i.open && !isForm(i)) ? 'Opslaan & volgende' : 'Feedback opslaan',
       setLeads: e => this.setForm({ leads: tv(e).replace(/\D/g, '') }), decLeads: () => this.setForm({ leads: Math.max(0, (+f.leads || 0) - 1) }), incLeads: () => this.setForm({ leads: (+f.leads || 0) + 1 }),
       setRecText: e => this.setForm({ rec: tv(e) }), setKlantText: e => this.setForm({ klant: tv(e) }), setNote: e => this.setForm({ note: tv(e) }),
@@ -1763,7 +1766,7 @@ export default class App extends React.Component {
       // noFb: nothing open and this week needs no feedback (no new candidates, not called).
       const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c), cw = c.weeks[c.weeks.length - 1], open = openWeeks(c).length > 0;
       return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open, ats: !!c.ats,
-        noFb: !c.halt && !open && cw.q == null && !needsFeedback(cw),
+        noFb: !c.halt && !open && !fbDone(cw) && !needsFeedback(cw),
         rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? haltLabel(c.halt) : '', added: added[c.client] || trelloCreated(c.boardId) };
     }), sort);
     const mx = Math.max(...groups.map(g => g.total), 1), exp = this.state.liveExp;
@@ -1890,11 +1893,11 @@ export default class App extends React.Component {
     if (this._scrT) this.saveScr(this.state.bord.sel);
     this.setBord({ sel: id, mode: null, text: '', at: '', gateTo: '', gc: null, scr: {}, ans: {}, ...p });
   }
-  /** Moving candidate y out of a call stage to a stage that hands them to the client first asks the contact details and screening (the gate). */
-  openGate(y, to) {
+  /** Moving candidate y out of a call stage to a stage that hands them to the client first asks the contact details and screening (the gate); low: shown under the screening. */
+  openGate(y, to, low = false) {
     const other = this.state.bord.sel !== y.id;
     if (other && this._scrT) this.saveScr(this.state.bord.sel);
-    this.setBord({ sel: y.id, ...(other ? { scr: {} } : {}), mode: 'gate', gateTo: to, gc: { name: y.name || '', phone: y.phone || '', email: y.email || '' } });
+    this.setBord({ sel: y.id, ...(other ? { scr: {} } : {}), mode: low ? 'gateLow' : 'gate', gateTo: to, gc: { name: y.name || '', phone: y.phone || '', email: y.email || '' } });
   }
   /** An action on candidate id, by default the one in the panel (see candidates.act); done: what the toast says afterwards. */
   async bordAct(body, done = '', id = this.state.bord.sel) {
@@ -1943,10 +1946,15 @@ export default class App extends React.Component {
     };
     // Call order: who waits longest first, who was called today last.
     const order = (a, b) => ((calledToday(a, now) ? 1 : 0) - (calledToday(b, now) ? 1 : 0)) || a.at - b.at;
+    // Zoeken: by name or e-mail, or by phone number from 3 digits on (spaces and dashes don't matter).
+    const q = B.q.trim().toLowerCase(), qd = q.replace(/\D/g, '');
+    const hit = x => !q || (x.name || '').toLowerCase().includes(q) || (x.email || '').toLowerCase().includes(q) || (qd.length >= 3 && (x.phone || '').replace(/\D/g, '').includes(qd));
+    const found = cands.filter(hit);
     const cols = STAGES.filter(([k]) => (k !== 'afgewezen' || B.showRej) && !(ro && CALL_STAGES.includes(k))).map(([key, label]) => {
-      const xs = cands.filter(x => x.stage === key).sort(key === 'afgewezen' ? (a, b) => b.lastAt - a.lastAt : order);
+      const xs = found.filter(x => x.stage === key).sort(key === 'afgewezen' ? (a, b) => b.lastAt - a.lastAt : order);
       return { key, label, n: xs.length, cards: xs.map(card) };
     });
+    const rejN = found.filter(y => y.stage === 'afgewezen').length, foundN = cols.reduce((s, col) => s + col.n, 0) + (B.showRej ? 0 : rejN);
     const status = (st.live.status || {})[c.boardId], sNow = statusToday(status, now), active = cands.filter(x => x.stage !== 'afgewezen' && x.stage !== 'aangenomen').length;
     const x = cands.find(y => y.id === B.sel), act = (body, done) => this.bordAct(body, done);
     const gates = (y, to) => CALL_STAGES.includes(y.stage) && STAGE_RANK[to] >= 1;
@@ -1964,7 +1972,7 @@ export default class App extends React.Component {
       canReject: x.stage !== 'afgewezen', canNb: (x.att || 0) >= MAX_ATTEMPTS && x.stage !== 'nb', nbText: 'Naar Niet bereikbaar', toNb: () => act({ kind: 'move', to: 'nb' }, `${x.name} staat nu in Niet bereikbaar`),
       geenGehoor: () => act({ kind: 'geenGehoor' }, 'Geen gehoor gelogd · tot middernacht van de belllijst'),
       startTba: () => this.setBord({ mode: 'tba', text: '' }), submitTba: e => { e.preventDefault(); act({ kind: 'tba', text: B.text }, 'TBA afspraak gelogd'); },
-      bereikt: () => this.openGate(x, 'gescreend'),
+      toGescreend: () => this.openGate(x, 'gescreend', true),
       startReject: () => this.setBord({ mode: 'reject' }),
       reasons: REASONS.map(r => ({ text: r, pick: () => act({ kind: 'reject', reason: r }, `${x.name} afgewezen: ${r}`) })),
       startNote: () => this.setBord({ mode: 'note', text: '' }), submitNote: e => { e.preventDefault(); act({ kind: 'note', text: B.text }, 'Notitie opgeslagen'); },
@@ -1972,7 +1980,7 @@ export default class App extends React.Component {
       moveOpts: STAGES.filter(([k]) => k !== x.stage && k !== 'afgewezen').map(([v, l]) => ({ v, l })),
       move: e => { const to = e.target.value; if (!to) return; if (to === 'gesprek') this.setBord({ mode: 'gesprek', at: '' }); else if (gates(x, to)) this.openGate(x, to); else act({ kind: 'move', to }, `${x.name} staat nu in ${stageName(to)}`); },
       submitGesprek: e => { e.preventDefault(); if (!B.at) return; if (gates(x, 'gesprek')) this.openGate(x, 'gesprek'); else act({ kind: 'move', to: 'gesprek', at: new Date(B.at).toISOString() }, `${x.name} staat nu in Gesprek`); },
-      gate: B.mode !== 'gate' ? null : { name: gc.name, phone: gc.phone, email: gc.email, setName: setGc('name'), setPhone: setGc('phone'), setEmail: setGc('email'),
+      gate: B.mode !== 'gate' && B.mode !== 'gateLow' ? null : { low: B.mode === 'gateLow', name: gc.name, phone: gc.phone, email: gc.email, setName: setGc('name'), setPhone: setGc('phone'), setEmail: setGc('email'),
         to: stageName(B.gateTo), ok: !gateMissing.length, missing: gateMissing,
         submit: e => { e.preventDefault(); if (gateMissing.length) return; clearTimeout(this._scrT); this._scrT = null; // the move carries the screening itself
           act({ kind: 'move', to: B.gateTo, ...(B.gateTo === 'gesprek' ? { at: new Date(B.at).toISOString() } : {}), contact: gc, screening: cleanScreening(draft) }, `${x.name} ligt nu bij de klant`); } },
@@ -1997,11 +2005,13 @@ export default class App extends React.Component {
       subline: `RM ${this.mktOf(c) || '—'} · ${active} ${active === 1 ? 'kandidaat' : 'kandidaten'} in behandeling`,
       clientOpts: clients.map(y => ({ v: y.boardId, l: y.client })), clientValue: c.boardId,
       setClient: e => { const f = list.find(y => y.boardId === e.target.value); if (f) this.openBord(f.id); },
+      search: { q: B.q, set: e => this.setBord({ q: e.target.value }), clear: () => this.setBord({ q: '' }),
+        text: !q ? '' : foundN ? `${foundN} ${foundN === 1 ? 'kandidaat' : 'kandidaten'} gevonden voor “${B.q.trim()}”` : `Geen kandidaat gevonden voor “${B.q.trim()}” op dit bord` },
       tabs: fns.map(f => { const n = callList(f); return { id: f.id, label: f.vac, n: n.nieuw + n.contact, on: f.id === c.id, onClick: () => this.openBord(f.id) }; }),
       status: { client: c.client, st: sNow, stBy: sNow ? status.by : '', stAt: sNow ? hhmm(status.at) : '',
         setSt: () => { const n = nextStatus(sNow); this.setLiveStatus(c.boardId, n); if (n === 'done') this.celebrate(c.client); } },
       celebrate: st.celebrate,
-      cols, rejected: { n: cands.filter(y => y.stage === 'afgewezen').length, open: B.showRej, toggle: () => this.setBord({ showRej: !B.showRej }) },
+      cols, rejected: { n: rejN, open: B.showRej, toggle: () => this.setBord({ showRej: !B.showRej }) },
       // Dragging a card: dropped on a column it moves there; Gesprek and Afgewezen first ask the moment or the reason, in the panel.
       dragFrom: (cands.find(y => y.id === B.drag) || {}).stage || null, over: B.over, setOver: k => this.setBord({ over: k }),
       drop: to => {
@@ -2024,9 +2034,12 @@ export default class App extends React.Component {
     const v = this.renderVals();
     return (
       <>
-        <div className={v.navOpen ? 'app-shell nav-open' : 'app-shell'} inert={v.hasConfirm ? '' : undefined}>
+        <div className={`app-shell${v.navOpen ? ' nav-open' : ''}${v.navMini ? ' nav-mini' : ''}`} inert={v.hasConfirm ? '' : undefined}>
           <MobileBar v={v} />
           <Sidebar v={v} />
+          <button type="button" className="nav-expand" onClick={v.toggleNavMini} aria-label="Menu tonen" aria-controls="app-nav" aria-expanded="false" title="Menu tonen">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 6l6 6-6 6M13 6l6 6-6 6" /></svg>
+          </button>
           <div className="nav-backdrop" onClick={v.closeNav} aria-hidden="true" />
           <main className="app-main" inert={v.navOpen ? '' : undefined}>
             {/* The board's columns use all the width there is. */}
@@ -2058,7 +2071,7 @@ export default class App extends React.Component {
         {v.hasPanel ? <SidePanel v={v} /> : null}
         {v.hasConfirm ? <ConfirmDialog {...v.confirm} /> : null}
         {v.hasCtlDlg ? <CtlDialog {...v.ctlDlg} /> : null}
-        {v.hasToast ? <div role="status" className="toast" style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', background: '#1B1B63', color: '#FFFFFF', padding: '12px 18px', borderRadius: '10px', fontSize: '14px', boxShadow: '0 8px 32px rgba(29,29,27,.15)', zIndex: 10 }}>{v.toast}</div> : null}
+        {v.hasToast ? <div role="status" className="toast" style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', background: '#1B1B63', color: '#FFFFFF', padding: '12px 18px', borderRadius: '10px', fontSize: '14px', boxShadow: '0 8px 32px rgba(29,29,27,.15)', zIndex: 25 }}>{v.toast}</div> : null}
       </>
     );
   }

@@ -11,10 +11,13 @@ const byOpen = (a, b) => (a.open ? 0 : 1) - (b.open ? 0 : 1);
  */
 export const needsFeedback = wk => (wk.tr.nieuw || 0) > 0 || (wk.tr.gebeld || 0) > 0;
 
+/** Whether the recruiter handled week wk: a quality score, or n.v.t. (nothing to judge, no score). */
+export const fbDone = wk => wk.q != null || !!wk.nvt;
+
 /** The weeks of campaign c that still wait for recruiter feedback: last week's (catching up) first. */
 export function openWeeks(c, cur = CUR) {
   if (c.ended || c.inactive || c.halt) return [];
-  return c.weeks.filter(w => w.q == null && w.w >= FB_START && fbOpenWeek(w.w, cur) && needsFeedback(w)).map(w => w.w).sort((a, b) => a - b);
+  return c.weeks.filter(w => !fbDone(w) && w.w >= FB_START && fbOpenWeek(w.w, cur) && needsFeedback(w)).map(w => w.w).sort((a, b) => a - b);
 }
 
 /**
@@ -45,8 +48,8 @@ export function checkinQueue(campaigns, rec, { cur = CUR, keep = [] } = {}) {
   const cs = campaigns.filter(c => !c.ended && !c.inactive && !c.halt && (rec === 'all' || c.rec === rec));
   const late = cs.flatMap(c => {
     const wk = c.weeks.find(x => x.w === cur - 1);
-    return wk && wk.w >= FB_START && needsFeedback(wk) && (wk.q == null || keep.includes(c.id + '|' + wk.w)) ? [{ c, w: wk.w, late: true, open: wk.q == null, needed: true }] : [];
+    return wk && wk.w >= FB_START && needsFeedback(wk) && (!fbDone(wk) || keep.includes(c.id + '|' + wk.w)) ? [{ c, w: wk.w, late: true, open: !fbDone(wk), needed: true }] : [];
   });
-  const now = cs.map(c => { const wk = c.weeks[c.weeks.length - 1], needed = needsFeedback(wk); return { c, w: wk.w, late: false, open: needed && wk.q == null, needed }; });
+  const now = cs.map(c => { const wk = c.weeks[c.weeks.length - 1], needed = needsFeedback(wk); return { c, w: wk.w, late: false, open: needed && !fbDone(wk), needed }; });
   return [...late.sort(byOpen), ...now.filter(i => i.needed).sort(byOpen), ...now.filter(i => !i.needed)];
 }

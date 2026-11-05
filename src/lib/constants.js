@@ -18,7 +18,7 @@ export const MONITOR = {
 export const MONITOR_KEYS = ['actie', 'goed', 'klant', 'check'];
 // A campaign put on Pauze for a while, or stopped (halt: { kind, by, w } on the campaign or Trello link). It keeps its
 // feedback. Paused: only under Campagnes › Pauze for the marketeer; stopped: only in Toewijzing, to activate it again.
-// The recruiter keeps either one until all its candidates are called (clientGroups.js recruiterSees).
+// The recruiter keeps either one until Nieuw and Contactpoging are empty, until midnight (clientGroups.js recruiterSees).
 export const HALT = {
   pauze: { label: 'Pauze', done: 'gepauzeerd', fg: '#5C5C5A', bg: '#EEEAE5' },
   stop: { label: 'Gestopt', done: 'gestopt', fg: '#5C5C5A', bg: '#EEEAE5' }
@@ -82,6 +82,7 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 41, date: '5 nov', tag: 'Nieuw', title: 'N.v.t. bij de wekelijkse feedback', text: 'Valt er voor een campagne deze week niets te beoordelen, kies dan bij Wekelijkse feedback recruiter onder de scores 1 tot 10 de grote knop N.v.t. (of druk op N) en sla op. De campagne telt dan als ingevuld: hij staat niet meer open, er gaat geen herinnering voor uit en hij telt niet mee in de gemiddelde kwaliteit. Schrijf er gerust bij waarom, in Feedback recruitment. Je kunt het later nog veranderen in een score.' },
   { id: 40, date: '4 nov', tag: 'Verbeterd', title: 'Trello-kaarten mee naar het Bord, en een opgeruimd menu', text: 'Zet de teamlead een functie om naar het ATS, dan komen de lopende kandidaten uit Trello (Nieuw tot en met Voorstel) meteen mee naar het Bord, met hun telefoonnummer en e-mailadres uit de beschrijving. In Trello blijven die kaarten staan, maar ze tellen daar niet meer mee, dus niets telt dubbel. Komen er daarna nog kaarten in Trello binnen, kies dan in Toewijzing bij de functie Kaarten uit Trello halen. Het Bord staat in het menu nu onder Recruiter; Health-regels en Blacklist staan onderaan, onder Dev.' },
   { id: 40, date: '4 nov', tag: 'Verbeterd', title: 'Mijn campagnes is weg', text: 'Recruiters werken vanuit Live campagnes en Wekelijkse feedback recruiter; het scherm Mijn campagnes is uit het menu gehaald. Na het invullen van je feedback ga je door naar Live campagnes.' },
   { id: 39, date: '4 nov', tag: 'Nieuw', title: 'Bord: kandidaten in de app in plaats van Trello', text: 'Zet de teamlead een functie om naar het ATS, dan komen nieuwe kandidaten niet meer in Trello binnen maar op het Bord, onder Recruiter. Klik een kaart aan en je ziet ernaast het nummer, de antwoorden uit het formulier en de historie. Log je belpoging met één klik: Geen gehoor, TBA afspraak, Bereikt of Niet geschikt (met reden). Een kaart verplaatsen kan ook door hem naar een andere kolom te slepen. En zet je een klant op Done, dan krijg je een duim. Geen gehoor verplaatst de kaart niet; na drie keer kies je zelf Naar Niet bereikbaar. Je collega’s zien het meteen. Vanuit Live campagnes kom je er met Bord →.' },

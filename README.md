@@ -764,6 +764,7 @@ Campagnemonitor.html   original Claude Design export (reference only)
 | POST | `/api/kandidaten/trello/:linkId` | The open Trello cards of a switched campaign onto its board (*assign*) |
 | GET | `/api/portaal/functies` | The client portal's functions (no login; header `x-toppers-sleutel` = the Klantportaal integration; 503 without it, 401 with a wrong key, 120 requests a minute) |
 | GET | `/api/portaal/kandidaten?links=` | The handed-over candidates of those links, allowed fields only (same key) |
+| GET | `/api/portaal/cijfers?links=` | Per link only counts: `{ sollicitanten, gescreend }`, from the ATS (same key) |
 | POST | `/api/portaal/kandidaten/:id/actie` | `{ kind: geenGehoor \| gesprek \| aangenomen \| afwijzen \| opmerking \| vraag, … }` (same key) |
 | GET | `/api/trello/…` | Read-only Trello proxy (`members/me`, `members/me/boards`, `boards/:id`) |
 | GET | `/api/trello/snapshot` | The [Trello snapshot](#trello-snapshot): `{ boards: { [boardId]: { at, stats } } }` |

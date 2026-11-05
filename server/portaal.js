@@ -3,7 +3,7 @@
 import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { CandidateError } from './candidates.js';
-import { visibleToClient, waitingSince, stageName } from '../src/lib/ats.js';
+import { visibleToClient, waitingSince, stageName, atsStats } from '../src/lib/ats.js';
 import { can } from '../src/lib/permissions.js';
 import { stamp } from '../src/lib/weeks.js';
 
@@ -71,6 +71,19 @@ export function portaalRouter({ candidates, secrets, store, accounts, audit, ats
     const kandidaten = ids.flatMap(id => candidates.ofLink(id)).filter(visibleToClient)
       .sort((a, b) => b.doorgezetOp - a.doorgezetOp).map(forClient);
     res.json({ kandidaten });
+  });
+
+  // Only counts, no people: all applicants of a function and how many reached Gescreend, also those past their term
+  // (anon). Trello cards closed before the switch to the ATS are not in here.
+  r.get('/cijfers', (req, res) => {
+    const ids = String(req.query.links || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length > MAX_LINKS) return res.status(400).json({ fout: 'Maximaal 50 functies per verzoek.' });
+    const want = new Set(ids), stats = atsStats(candidates.all().filter(c => want.has(c.link)), candidates.anon().filter(a => want.has(a.link)));
+    const cijfers = Object.fromEntries(ids.map(id => {
+      const weeks = Object.values((stats[id] || {}).weeks || {});
+      return [id, { sollicitanten: weeks.reduce((n, w) => n + w.nieuw, 0), gescreend: weeks.reduce((n, w) => n + w.gescreend, 0) }];
+    }));
+    res.json({ cijfers });
   });
 
   r.post('/kandidaten/:id/actie', express.json({ limit: '20kb' }), (req, res) => {

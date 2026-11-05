@@ -27,7 +27,8 @@ export const calledToday = (c, now = Date.now()) => Math.max(c.gg || 0, (c.tba &
 
 /**
  * Per switched campaign (link id) the numbers boardStats gives per Trello function: minW, weeks (new candidates by
- * the week they came in, how far they got, rejection reasons, gebeld: called that week) and live, today's call list.
+ * the week they came in, how far they got, rejection reasons, gebeld: called that week) and live, today's call list;
+ * uit (only when there is one): when a candidate last left Nieuw/Contactpoging.
  * cands: the candidates still kept; anon: what is left of the ones past their term (no live numbers).
  */
 export function atsStats(cands, anon = [], now = Date.now()) {
@@ -50,6 +51,7 @@ export function atsStats(cands, anon = [], now = Date.now()) {
   for (const c of cands) {
     const s = count(c.link, weekOf(c.at), c.reached || 0, c.stage === 'afgewezen' ? c.reason : null, c.calls);
     if (c.stage === 'nieuw' || c.stage === 'contact') s.live[calledToday(c, now) ? 'gebeld' : c.stage]++;
+    if (c.uitAt > (s.uit || 0)) s.uit = c.uitAt;
   }
   return out;
 }

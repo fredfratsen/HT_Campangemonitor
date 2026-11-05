@@ -145,7 +145,7 @@ export function liveCampaign(k, s, f, acts, quick = false) {
   for (let w = start; w <= CUR; w++) {
     const tr = { ...emptyTr(), ...(s && s.weeks[w]) }, e = f[w] || {}, mon = {};
     MON_FIELDS.forEach(x => { if (e[x] !== undefined) mon[x] = e[x]; });
-    weeks.push({ w, leads: e.leads ?? tr.nieuw, q: e.q ?? null, rec: e.rec || '', klant: e.klant || '', note: e.note || '', needsAction: !!e.needsAction, at: e.at || '', recBy: e.recBy, klantBy: e.klantBy, ...mon, tr });
+    weeks.push({ w, leads: e.leads ?? tr.nieuw, q: e.q ?? null, nvt: !!e.nvt, rec: e.rec || '', klant: e.klant || '', note: e.note || '', needsAction: !!e.needsAction, at: e.at || '', recBy: e.recBy, klantBy: e.klantBy, ...mon, tr });
   }
   return { id: k.id, boardId: k.boardId, client: k.boardName, vac: k.vac, rec: k.rec, start, ended: false, weeks, actions: acts, trello: true,
     live: s ? { gebeld: 0, ...s.live } : { nieuw: 0, contact: 0, gebeld: 0 }, ...(quick ? { quick: true } : {}), ...(k.halt ? { halt: k.halt } : {}) };
@@ -156,7 +156,7 @@ export function liveCampaign(k, s, f, acts, quick = false) {
  * then from the snapshot (quick[boardId].stats). A board in neither shows no campaign yet. A board on Niet actief
  * keeps its campaigns for the Recruitment Marketeer, without a recruiter (inactive).
  * ats: the campaigns switched to the app's own candidates ({ linkId: { stats } }, see lib/ats.js): their numbers are
- * added to what Trello still has of them, and they show without their board too. They get ats: true.
+ * added to what Trello still has of them, and they show without their board too. They get ats: true, and uit (see atsStats).
  */
 export function liveCampaigns(L, full, quick, ats = {}) {
   const ina = L.inactive || {};
@@ -164,7 +164,7 @@ export function liveCampaigns(L, full, quick, ats = {}) {
     const key = linkKey(k), f = L.fb[k.id] || {}, acts = L.actions[k.id] || [], sw = ats[k.id], a = sw ? sw.stats || undefined : undefined;
     const t = full[k.boardId] ? full[k.boardId][key] : quick[k.boardId] ? quick[k.boardId].stats[key] : undefined;
     let c = full[k.boardId] || quick[k.boardId] || sw ? liveCampaign(k, addStats(t, a), f, acts, !full[k.boardId] && !!quick[k.boardId]) : null;
-    if (c && sw) c = { ...c, ats: true };
+    if (c && sw) c = { ...c, ats: true, ...(a && a.uit ? { uit: a.uit } : {}) };
     return c && ina[k.boardId] ? { ...c, rec: '', inactive: true } : c;
   }).filter(Boolean);
 }

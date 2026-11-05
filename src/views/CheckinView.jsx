@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import useCenterCurrent from '../lib/useCenterCurrent.js';
 
 export default function CheckinView({ v }) {
-  const { ciNone, ciQ, decLeads, fc, form, goLive, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, queue, queueComplete, queueDone, queueDoneTitle, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setCiQ, setLeads, setNote, setRecText, toggleNeeds, wk } = v;
+  const { ciNone, ciQ, decLeads, fc, form, goLive, hasForm, hasLate, incLeads, lateText, needsBg, needsKnob, nvtOn, queue, queueComplete, queueDone, queueDoneTitle, queueOpen, queuePct, queueTotal, saveForm, saveLabel, scoreBtns, setCiQ, setLeads, setNote, setNvt, setRecText, toggleNeeds, wk } = v;
   const listRef = useCenterCurrent(form.id + '|' + form.w);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -78,7 +78,11 @@ export default function CheckinView({ v }) {
                     <span>Slecht</span>
                     <span>Uitstekend</span>
                   </div>
-                  {form.err ? <div style={{ fontSize: '13px', color: '#D32F2F' }}>Kies een kwaliteitsscore om op te slaan.</div> : null}
+                  <button onClick={setNvt} aria-pressed={nvtOn} style={{ maxWidth: '560px', height: '52px', borderRadius: '8px', border: `1px solid ${nvtOn ? '#1B1B63' : '#E4E1DE'}`, background: nvtOn ? '#1B1B63' : '#FFFFFF', color: nvtOn ? '#FFFFFF' : '#1D1D1B', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: 'pointer', transition: 'all 120ms' }}>
+                    <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: '600', fontSize: '16px' }}>N.v.t.</span>
+                    <span style={{ fontSize: '13px', color: nvtOn ? '#E7E7F0' : '#8C8C8A' }}>niets te beoordelen</span>
+                  </button>
+                  {form.err ? <div style={{ fontSize: '13px', color: '#D32F2F' }}>Kies een kwaliteitsscore of n.v.t. om op te slaan.</div> : null}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#1B1B63' }} />Feedback recruitment</label>
@@ -93,7 +97,7 @@ export default function CheckinView({ v }) {
                 </div>
               </div>
               <div className="f-foot" style={{ padding: '16px 28px', borderTop: '1px solid #E4E1DE', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', background: '#FDFBF8', borderRadius: '0 0 12px 12px' }}>
-                <span className="kbd-hint" style={{ fontSize: '12px', color: '#8C8C8A' }}>Toets 1–0 voor de score · Ctrl/⌘ + Enter om op te slaan</span>
+                <span className="kbd-hint" style={{ fontSize: '12px', color: '#8C8C8A' }}>Toets 1–0 voor de score, N voor n.v.t. · Ctrl/⌘ + Enter om op te slaan</span>
                 <Button variant="primary" size="lg" onClick={saveForm}>{saveLabel}</Button>
               </div>
             </div> : null}

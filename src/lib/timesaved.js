@@ -23,7 +23,7 @@ export function unitsIn(campaigns, w) {
     const wk = c.weeks.find(x => x.w === w);
     if (!wk) continue;
     u.overview++;
-    if (wk.q != null) u.feedback++;
+    if (wk.q != null || wk.nvt) u.feedback++;
     if (wk.klant) u.klant++;
   }
   return u;

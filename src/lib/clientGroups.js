@@ -13,15 +13,16 @@ export function callList(c) {
     contact: Math.round(rnd(c.id + 'cp') * 3) + Math.round(cur.leads / 4), gebeld: Math.round(rnd(c.id + 'gg') * 2) };
 }
 /**
- * A campaign on Pauze or stopped (halt) stays with the recruiter until all its candidates are called: until nieuw plus
- * contact is 0. Cards called today (gebeld) don't keep it; one that comes back after midnight brings it back. A new one
- * that waits for its ads isn't theirs yet: they see it once it's resumed (and hear of it then, see server/announce.js).
+ * A campaign on Pauze or stopped (halt) stays with the recruiter while it has cards in Nieuw or Contactpoging (called
+ * today or not), and after that until midnight of the day it was paused or the last card left (uit, ATS only), so the
+ * list stays tidy without a board vanishing mid-call. A new one that waits for its ads isn't theirs yet: they see it
+ * once it's resumed (and hear of it then, see server/announce.js). The RM, teamlead and dev see every board anyway.
  */
-export function recruiterSees(c) {
+export function recruiterSees(c, now = Date.now()) {
   if (!c.halt) return true;
   if (waitsForAds(c.halt)) return false;
-  const n = callList(c);
-  return n.nieuw + n.contact > 0;
+  const n = callList(c), today = new Date(now).setHours(0, 0, 0, 0);
+  return n.nieuw + n.contact + n.gebeld > 0 || (c.halt.at || 0) >= today || (c.uit || 0) >= today;
 }
 
 /** The orders a recruiter can pick for Live campagnes, [key, label]; the first is the default. */

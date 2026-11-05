@@ -140,7 +140,8 @@ export function createCandidates(docs) {
   }
 
   const moveTo = (c, to, now) => {
-    if (CALL_STAGES.slice(0, 2).includes(c.stage) && to !== c.stage && to !== 'nieuw' && to !== 'contact') callWeek(c, now);
+    // uitAt: when it left Nieuw/Contactpoging, so a paused board stays with its recruiter until midnight (recruiterSees)
+    if (CALL_STAGES.slice(0, 2).includes(c.stage) && to !== c.stage && to !== 'nieuw' && to !== 'contact') { callWeek(c, now); c.uitAt = now; }
     c.stage = to;
     c.reached = Math.max(c.reached || 0, STAGE_RANK[to] || 0);
     c.endedAt = END_STAGES.includes(to) ? now : null;
@@ -161,7 +162,7 @@ export function createCandidates(docs) {
     log(c, by, ch.length ? ch.map(x => `${x[0]}: ${x[1] || '–'} → ${x[2] || '–'}`).join('; ') : 'Gegevens gecontroleerd', now);
   };
   const needScreening = s => { const m = screeningMissing(s); if (m.length) fail(`Vul eerst de screening in: ${m.join(', ')}.`); };
-  const SNAP = ['stage', 'reached', 'att', 'gg', 'tba', 'gesprek', 'reason', 'endedAt', 'calls'];
+  const SNAP = ['stage', 'reached', 'att', 'gg', 'tba', 'gesprek', 'reason', 'endedAt', 'calls', 'uitAt'];
 
   /**
    * What a recruiter does with candidate id: { kind: 'geenGehoor' | 'tba' (text) | 'move' (to, at: for Gesprek) |

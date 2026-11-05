@@ -126,7 +126,11 @@ test('the numbers: per week how far they got, the reasons, and today\'s call lis
   assert.equal(t.voorgesteld, 1);
   assert.equal(t.gebeld, 3, 'a Geen gehoor, and two moved on from Nieuw past Contactpoging');
   assert.equal(s.minW, w);
+  assert.equal(s.uit, now, 'when the last one left Nieuw/Contactpoging');
   assert.deepEqual(atsStats(ats.all(), [], now + DAY)['t-b1-kok'].live, { nieuw: 1, contact: 2, gebeld: 0 }, 'back on the list after midnight');
+  ats.act(kim, ids[4], { kind: 'undo' }, now + 1);
+  assert.equal(ats.all().find(c => c.id === ids[4]).stage, 'nieuw');
+  assert.equal(ats.all().find(c => c.id === ids[4]).uitAt, undefined, 'undo takes it back');
 });
 
 test('Trello and ATS numbers of one campaign add up', () => {
