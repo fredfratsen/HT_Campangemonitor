@@ -147,6 +147,8 @@ test('trello feedback (live.fb) follows the linked recruiter', () => {
   assert.equal(a('live.fb', 't-3-all', undefined, {}), '', 'empty entry for a new campaign');
   assert.equal(a('live.fb', 't-1-all', {}, { [W]: { q: 6, rec: 'x', recBy: 'Kim' } }), '');
   assert.equal(a('live.fb', 't-1-all', {}, { [W]: { nvt: true, recBy: 'Kim' } }), '', 'n.v.t. is recruiter feedback');
+  assert.equal(a('live.fb', 't-1-all', {}, { [W]: { q: 6, recBy: 'Kim', recAt: Date.now() } }), '', 'when it was first given: part of it');
+  assert.equal(a('live.fb', 't-2-all', {}, { [W]: { recAt: Date.now() } }), NO_RIGHT, 'not on another recruiter\'s campaign');
   assert.equal(a('live.fb', 't-2-all', {}, { 39: { q: 6 } }), NO_RIGHT);
   assert.equal(a('live.fb', 't-2-all', {}, { [W]: { nvt: true } }), NO_RIGHT, 'not on another recruiter\'s campaign');
   assert.equal(a('live.fb', 't-2-all', { 39: { q: 6, leads: 4 } }, { 39: { q: 6 } }), '', 'manual count dropping out is allowed');

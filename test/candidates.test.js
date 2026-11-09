@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCandidates, parseLead, parseDesc } from '../server/candidates.js';
 import { atsStats, addStats, KEEP_MS, openQuestions } from '../src/lib/ats.js';
-import { countWeek } from '../src/lib/weeks.js';
+import { countWeek, mondayOf } from '../src/lib/weeks.js';
 
 const memDocs = () => (name, initial) => ({ data: initial(), save() {}, flush() {} });
 const DAY = 864e5;
@@ -54,14 +54,15 @@ test('a new key replaces the old one, and the campaign stays switched since the 
 });
 
 test('Geen gehoor counts an attempt but never moves the candidate, also not the third time', () => {
-  const { ats, key } = setup(), id = ats.take(key, priya).cand.id;
-  for (let i = 0; i < 4; i++) ats.act(kim, id, { kind: 'geenGehoor' });
+  const m = mondayOf(countWeek(Date.now()) - 1), wed = new Date(m.getFullYear(), m.getMonth(), m.getDate() + 2, 10).getTime(); // not a Friday: by its week
+  const { ats, key } = setup(), id = ats.take(key, priya, wed).cand.id;
+  for (let i = 0; i < 4; i++) ats.act(kim, id, { kind: 'geenGehoor' }, wed + i * 6e4);
   const c = ats.get(id);
   assert.equal(c.stage, 'nieuw');
   assert.equal(c.att, 4);
   assert.equal(c.canUndo, undefined);
   assert.equal(c.undo, null, 'nothing to undo: nothing moved');
-  assert.deepEqual(c.calls, [countWeek(Date.now())]);
+  assert.deepEqual(c.calls, [countWeek(wed)]);
   ats.act(kim, id, { kind: 'move', to: 'nb' });
   assert.equal(ats.get(id).stage, 'nb', 'the recruiter moves them');
 });
@@ -108,6 +109,19 @@ test('four weeks after Afgewezen or Aangenomen, or without any action, only anon
   const s = atsStats(ats.all(), ats.anon(), t)['t-b1-kok'];
   assert.equal(s.weeks[countWeek(t)].nieuw, 3, 'still counted');
   assert.deepEqual(s.weeks[countWeek(t)].reasons, { 'Geen interesse': 1 });
+});
+
+test('on a Friday a call keeps its time, and so does the candidate once anonymous, for after the recruiter\'s round', () => {
+  const { ats, key } = setup(), w = countWeek(Date.now()) - 1, m = mondayOf(w), fri = h => new Date(m.getFullYear(), m.getMonth(), m.getDate() + 4, h).getTime();
+  const id = ats.take(key, priya, fri(9)).cand.id;
+  ats.act(kim, id, { kind: 'geenGehoor' }, fri(14));
+  assert.deepEqual([ats.get(id).calls, ats.get(id).friCalls], [[], [fri(14)]]);
+  const s = atsStats(ats.all(), [], fri(15))['t-b1-kok'];
+  assert.deepEqual([s.weeks[w].nieuw, s.weeks[w].gebeld, s.weeks[w].fri, s.weeks[w].friCalls], [1, 1, [[fri(9), 0, null]], [[fri(14), fri(14)]]]);
+  assert.equal(ats.prune(fri(14) + KEEP_MS + DAY), 1);
+  const a = ats.anon()[0];
+  assert.deepEqual([a.at, a.friCalls], [fri(9), [fri(14)]]);
+  assert.deepEqual(atsStats([], ats.anon())['t-b1-kok'].weeks[w], s.weeks[w], 'the same numbers');
 });
 
 test('the numbers: per week how far they got, the reasons, and today\'s call list without who was called today', () => {

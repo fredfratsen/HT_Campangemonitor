@@ -379,7 +379,7 @@ export default class App extends React.Component {
       c.weeks.forEach(w => {
         const e = {};
         if (w.q != null) e.q = w.q; if (w.nvt) e.nvt = true; if (w.rec) e.rec = w.rec; if (w.klant) e.klant = w.klant; if (w.note) e.note = w.note;
-        if (w.needsAction) e.needsAction = true; if (w.leads !== w.tr.nieuw) e.leads = w.leads; if (w.at) e.at = w.at;
+        if (w.needsAction) e.needsAction = true; if (w.leads !== w.tr.nieuw) e.leads = w.leads; if (w.at) e.at = w.at; if (w.recAt) e.recAt = w.recAt;
         if (w.recBy) e.recBy = w.recBy; if (w.klantBy) e.klantBy = w.klantBy;
         MON_FIELDS.forEach(k => { if (w[k] !== undefined) e[k] = w[k]; });
         if (Object.keys(e).length) o[w.w] = e;
@@ -1171,7 +1171,7 @@ export default class App extends React.Component {
     if (!f) return;
     if (f.q == null && !f.nvt) { this.setForm({ err: true }); return; }
     const campaigns = this.state.campaigns.map(c => c.id !== f.id ? c : { ...c, weeks: c.weeks.map(w => w.w !== f.w ? w
-      : { ...w, leads: +f.leads || 0, q: f.nvt ? null : f.q, nvt: !!f.nvt, rec: f.rec.trim(), recBy: this.author(), note: f.note.trim(), needsAction: f.needsAction, at: stamp() }) });
+      : { ...w, leads: +f.leads || 0, q: f.nvt ? null : f.q, nvt: !!f.nvt, rec: f.rec.trim(), recBy: this.author(), note: f.note.trim(), needsAction: f.needsAction, at: stamp(), recAt: w.recAt || Date.now() }) });
     // Last week's feedback, caught up: it stays in the list (with ✓) for the rest of this visit.
     const c = campaigns.find(x => x.id === f.id), late = f.w < c.weeks[c.weeks.length - 1].w, key = f.id + '|' + f.w;
     this.setState(s => ({ campaigns, ...(late && !s.ciKeep.includes(key) ? { ciKeep: [...s.ciKeep, key] } : {}) }), () => {

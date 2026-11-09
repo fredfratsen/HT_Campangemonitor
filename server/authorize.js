@@ -15,7 +15,7 @@ const isEmpty = v => v == null || (Array.isArray(v) ? !v.length : typeof v === '
 const keysOf = (...objs) => [...new Set(objs.flatMap(o => o && typeof o === 'object' ? Object.keys(o) : []))];
 // Fields of a feedback week that belong to the recruiter's check-in, to the client feedback, and to the
 // marketeer's monitor status and update for the recruiter.
-const REC_FIELDS = new Set(['leads', 'q', 'nvt', 'rec', 'recBy', 'note', 'needsAction', 'at']);
+const REC_FIELDS = new Set(['leads', 'q', 'nvt', 'rec', 'recBy', 'note', 'needsAction', 'at', 'recAt']);
 const KLANT_FIELDS = new Set(['klant', 'klantBy']);
 const MON_FIELDS = new Set(MON_KEYS);
 const emptyWeek = w => w && w.q == null && !w.nvt && !w.rec && !w.klant && !w.note && !w.needsAction && !w.at && !w.mon && !w.upd;

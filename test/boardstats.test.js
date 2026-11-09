@@ -2,9 +2,10 @@
 // show right after login, before the full boards are loaded in the background.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey, cardsOf } from '../src/lib/boardStats.js';
+import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey, cardsOf, afterRound, feedbackRounds } from '../src/lib/boardStats.js';
+import { needsFeedback } from '../src/lib/checkin.js';
 import { intakeName, stageOf } from '../src/lib/constants.js';
-import { CUR, countWeek } from '../src/lib/weeks.js';
+import { CUR, countWeek, mondayOf } from '../src/lib/weeks.js';
 import { board, intakeBoard, dayOf, BOARD_ID, KOK, BEDIENING, SPOED, IN, INTAKE_CARD, CARD } from './trello-fixture.js';
 
 const tr = (nieuw, o = {}) => ({ nieuw, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, gebeld: 0, reasons: {}, ...o });
@@ -33,6 +34,56 @@ test('a candidate from the weekend counts for the week after: a counting week ru
   const s = boardStats(bd)[KOK];
   assert.equal(s.weeks[CUR - 1], undefined, 'last week asks no feedback because of the weekend');
   assert.deepEqual(s.weeks[CUR], tr(3, { gebeld: 1 }));
+});
+
+// Last week's Friday at hour h, and a board where Kok's three cards applied that Friday at the given hours.
+const W = CUR - 1, fri = h => { const t = dayOf(W, 4); t.setHours(h, 0); return t.getTime(); };
+function fridayBoard(hNew, hContact, hArchived) {
+  const bd = board(), sd = bd.customFields.find(f => f.name === 'Sollicitatiedatum').id;
+  for (const [id, h] of [[CARD.kokNew, hNew], [CARD.kokContact, hContact], [CARD.kokArchived, hArchived]])
+    bd.cards.find(c => c.id === id).customFieldItems = [{ id: 'cfi-' + id, idCustomField: sd, value: { date: new Date(fri(h)).toISOString() } }];
+  return { bd, card: id => bd.cards.find(c => c.id === id) };
+}
+
+test('after the recruiter\'s round, the rest of that Friday counts for the week after', () => {
+  const { bd, card } = fridayBoard(8, 14, 15);
+  card(CARD.kokContact).friCalls = [fri(14) + 6e5]; // called right after coming in
+  const s = boardStats(bd)[KOK], at10 = w => w === W ? fri(10) : undefined;
+  assert.deepEqual([s.weeks[W].nieuw, s.weeks[W].gebeld], [3, 1], 'without a round the whole Friday counts for that week');
+  const ws = afterRound(s.weeks, at10);
+  assert.deepEqual([ws[W].nieuw, ws[W].gebeld], [1, 0], 'round at 10:00: only the one from 8:00 stays');
+  assert.deepEqual([ws[CUR].nieuw, ws[CUR].gebeld], [2, 1], 'the afternoon counts for the week after');
+  assert.equal(afterRound(s.weeks, w => w === W ? dayOf(W, 2).getTime() : undefined)[W].nieuw, 0, 'a round before the Friday moves the whole Friday');
+  assert.equal(afterRound(s.weeks, w => w === W ? mondayOf(CUR).getTime() : undefined)[W].nieuw, 3, 'feedback caught up later moves nothing');
+  assert.equal(s.weeks[W].nieuw, 3, 'the numbers it got stay as they were');
+  card(CARD.kokContact).calls = [W];
+  const t = afterRound(boardStats(bd)[KOK].weeks, at10);
+  assert.deepEqual([t[W].gebeld, t[CUR].gebeld], [1, 1], 'also called earlier that week: it stays called then too');
+});
+
+test('a rejected candidate moves with how far they got and the reason', () => {
+  const bd = board(), sd = bd.customFields.find(f => f.name === 'Sollicitatiedatum').id, rej = bd.cards.find(c => c.id === CARD.bedRejected);
+  rej.customFieldItems = rej.customFieldItems.map(i => i.idCustomField === sd ? { ...i, value: { date: new Date(fri(16)).toISOString() } } : i);
+  const ws = afterRound(boardStats(bd)['*'].weeks, w => w === W ? fri(10) : undefined);
+  assert.deepEqual(ws[W].reasons, {}, 'gone from that week');
+  assert.deepEqual(ws[CUR].reasons, { Afstand: 1 });
+  assert.equal(ws[W].nieuw, 1, 'Bediening from Monday stays');
+});
+
+test('a campaign with nothing to give on Friday morning goes by its recruiter\'s round on another campaign', () => {
+  const { bd } = fridayBoard(14, 15, 16);
+  const kok = { id: 'k', boardId: BOARD_ID, boardName: 'Hotel Zee', labelId: KOK, vac: 'Kok', rec: 'Kim' };
+  const bed = { id: 'b', boardId: BOARD_ID, boardName: 'Hotel Zee', labelId: BEDIENING, vac: 'Bediening', rec: 'Kim' };
+  const robin = { ...kok, id: 'r', rec: 'Robin' };
+  const L = { links: [kok, bed, robin], fb: { b: { [W]: { q: 7, recAt: fri(11) } }, k: { [W]: { recAt: fri(12) } } }, actions: {}, inactive: {} };
+  assert.deepEqual(feedbackRounds(L), { Kim: { [W]: fri(11) } }, 'her first feedback that week');
+  for (const [full, quick] of [[{ [BOARD_ID]: boardStats(bd) }, {}], [{}, { [BOARD_ID]: { stats: JSON.parse(JSON.stringify(quickStats(boardStats(bd), CUR - 11))) } }]]) {
+    const [k, , r] = liveCampaigns(L, full, quick), wk = (c, w) => c.weeks.find(x => x.w === w);
+    assert.equal(needsFeedback(wk(k, W)), false, 'Kim did her round at 11:00: the afternoon asks no feedback on that week');
+    assert.equal(wk(k, CUR).tr.nieuw, 3);
+    assert.equal(needsFeedback(wk(r, W)), true, 'Robin did no round: his Friday still counts for that week');
+    assert.equal(wk(k, W).tr.fri, undefined, 'the Friday times stay out of the campaign');
+  }
 });
 
 test('a card with a ‘Geen gehoor’ from today is off today\'s call list until midnight, counted as called', () => {

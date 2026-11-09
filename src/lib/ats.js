@@ -1,7 +1,7 @@
 // The app's own candidate pipeline (ATS), for campaigns switched over from Trello in Toewijzing. Shared by the server
 // (server/candidates.js keeps the candidates) and the app (the board), so both use the same stages and count the same
 // way as Trello (lib/boardStats.js).
-import { countWeek } from './weeks.js';
+import { countWeek, isFriday } from './weeks.js';
 
 /** The columns of the board, in order. Afgewezen is a tile that opens a column of its own. */
 export const STAGES = [
@@ -25,31 +25,49 @@ const midnight = now => new Date(now).setHours(0, 0, 0, 0);
 /** Got ‘Geen gehoor’ or a ‘TBA afspraak’ today: off today's call list until midnight, as in Trello. */
 export const calledToday = (c, now = Date.now()) => Math.max(c.gg || 0, (c.tba && c.tba.at) || 0) >= midnight(now);
 
+export const emptyTr = () => ({ nieuw: 0, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, gebeld: 0, reasons: {} });
+
+/**
+ * Counts one candidate into the weeks of campaign numbers s ({ minW, weeks }), the same for Trello cards and the ATS:
+ * new in week w, how far they got (reached: 0, or gescreend 1 … geplaatst 4), why they were rejected, and gebeld in
+ * the weeks they were called in (calls: week numbers; friCalls: the times of calls on a Friday). What happened on a
+ * Friday also goes on its week by time, so the app can move what came after the recruiter's feedback round to the
+ * week after (afterRound in boardStats.js): fri [[at, reached, reason]], and friCalls [[first, last]] per card called
+ * that Friday (first is 0 when the card was also called earlier that week, so that week keeps it).
+ */
+export function tally(s, w, at, reached, reason, calls = [], friCalls = []) {
+  const week = x => s.weeks[x] || (s.weeks[x] = emptyTr()), t = week(w);
+  if (w < s.minW) s.minW = w;
+  t.nieuw++;
+  if (reached >= 1) t.gescreend++;
+  if (reached >= 2) t.gesprek++;
+  if (reached >= 3) t.voorgesteld++;
+  if (reached >= 4) t.geplaatst++;
+  if (reason) t.reasons[reason] = (t.reasons[reason] || 0) + 1;
+  if (at != null && isFriday(at)) (t.fri || (t.fri = [])).push([at, reached, reason || null]);
+  const called = new Set(calls), fri = {};
+  for (const cw of called) week(cw).gebeld++;
+  for (const ts of friCalls) (fri[countWeek(ts)] = fri[countWeek(ts)] || []).push(ts);
+  for (const [x, ts] of Object.entries(fri)) {
+    const t2 = week(+x), also = called.has(+x);
+    if (!also) t2.gebeld++;
+    (t2.friCalls || (t2.friCalls = [])).push([also ? 0 : Math.min(...ts), Math.max(...ts)]);
+  }
+}
+
 /**
  * Per switched campaign (link id) the numbers boardStats gives per Trello function: minW, weeks (new candidates by
- * the week they came in, how far they got, rejection reasons, gebeld: called that week) and live, today's call list;
- * uit (only when there is one): when a candidate last left Nieuw/Contactpoging.
+ * the week they came in, how far they got, rejection reasons, gebeld: called that week; see tally) and live, today's
+ * call list; uit (only when there is one): when a candidate last left Nieuw/Contactpoging.
  * cands: the candidates still kept; anon: what is left of the ones past their term (no live numbers).
  */
 export function atsStats(cands, anon = [], now = Date.now()) {
   const out = {};
   const of = link => out[link] || (out[link] = { minW: Infinity, weeks: {}, live: { nieuw: 0, contact: 0, gebeld: 0 } });
-  const week = (s, w) => s.weeks[w] || (s.weeks[w] = { nieuw: 0, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, gebeld: 0, reasons: {} });
-  const count = (link, w, reached, reason, calls) => {
-    const s = of(link), t = week(s, w);
-    if (w < s.minW) s.minW = w;
-    t.nieuw++;
-    if (reached >= 1) t.gescreend++;
-    if (reached >= 2) t.gesprek++;
-    if (reached >= 3) t.voorgesteld++;
-    if (reached >= 4) t.geplaatst++;
-    if (reason) t.reasons[reason] = (t.reasons[reason] || 0) + 1;
-    for (const cw of new Set(calls || [])) week(s, cw).gebeld++;
-    return s;
-  };
-  for (const a of anon) count(a.link, a.w, a.reached || 0, a.reason, a.calls);
+  const count = (link, w, at, reached, reason, calls, friCalls) => { const s = of(link); tally(s, w, at, reached, reason, calls, friCalls); return s; };
+  for (const a of anon) count(a.link, a.w, a.at, a.reached || 0, a.reason, a.calls, a.friCalls);
   for (const c of cands) {
-    const s = count(c.link, countWeek(c.at), c.reached || 0, c.stage === 'afgewezen' ? c.reason : null, c.calls);
+    const s = count(c.link, countWeek(c.at), c.at, c.reached || 0, c.stage === 'afgewezen' ? c.reason : null, c.calls, c.friCalls);
     if (c.stage === 'nieuw' || c.stage === 'contact') s.live[calledToday(c, now) ? 'gebeld' : c.stage]++;
     if (c.uitAt > (s.uit || 0)) s.uit = c.uitAt;
   }
@@ -69,7 +87,8 @@ export function addStats(t, a) {
     if (!y) { weeks[w] = x; continue; }
     const reasons = { ...(y.reasons || {}) };
     for (const [r, n] of Object.entries(x.reasons || {})) reasons[r] = (reasons[r] || 0) + n;
-    weeks[w] = { ...y, ...Object.fromEntries(['nieuw', 'gescreend', 'gesprek', 'voorgesteld', 'geplaatst', 'gebeld'].map(k => [k, (y[k] || 0) + (x[k] || 0)])), reasons };
+    const both = k => y[k] || x[k] ? { [k]: [...(y[k] || []), ...(x[k] || [])] } : {};
+    weeks[w] = { ...y, ...Object.fromEntries(['nieuw', 'gescreend', 'gesprek', 'voorgesteld', 'geplaatst', 'gebeld'].map(k => [k, (y[k] || 0) + (x[k] || 0)])), reasons, ...both('fri'), ...both('friCalls') };
   }
   const live = Object.fromEntries(['nieuw', 'contact', 'gebeld'].map(k => [k, ((t.live || {})[k] || 0) + (a.live[k] || 0)]));
   return { minW: Math.min(t.minW, a.minW), weeks, live };

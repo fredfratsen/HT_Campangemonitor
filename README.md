@@ -42,7 +42,10 @@ Everyone logs in with a personal account. What you see and can do depends on you
   feedback is asked even without new candidates. The current week can still change: once a candidate comes in or
   someone calls, the feedback is asked (`needsFeedback` in `src/lib/checkin.js`). New candidates and calls count
   Saturday to Friday: the round is on Friday, so the weekend counts for the week after and can't reopen a round that
-  is done (`countWeek` in `src/lib/weeks.js`).
+  is done (`countWeek` in `src/lib/weeks.js`). The same goes for the rest of the Friday once the recruiter did their
+  round: from the first feedback they gave on that week (on any of their campaigns, `recAt`), what comes in or is
+  called that Friday counts for the week after (`afterRound` in `src/lib/boardStats.js`). A round before the Friday
+  moves the whole Friday; a recruiter who gave no feedback that week keeps the Friday in it.
 - **Mijn campagnes**: your own campaigns with this week's candidates, quality, feedback and signals (no status,
   recruiter or average-quality columns). Sorted by most new candidates; you can also sort by fewest or by client.
 
@@ -119,7 +122,7 @@ all; Blacklist, under Dev with Health-regels: right *Blacklist raadplegen*; recr
   the whole screen green, with `public/the-office.gif` and confetti (`Celebrate` in `BoardView.jsx`). Everyone who has the board open
   sees a change at once (the server counts `meta.ats` up). Live campagnes links to it (*Bord →*); the address bar
   follows it (`#bord=<campaign>`). Personal data is kept **4 weeks** after Afgewezen or Aangenomen, or after the last
-  action in an open stage; then only anonymous counts are left (campaign, week, how far they got, reason, call weeks).
+  action in an open stage; then only anonymous counts are left (campaign, week, how far they got, reason, call weeks; on a Friday the time).
 - **Screening and the client portal.** The panel has the **screening form** (the recruiters' emoji format), saved
   automatically, with *Kopieer als tekst*. Moving a card from Nieuw, Contactpoging or Niet bereikbaar to Gescreend or
   further first opens the step *Doorzetten naar klant* (check name, phone and email, and the required screening
@@ -334,7 +337,8 @@ variable afterwards.
   [Geen gehoor and TBA afspraak](#geen-gehoor): their text is dropped right away, only the card id and the time are
   kept, until midnight. The privacy notice says so.
   The server only stores counts (the [Trello snapshot](#trello-snapshot)) and, per card, the id of its intake list,
-  today's ‘Geen gehoor’ or ‘TBA afspraak’ time and the weeks (this one and last) it was called in (the
+  today's ‘Geen gehoor’ or ‘TBA afspraak’ time and the weeks (this one and last) it was called in, on a Friday the
+  time (the
   [intake memory](#functions-from-intake-lists)), never cards, names, comments or rejection reasons.
 - **The blacklist is the exception**: the only place the app stores candidates' personal data, typed in by the
   team. It is its own document (`DATA_DIR/blacklist.json`), only reachable through `/api/blacklist` with a
@@ -373,7 +377,7 @@ variable afterwards.
   | Trello snapshot (counts per campaign) | Until the next load of that board; boards gone from Trello are removed |
   | Trello intake memory (card id → intake list id) | While the card is on the board; boards gone from Trello are removed |
   | *Geen gehoor* / *TBA afspraak* time per card (in the intake memory) | Only today's: removed at the board's first load after midnight |
-  | Weeks a card was called in (in the intake memory) | Only this week and last: older weeks are removed at the board's next load |
+  | Weeks a card was called in, on a Friday the time (in the intake memory) | Only this week and last: older weeks are removed at the board's next load |
 
 - **Privacy notice** at `/privacy`, linked from the login page. It is a draft: have it checked and fill in the
   contact person in `server/pages.js`.
@@ -628,7 +632,8 @@ either):
 - The same read also gives the weeks a card was called in, for whether a week asks feedback (see
   [Wekelijkse feedback recruiter](#features)): a *Geen gehoor*, or a move from *Nieuw* (or an intake list) or
   *Contactpoging* to a list further on (not to another intake list or to *Informatie*), at the time Trello logged it.
-  Kept per card as `calls: [week]` in the intake memory, only this week and last, and sent with the card;
+  Kept per card as `calls: [week]` in the intake memory, only this week and last, and sent with the card; a call on a
+  Friday as its time in `friCalls: [ms]`, for after the recruiter's round (see [Wekelijkse feedback recruiter](#features)).
   `boardStats` counts them per week as `tr.gebeld`, the snapshot too. When the history can't be read, only new
   candidates count for those weeks.
 - Limits: it can take up to 5 minutes before the number drops. A *Geen gehoor* comment deleted after a mistaken click
@@ -664,7 +669,8 @@ did it, in `DATA_DIR/trello-snapshot.json`:
   bijwerken…* from an earlier day).
 - In the background the app loads the boards as before, and the numbers move to the live state (*Trello bijgewerkt
   09:14*). Until a campaign's board is in, its page shows *Laden uit Trello…* for the pipeline.
-- Only counts per campaign go in: new candidates per week (the 12 weeks a campaign shows) and today's call list
+- Only counts per campaign go in: new candidates per week (the 12 weeks a campaign shows, with the times of those
+  that came in or were called on the Friday) and today's call list
   (open cards in *Nieuw* and *Contactpoging*, and how many of them got *Geen gehoor* or a *TBA afspraak* today). No cards, no
   pipeline, no rejection reasons.
 - The server fills it from every board it loads from Trello (`server/trelloSnapshot.js`), also in its round every

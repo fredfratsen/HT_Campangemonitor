@@ -30,6 +30,9 @@ export const CUR = feedbackWeek();
 // The week new candidates and calls count for: Saturday to Friday. The round is held on Friday, so what comes in over
 // the weekend counts for the week after; it can't make a round that is already done ask feedback after all.
 export const countWeek = ts => Math.floor((dayNum(new Date(ts)) + 2) / 7) + 1;
+// On the Friday itself, what comes after the recruiter's round counts for the week after too (afterRound in
+// boardStats.js), so new candidates and calls on a Friday keep their time.
+export const isFriday = ts => new Date(ts).getDay() === 5;
 // First week recruiters give feedback on: week 42 (12–18 October 2026), the first round held in its own week.
 // Earlier weeks still show their Trello numbers and any feedback given, but never count as missing feedback.
 export const FB_START = weekOf(new Date(2026, 9, 12).getTime());

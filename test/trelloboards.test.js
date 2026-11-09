@@ -222,8 +222,9 @@ test('cards gone from a board are forgotten, and a new Trello key forgets everyt
 // ── ‘Geen gehoor’: called today, off the call list until midnight ────────
 
 const calledOf = bd => Object.fromEntries(bd.cards.filter(c => c.geenGehoor).map(c => [c.id, c.geenGehoor]));
-// The last weekday, so a call "today" falls in the feedback week (on a weekend it counts for the week after, see countWeek).
-const afternoon = () => { const d = new Date(); d.setDate(d.getDate() - ({ 6: 1, 0: 2 }[d.getDay()] || 0)); d.setHours(15, 0, 0, 0); return d.getTime(); };
+// The last Monday to Thursday, so a call "today" counts by its week: on a weekend it counts for the week after (see
+// countWeek), and on a Friday it goes by its time (friCalls, see the Friday test below).
+const afternoon = () => { const d = new Date(); d.setDate(d.getDate() - ({ 5: 1, 6: 2, 0: 3 }[d.getDay()] || 0)); d.setHours(15, 0, 0, 0); return d.getTime(); };
 
 test('a card that got ‘Geen gehoor’ today is off the call list; other comments and older ones don\'t count', async () => {
   clock = afternoon();
@@ -294,6 +295,20 @@ test('a memory from before ‘Geen gehoor’ was read catches up, so this mornin
 // ── ‘TBA afspraak’: picked up, wants a call back later; the same as ‘Geen gehoor’ ──
 
 const callsOf = bd => Object.fromEntries(bd.cards.filter(c => c.calls).map(c => [c.id, c.calls]));
+
+test('a call on a Friday keeps its time, so after the recruiter\'s round it can count for the week after', async () => {
+  const W = feedbackWeek(Date.now()) - 1, m = mondayOf(W);
+  clock = new Date(m.getFullYear(), m.getMonth(), m.getDate() + 4, 15).getTime(); // last week's Friday afternoon
+  const b = fakeBoard('Hotel Zee'); boards = [b];
+  const jan = arrive(b, 'kok', clock - 3 * DAY); comment(b, jan, geenGehoor(clock - HOUR), clock - HOUR);
+  const piet = arrive(b, 'kok', clock - 3 * DAY); move(b, piet, 'contact', clock - 2 * DAY);
+  const a = await serve(tmp()), bd = await a.load(b);
+  assert.deepEqual(callsOf(bd), { [piet]: [W] }, 'Wednesday: by its week');
+  assert.deepEqual(Object.fromEntries(bd.cards.filter(c => c.friCalls).map(c => [c.id, c.friCalls])), { [jan]: [clock - HOUR] }, 'Friday: by its time');
+  const week = (await a.get('/snapshot')).boards[b.id].stats[b.lists.kok.id].weeks[W];
+  assert.deepEqual([week.gebeld, week.friCalls], [2, [[clock - HOUR, clock - HOUR]]], 'the snapshot has it too');
+  await a.stop();
+});
 /** The comment the Trello automation ‘TBA afspraak’ makes; the recruiter's own text follows. */
 const tba = rest => `📲 TBA\nTBA afspraak: ${rest}`;
 

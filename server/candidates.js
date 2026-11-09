@@ -10,12 +10,13 @@
 // - Geen gehoor never moves a candidate, also not the third time: the recruiter moves them (lib/ats.js).
 // - Four weeks after a candidate is done with (Afgewezen, Aangenomen), or four weeks after the last action in an open
 //   stage, the personal data goes (prune). What stays is anonymous: campaign, week, how far they got, the rejection
-//   reason and the weeks they were called in, so the monitor's numbers stay the same (atsStats).
+//   reason and the weeks they were called in (on a Friday: when, and when they applied if that was a Friday), so
+//   the monitor's numbers stay the same (atsStats).
 import { randomToken, sha256 } from './crypto.js';
 import { normEmail, normPhone } from './blacklist.js';
 import { visibleToClient, STAGE_KEYS, STAGE_RANK, CALL_STAGES, END_STAGES, KEEP_MS, stageName, cleanScreening, screeningMissing } from '../src/lib/ats.js';
 import { REASONS } from '../src/lib/constants.js';
-import { countWeek } from '../src/lib/weeks.js';
+import { countWeek, isFriday } from '../src/lib/weeks.js';
 
 export class CandidateError extends Error {}
 const fail = msg => { throw new CandidateError(msg); };
@@ -97,7 +98,11 @@ export function createCandidates(docs) {
 
   const mustGet = id => D.cands[id] || fail('Deze kandidaat bestaat niet (meer).');
   const log = (c, by, what, now, extra) => { c.log.unshift({ at: now, by, what, ...extra }); c.lastAt = now; };
-  const callWeek = (c, now) => { const w = countWeek(now); if (!c.calls.includes(w)) c.calls.push(w); };
+  // A call on a Friday keeps its time: after the recruiter's round it counts for the week after (afterRound in boardStats.js).
+  const callWeek = (c, now) => {
+    if (isFriday(now)) { c.friCalls = [...(c.friCalls || []), now]; return; }
+    const w = countWeek(now); if (!c.calls.includes(w)) c.calls.push(w);
+  };
 
   /** A lead for the campaign of key raw. Returns { cand, dup }, or null for an unknown key. */
   function take(raw, body, now = Date.now()) {
@@ -130,7 +135,7 @@ export function createCandidates(docs) {
       const name = line(x.name, 80) || 'Naam onbekend', { phone, email, answers } = parseDesc(x.desc);
       const at = isNaN(x.at) ? now : x.at, gg = Date.parse(x.card.geenGehoor) || 0, id = 'k' + now.toString(36) + randomToken(4).replace(/[-_]/g, 'x');
       D.cands[id] = { id, link, name, phone, email, src: 'Trello', answers, at, stage, reached: STAGE_RANK[stage] || 0, att: 0, gg, tba: null, gesprek: null,
-        reason: null, endedAt: null, lastAt: now, calls: [...(x.card.calls || [])], undo: null,
+        reason: null, endedAt: null, lastAt: now, calls: [...(x.card.calls || [])], ...(x.card.friCalls ? { friCalls: [...x.card.friCalls] } : {}), undo: null,
         log: [{ at: now, by: actor.name, what: `Overgehaald uit Trello (${line(x.list, 60)})` }, { at, by: 'automatisch', what: 'Gesolliciteerd (Trello)' }] };
       n++;
     }
@@ -162,7 +167,7 @@ export function createCandidates(docs) {
     log(c, by, ch.length ? ch.map(x => `${x[0]}: ${x[1] || '–'} → ${x[2] || '–'}`).join('; ') : 'Gegevens gecontroleerd', now);
   };
   const needScreening = s => { const m = screeningMissing(s); if (m.length) fail(`Vul eerst de screening in: ${m.join(', ')}.`); };
-  const SNAP = ['stage', 'reached', 'att', 'gg', 'tba', 'gesprek', 'reason', 'endedAt', 'calls', 'uitAt'];
+  const SNAP = ['stage', 'reached', 'att', 'gg', 'tba', 'gesprek', 'reason', 'endedAt', 'calls', 'friCalls', 'uitAt'];
 
   /**
    * What a recruiter does with candidate id: { kind: 'geenGehoor' | 'tba' (text) | 'move' (to, at: for Gesprek) |
@@ -311,7 +316,8 @@ export function createCandidates(docs) {
   function prune(now = Date.now()) {
     const gone = all().filter(c => (c.endedAt ? c.endedAt : c.lastAt) + KEEP_MS < now);
     for (const c of gone) {
-      D.anon.push({ link: c.link, w: countWeek(c.at), reached: c.reached || 0, reason: c.stage === 'afgewezen' ? c.reason : null, calls: c.calls });
+      D.anon.push({ link: c.link, w: countWeek(c.at), reached: c.reached || 0, reason: c.stage === 'afgewezen' ? c.reason : null, calls: c.calls,
+        ...(c.friCalls ? { friCalls: c.friCalls } : {}), ...(isFriday(c.at) ? { at: c.at } : {}) });
       delete D.cands[c.id];
     }
     if (gone.length) f.save();
