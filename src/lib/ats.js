@@ -1,7 +1,7 @@
 // The app's own candidate pipeline (ATS), for campaigns switched over from Trello in Toewijzing. Shared by the server
 // (server/candidates.js keeps the candidates) and the app (the board), so both use the same stages and count the same
 // way as Trello (lib/boardStats.js).
-import { weekOf } from './weeks.js';
+import { countWeek } from './weeks.js';
 
 /** The columns of the board, in order. Afgewezen is a tile that opens a column of its own. */
 export const STAGES = [
@@ -49,7 +49,7 @@ export function atsStats(cands, anon = [], now = Date.now()) {
   };
   for (const a of anon) count(a.link, a.w, a.reached || 0, a.reason, a.calls);
   for (const c of cands) {
-    const s = count(c.link, weekOf(c.at), c.reached || 0, c.stage === 'afgewezen' ? c.reason : null, c.calls);
+    const s = count(c.link, countWeek(c.at), c.reached || 0, c.stage === 'afgewezen' ? c.reason : null, c.calls);
     if (c.stage === 'nieuw' || c.stage === 'contact') s.live[calledToday(c, now) ? 'gebeld' : c.stage]++;
     if (c.uitAt > (s.uit || 0)) s.uit = c.uitAt;
   }

@@ -14,7 +14,7 @@
 // (of its name, or one its campaign was moved to), or while it still has a campaign, until that is moved to an
 // intake list or stopped. A campaign moved to an intake list (Overzetten in Toewijzing: joinList on the link) counts
 // that list under its own key, so it keeps its feedback and the cards of its old label or archived list.
-import { CUR, weekOf } from './weeks.js';
+import { CUR, countWeek } from './weeks.js';
 import { RANK, MON_FIELDS, stageOf, intakeName, cardTs } from './constants.js';
 import { addStats } from './ats.js';
 
@@ -87,7 +87,7 @@ export function boardStats(bd, now = Date.now(), links = []) {
     const stage = stg[c.idList];
     if (stage === 'info') continue;
     const it = c.customFieldItems || [], dv = sd && it.find(i => i.idCustomField === sd.id), rv = rf && it.find(i => i.idCustomField === rf.id);
-    const w = weekOf(dv && dv.value && dv.value.date ? Date.parse(dv.value.date) : cardTs(c.id)), r = RANK[stage] || 0;
+    const w = countWeek(dv && dv.value && dv.value.date ? Date.parse(dv.value.date) : cardTs(c.id)), r = RANK[stage] || 0;
     const reason = rv ? (ropt[rv.idValue] || (rv.value && rv.value.text) || null) : null;
     for (const key of ['*', ...new Set(fnsOf(c))]) {
       const s = out[key] || (out[key] = { minW: w, weeks: {}, live: { nieuw: 0, contact: 0, gebeld: 0 } });

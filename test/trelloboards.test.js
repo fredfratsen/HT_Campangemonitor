@@ -222,7 +222,8 @@ test('cards gone from a board are forgotten, and a new Trello key forgets everyt
 // ── ‘Geen gehoor’: called today, off the call list until midnight ────────
 
 const calledOf = bd => Object.fromEntries(bd.cards.filter(c => c.geenGehoor).map(c => [c.id, c.geenGehoor]));
-const afternoon = () => { const d = new Date(); d.setHours(15, 0, 0, 0); return d.getTime(); };
+// The last weekday, so a call "today" falls in the feedback week (on a weekend it counts for the week after, see countWeek).
+const afternoon = () => { const d = new Date(); d.setDate(d.getDate() - ({ 6: 1, 0: 2 }[d.getDay()] || 0)); d.setHours(15, 0, 0, 0); return d.getTime(); };
 
 test('a card that got ‘Geen gehoor’ today is off the call list; other comments and older ones don\'t count', async () => {
   clock = afternoon();

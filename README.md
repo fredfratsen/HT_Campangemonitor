@@ -40,7 +40,9 @@ Everyone logs in with a personal account. What you see and can do depends on you
   missing (menu badge, Live campagnes, *Feedback recruiters* in the Weekoverzicht, reminders). Called means a card of the
   campaign got [Geen gehoor or a TBA afspraak](#geen-gehoor) that week, or was moved on from *Nieuw* or *Contactpoging*; then
   feedback is asked even without new candidates. The current week can still change: once a candidate comes in or
-  someone calls, the feedback is asked (`needsFeedback` in `src/lib/checkin.js`).
+  someone calls, the feedback is asked (`needsFeedback` in `src/lib/checkin.js`). New candidates and calls count
+  Saturday to Friday: the round is on Friday, so the weekend counts for the week after and can't reopen a round that
+  is done (`countWeek` in `src/lib/weeks.js`).
 - **Mijn campagnes**: your own campaigns with this week's candidates, quality, feedback and signals (no status,
   recruiter or average-quality columns). Sorted by most new candidates; you can also sort by fewest or by client.
 

@@ -15,7 +15,7 @@
 // on. A week without new candidates and without calls asks the recruiter no feedback (src/lib/checkin.js).
 import { intakeName, stageOf } from '../src/lib/constants.js';
 import { LIVE_WEEKS } from '../src/lib/boardStats.js';
-import { feedbackWeek, mondayOf, weekOf } from '../src/lib/weeks.js';
+import { countWeek, feedbackWeek, mondayOf } from '../src/lib/weeks.js';
 
 const OVERLAP = 5 * 60 * 1000;
 // What a history read picks up besides the intake lists: 1 calls and ‘Geen gehoor’, 2 also ‘TBA afspraak’.
@@ -59,7 +59,7 @@ export function createTrelloIntake(docs) {
         for (const m of [...moves].sort((x, y) => Date.parse(x.date) - Date.parse(y.date))) {
           if (m.card && m.geenGehoor) called[m.card] = m.date;
           else if (m.card && intake.has(m.list)) b.cards[m.card] = m.list;
-          const w = weekOf(Date.parse(m.date));
+          const w = countWeek(Date.parse(m.date));
           if (m.card && w >= lastWeek && (m.geenGehoor || callMove(m)) && !(calls[m.card] || []).includes(w)) calls[m.card] = [...(calls[m.card] || []), w].sort((x, y) => x - y);
           if (!b.since || Date.parse(m.date) > Date.parse(b.since)) b.since = m.date;
         }

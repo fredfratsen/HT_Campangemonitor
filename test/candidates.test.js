@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCandidates, parseLead, parseDesc } from '../server/candidates.js';
 import { atsStats, addStats, KEEP_MS, openQuestions } from '../src/lib/ats.js';
-import { weekOf } from '../src/lib/weeks.js';
+import { countWeek } from '../src/lib/weeks.js';
 
 const memDocs = () => (name, initial) => ({ data: initial(), save() {}, flush() {} });
 const DAY = 864e5;
@@ -61,7 +61,7 @@ test('Geen gehoor counts an attempt but never moves the candidate, also not the 
   assert.equal(c.att, 4);
   assert.equal(c.canUndo, undefined);
   assert.equal(c.undo, null, 'nothing to undo: nothing moved');
-  assert.deepEqual(c.calls, [weekOf(Date.now())]);
+  assert.deepEqual(c.calls, [countWeek(Date.now())]);
   ats.act(kim, id, { kind: 'move', to: 'nb' });
   assert.equal(ats.get(id).stage, 'nb', 'the recruiter moves them');
 });
@@ -106,12 +106,12 @@ test('four weeks after Afgewezen or Aangenomen, or without any action, only anon
   assert.equal(ats.anon().length, 2);
   assert.ok(ats.anon().every(a => !('name' in a) && !('phone' in a)), 'no personal data');
   const s = atsStats(ats.all(), ats.anon(), t)['t-b1-kok'];
-  assert.equal(s.weeks[weekOf(t)].nieuw, 3, 'still counted');
-  assert.deepEqual(s.weeks[weekOf(t)].reasons, { 'Geen interesse': 1 });
+  assert.equal(s.weeks[countWeek(t)].nieuw, 3, 'still counted');
+  assert.deepEqual(s.weeks[countWeek(t)].reasons, { 'Geen interesse': 1 });
 });
 
 test('the numbers: per week how far they got, the reasons, and today\'s call list without who was called today', () => {
-  const { ats, key } = setup(), now = Date.now(), w = weekOf(now);
+  const { ats, key } = setup(), now = Date.now(), w = countWeek(now);
   const ids = ['Ann', 'Bas', 'Cas', 'Dirk', 'Eva'].map((n, i) => ats.take(key, { naam: n, telefoon: '06123456' + (10 + i) }, now).cand.id);
   ats.act(kim, ids[1], { kind: 'move', to: 'contact' }, now);
   ats.act(kim, ids[2], { kind: 'move', to: 'contact' }, now);
@@ -158,7 +158,7 @@ test('a Trello description: phone, email and the other lines as answers; without
 });
 
 test('Trello cards onto the board: open stages only, once, with their numbers; the cards are left out from then on', () => {
-  const { ats } = setup(), now = Date.now(), at = now - 10 * DAY, w = weekOf(at);
+  const { ats } = setup(), now = Date.now(), at = now - 10 * DAY, w = countWeek(at);
   const card = (id, stage, list, extra = {}) => ({ card: { id, ...extra }, stage, list, at, name: `Kandidaat ${id}`, desc: `Telefoon: 06123456${id.slice(-2)}` });
   const cards = [card('c01', 'nieuw', 'Nieuwe Sollicitant | Kok', { calls: [w], geenGehoor: new Date(now).toISOString() }), card('c02', 'gesprek', 'Gesprek'),
     card('c03', 'voorgesteld', 'Voorstel'), card('c04', 'overig', 'Niet bereikbaar'), card('c05', 'afgewezen', 'Afgewezen'), card('c06', 'geplaatst', 'Aangenomen')];

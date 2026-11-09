@@ -83,13 +83,14 @@ function board(b, now) {
 
   // Candidates per function per week, from 7 weeks before the feedback week up to today. Recent ones are still in
   // Nieuw or Contactpoging; older ones got further, or were rejected (with a reason). The first one of the feedback
-  // week comes in at the very start of it, so every function has new candidates there, even on Monday morning.
+  // week comes in at the very start of it, so every function has new candidates there, even on Monday morning. They
+  // come in over the week they count for: Saturday to Friday (countWeek in src/lib/weeks.js).
   for (let w = cur - 7; w <= cur; w++) for (const lb of groups) {
     if (lb && quiet[lb.name] && w >= cur - 1) continue;
     const key = [b, lb ? lb.name : '*', w], recent = w >= cur, mon = mondayOf(w);
     for (let i = 0, count = 1 + Math.floor(rnd(...key) * 7); i < count; i++) {
       const created = recent && i === 0 ? mon.getTime()
-        : new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + Math.floor(rnd(...key, i, 'day') * 7), 9 + Math.floor(rnd(...key, i, 'hour') * 9)).getTime();
+        : new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() - 2 + Math.floor(rnd(...key, i, 'day') * 7), 9 + Math.floor(rnd(...key, i, 'hour') * 9)).getTime();
       if (created > now) continue;
       const r = rnd(...key, i, 'list');
       const list = recent ? (r < 0.45 ? 'Nieuw' : r < 0.75 ? 'Contactpoging' : r < 0.9 ? 'Gescreend' : 'Afgewezen')

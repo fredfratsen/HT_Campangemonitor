@@ -15,7 +15,7 @@ import { randomToken, sha256 } from './crypto.js';
 import { normEmail, normPhone } from './blacklist.js';
 import { visibleToClient, STAGE_KEYS, STAGE_RANK, CALL_STAGES, END_STAGES, KEEP_MS, stageName, cleanScreening, screeningMissing } from '../src/lib/ats.js';
 import { REASONS } from '../src/lib/constants.js';
-import { weekOf } from '../src/lib/weeks.js';
+import { countWeek } from '../src/lib/weeks.js';
 
 export class CandidateError extends Error {}
 const fail = msg => { throw new CandidateError(msg); };
@@ -97,7 +97,7 @@ export function createCandidates(docs) {
 
   const mustGet = id => D.cands[id] || fail('Deze kandidaat bestaat niet (meer).');
   const log = (c, by, what, now, extra) => { c.log.unshift({ at: now, by, what, ...extra }); c.lastAt = now; };
-  const callWeek = (c, now) => { const w = weekOf(now); if (!c.calls.includes(w)) c.calls.push(w); };
+  const callWeek = (c, now) => { const w = countWeek(now); if (!c.calls.includes(w)) c.calls.push(w); };
 
   /** A lead for the campaign of key raw. Returns { cand, dup }, or null for an unknown key. */
   function take(raw, body, now = Date.now()) {
@@ -311,7 +311,7 @@ export function createCandidates(docs) {
   function prune(now = Date.now()) {
     const gone = all().filter(c => (c.endedAt ? c.endedAt : c.lastAt) + KEEP_MS < now);
     for (const c of gone) {
-      D.anon.push({ link: c.link, w: weekOf(c.at), reached: c.reached || 0, reason: c.stage === 'afgewezen' ? c.reason : null, calls: c.calls });
+      D.anon.push({ link: c.link, w: countWeek(c.at), reached: c.reached || 0, reason: c.stage === 'afgewezen' ? c.reason : null, calls: c.calls });
       delete D.cands[c.id];
     }
     if (gone.length) f.save();

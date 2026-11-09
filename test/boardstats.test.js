@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { boardStats, boardFunctions, withoutFunction, quickStats, liveCampaign, liveCampaigns, linkKey, cardsOf } from '../src/lib/boardStats.js';
 import { intakeName, stageOf } from '../src/lib/constants.js';
-import { CUR } from '../src/lib/weeks.js';
+import { CUR, countWeek } from '../src/lib/weeks.js';
 import { board, intakeBoard, dayOf, BOARD_ID, KOK, BEDIENING, SPOED, IN, INTAKE_CARD, CARD } from './trello-fixture.js';
 
 const tr = (nieuw, o = {}) => ({ nieuw, gescreend: 0, gesprek: 0, voorgesteld: 0, geplaatst: 0, gebeld: 0, reasons: {}, ...o });
@@ -19,6 +19,20 @@ test('a board counts per campaign: the whole board and each function, by applica
   });
   assert.deepEqual(s[KOK], { minW: CUR, weeks: { [CUR]: tr(3) }, live: { nieuw: 1, contact: 1, gebeld: 0 } }, 'the Informatie list does not count');
   assert.deepEqual(s[BEDIENING].live, { nieuw: 0, contact: 0, gebeld: 0 }, 'archived and rejected cards are not on the call list');
+});
+
+test('a candidate from the weekend counts for the week after: a counting week runs Saturday to Friday', () => {
+  const at = (w, d, h) => { const t = dayOf(w, d); t.setHours(h, 0); return t.getTime(); };
+  assert.equal(countWeek(at(CUR - 1, 4, 23)), CUR - 1, 'Friday evening: still that week');
+  assert.equal(countWeek(at(CUR - 1, 5, 0)), CUR, 'Saturday: the week after');
+  assert.equal(countWeek(at(CUR - 1, 6, 23)), CUR, 'Sunday: the week after');
+  assert.equal(countWeek(at(CUR, 0, 0)), CUR, 'Monday');
+  const bd = board(), sat = bd.cards.find(c => c.id === CARD.kokNew);
+  sat.customFieldItems = [{ id: 'cfi9', idCustomField: bd.customFields.find(f => f.name === 'Sollicitatiedatum').id, value: { date: new Date(at(CUR - 1, 5, 10)).toISOString() } }];
+  sat.calls = [countWeek(at(CUR - 1, 6, 11))];
+  const s = boardStats(bd)[KOK];
+  assert.equal(s.weeks[CUR - 1], undefined, 'last week asks no feedback because of the weekend');
+  assert.deepEqual(s.weeks[CUR], tr(3, { gebeld: 1 }));
 });
 
 test('a card with a ‘Geen gehoor’ from today is off today\'s call list until midnight, counted as called', () => {
