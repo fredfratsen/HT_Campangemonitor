@@ -68,7 +68,8 @@ have *Eigen klanten bekijken* instead, see the last point)
 - **Campagnes**: all active campaigns with status, client and vacancy, recruiter, candidates, quality and average
   quality. Filter by status; sort by priority, lowest quality, fewest candidates or client.
 - **Campaign detail**: candidates and quality per week, the Trello pipeline, rejection reasons, and a log of
-  campaign changes (ad, audience, budget, vacancy text, ...). With the right *Monitorstatus en updates bijhouden*
+  campaign changes (ad, audience, budget, vacancy text, ...); a recorded change can be corrected afterwards with
+  *Aanpassen* (type and text). With the right *Monitorstatus en updates bijhouden*
   you set the campaign to *Check* or *In afwachting van klant*, pick a **Controle in x dagen** with a change (see
   [Monitor status](#monitor-status-and-health-rules)), and write an **update for the recruiter**. The
   recruiter sees it on the campaign and in their weekly feedback, and gets a notification under Meldingen. The
@@ -85,7 +86,9 @@ have *Eigen klanten bekijken* instead, see the last point)
   log.
 - **Vraag stellen** on a campaign (right: *Vragen stellen over campagnes*): send a question to the campaign's
   Recruitment Marketeer and/or recruiter. They answer it under Meldingen, and the answer comes back there too.
-- **Feedback klant**: record the client's feedback, separately from the recruiter's.
+- **Feedback klant**: record the client's feedback, separately from the recruiter's. Saved feedback can still be
+  changed afterwards, for when something was forgotten: click a campaign with ✓ in Feedback klant (emptying it and
+  saving removes it), or *Aanpassen* under *Klant* on the campaign page, for this week and last week.
 - **Historie & analyse**: totals, averages and changes over past weeks.
 - **Health-regels**: the rules that put a campaign on *Actie nodig*.
 - **Own clients** (right: *Eigen klanten bekijken*): the same screens, but Weekoverzicht, Campagnes and Feedback klant
@@ -180,6 +183,13 @@ all; Blacklist, under Dev with Health-regels: right *Blacklist raadplegen*; recr
   set the **address that gets a mail about every new report** (empty: no mail), send a test mail, and see whether
   the last mail went out. The link in the mail (`/#ideeen`) opens the board. Mail goes through the mail server under
   Integraties.
+- **Reacties**: under a report, the reporter and whoever has *Bugs en ideeën afhandelen* write reactions to each
+  other (*Reageren*, on the card here or in the panel), for example to ask which restaurant or step. Each new reaction
+  goes as a notification under Meldingen to the reporter and everyone who reacted before (not to whoever wrote it);
+  the notification opens the report. By mail it goes to the reporter's login address when someone else reacts, and to
+  the address set above when the reporter reacts. A card whose reporter reacted last shows its 💬 count in amber.
+  Reactions are added by the server after what it has (`replies`, authors stamped), so they can't be changed or
+  removed, also not from an app that hadn't seen the latest one yet.
 - **Mail to the reporter**: when the status of a report becomes *Opgepakt*, *Opgelost* or *Doen we niet* (here or
   in the panel), whoever sent it gets a mail at the address they log in with, with the new status, who set it and
   their own text. Not for *Nieuw*, a +1 or a column, not when you change your own report, not to a deactivated
@@ -188,7 +198,10 @@ all; Blacklist, under Dev with Health-regels: right *Blacklist raadplegen*; recr
   only promises a mail when a mail server is set.
 
 **Everyone**: **Meldingen** (in-app notifications), **Wat is er nieuw** (changelog), **Bug of idee melden**
-(report a bug or idea; it goes to the developer, others can give it a +1), the **Databron** switch between demo
+(report a bug or idea; it goes to the developer, others can give it a +1, and the reporter and the developer can
+react to each other under it. A bug also asks *Gebeurt dit bij een specifiek restaurant? Zo ja, welke?*, a pick from
+the clients or *Nee*; the answer is on the report as `client` and in the mail. Reports on *Opgelost* leave this list
+for everyone; the Dev still finds them on the board under *Afgehandeld*), the **Databron** switch between demo
 data and live Trello data, and **Instellingen** (your account, password, two-factor, sessions and a download of
 your own data).
 
@@ -350,8 +363,9 @@ variable afterwards.
   and rights changes, two-factor changes, API-key changes, exports, anonymisation, rule and assignment changes,
   every blacklist change, every mail the app sends (recipient and kind, not the text), and refused changes.
   Individual feedback edits are not logged.
-- **Mail about bugs and ideas** carries the reporter's name and text to the address the Dev set, through the mail
-  server under Integraties, and a status change on a report goes to the reporter's own address. The privacy notice
+- **Mail about bugs and ideas** carries the reporter's name and text (and a reaction's author and text) to the
+  address the Dev set, through the mail server under Integraties, and a status change or a reaction on a report goes
+  to the reporter's own address. Reactions are in the data export and are pseudonymised with the account. The privacy notice
   says so. Anonymising an account later can't reach mails already sent.
 - **Time in the app** is stored as weekly totals for the whole team, without names.
 - **Right of access.** Everyone can download their own data (Instellingen › Mijn account). The Dev can export

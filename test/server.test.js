@@ -497,6 +497,47 @@ for (const mode of ['server', 'netlify']) describe(mode, () => {
     } finally { await smtp.close(); }
   });
 
+  test('a reaction on a report goes to the reporter, and theirs back, under Meldingen and by mail', async () => {
+    const smtp = fakeSmtp(), port = await smtp.listen();
+    const until = async (ok, what) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 50)); assert.ok(ok(), what); };
+    const docs = async () => (await S.dev.get('/api/state')).data.docs;
+    const patch = async (who, idea) => (await who.api('POST', '/api/state/patch', { patches: [{ doc: 'ideas', set: { [idea.id]: idea } }] })).data;
+    try {
+      const creds = { host: '127.0.0.1', port: String(port), user: 'monitor', pass: 'goed-geheim', from: 'monitor@example.com' };
+      assert.equal((await S.dev.api('PUT', '/api/admin/integrations/smtp', { values: creds })).status, 200);
+      await S.dev.api('PUT', '/api/admin/idea-mail', { to: 'bugs@example.com' });
+
+      const idea = { id: 'm3', type: 'bug', text: 'Live campagnes blijft leeg', client: 'Hotel Zeezicht', page: 'Live campagnes', status: 'nieuw', voters: [] };
+      assert.deepEqual((await patch(S.rec, idea)).rejected, []);
+      await until(() => smtp.mails.length === 1, 'the bug is mailed');
+      assert.match(smtp.mails[0].data, /Bij restaurant: Hotel Zeezicht/);
+
+      const saved = (await docs()).ideas.m3;
+      assert.deepEqual((await patch(S.dev, { ...saved, replies: [{ id: 'r1', by: 'x', at: '13 nov 10:00', text: 'Bij welke functie?' }] })).rejected, []);
+      let d = await docs();
+      assert.equal(d.ideas.m3.replies[0].by, 'Tsjerk');
+      const toRec = Object.values(d.inbox).find(n => n.kind === 'idea' && n.to === 'Test Recruiter');
+      assert.ok(toRec, 'the reporter gets a notification');
+      assert.equal(toRec.idea, 'm3');
+      assert.equal(toRec.title, 'Reactie op je bug');
+      assert.deepEqual(toRec.items, ['Bij welke functie?', 'Melding: Live campagnes blijft leeg']);
+      await until(() => smtp.mails.length === 2, 'and a mail');
+      assert.deepEqual(smtp.mails[1].to, ['tessa@example.com']);
+      assert.match(smtp.mails[1].data, /Subject: Reactie op je bug: Live campagnes blijft leeg/);
+      assert.match(smtp.mails[1].data, /Tsjerk reageerde op je bug/);
+
+      // The reporter answers from an app that hadn't seen the reaction yet: both stay.
+      assert.deepEqual((await patch(S.rec, { ...saved, by: 'Test Recruiter', replies: [{ id: 'r2', by: 'x', at: '13 nov 10:05', text: 'Kok, bij Hotel Zeezicht' }] })).rejected, []);
+      d = await docs();
+      assert.deepEqual(d.ideas.m3.replies.map(r => [r.id, r.by]), [['r1', 'Tsjerk'], ['r2', 'Test Recruiter']]);
+      assert.ok(Object.values(d.inbox).some(n => n.kind === 'idea' && n.to === 'Tsjerk' && n.from === 'Test Recruiter'), 'whoever reacted before hears it');
+      await until(() => smtp.mails.length === 3, 'the Dev address gets a mail');
+      assert.deepEqual(smtp.mails[2].to, ['bugs@example.com']);
+      assert.match(smtp.mails[2].data, /Subject: Reactie van Test Recruiter op bug/);
+      assert.ok(!Object.values(d.inbox).some(n => n.kind === 'idea' && n.to === 'Test Recruiter' && n.from === 'Test Recruiter'), 'nothing to yourself');
+    } finally { await smtp.close(); }
+  });
+
   test('cross-site requests are refused', async () => {
     const r = await S.dev.req('POST', '/api/state/patch', { patches: [] }, { json: true, origin: 'https://evil.example' });
     assert.equal(r.status, 403);

@@ -43,6 +43,7 @@ export default function KlantView({ v }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#FB8915' }} />Feedback vanuit klant <span style={{ fontWeight: '400', color: '#8C8C8A' }}>(optioneel)</span></label>
                   <textarea value={kform.klant ?? ''} onChange={setKformText} rows="5" placeholder="Wat geeft de klant terug over de kandidaten en gesprekken?" style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', lineHeight: '1.5', resize: 'vertical' }} />
+                  {kc.saved ? <span style={{ fontSize: '12px', color: '#1A7A4A' }}>✓ {kc.saved}</span> : null}
                   <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Vorige week van klant: {kc.prevKlant}</span>
                 </div>
               </div>
@@ -50,7 +51,7 @@ export default function KlantView({ v }) {
                 <span className="kbd-hint" style={{ fontSize: '12px', color: '#8C8C8A' }}>Ctrl/⌘ + Enter om op te slaan</span>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <Button variant="ghost" size="lg" onClick={skipKlant}>Geen feedback deze week</Button>
-                  <Button variant="primary" size="lg" onClick={saveKlant}>Opslaan</Button>
+                  <Button variant="primary" size="lg" onClick={saveKlant}>{kc.saved ? 'Wijziging opslaan' : 'Opslaan'}</Button>
                 </div>
               </div>
             </div> : null}

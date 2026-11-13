@@ -191,6 +191,22 @@ test('ideas: only the Dev sorts them into a group (prio) and deletes them; the t
   assert.equal(D('ideas', '5', idea, undefined), '');
 });
 
+test('ideas: the reporter and ideas.manage react on a report; reactions are added, stamped, never removed', () => {
+  const idea = { id: 5, type: 'bug', text: 'x', by: 'Kim', status: 'nieuw', voters: [] };
+  const D = makeAuthorizer(dev, {}), K = makeAuthorizer(kim, {}), M = makeAuthorizer(mkt, {});
+  const r1 = { id: 'r1', by: 'Iemand', at: '13 nov 10:00', text: ' Bij welke klant? ' };
+  assert.equal(K('ideas', '6', undefined, { ...idea, id: 6, replies: [r1] }).value.replies, undefined, 'a new report starts without reactions');
+  assert.deepEqual(D('ideas', '5', idea, { ...idea, replies: [r1] }).value.replies, [{ ...r1, by: 'Tsjerk', text: 'Bij welke klant?' }], 'stamped with who wrote it');
+  const one = { ...idea, replies: [{ ...r1, by: 'Tsjerk' }] }, r2 = { id: 'r2', by: 'Kim', at: '13 nov 10:05', text: 'Hotel Zeezicht' };
+  assert.deepEqual(K('ideas', '5', one, { ...idea, replies: [r2] }).value.replies.map(r => [r.id, r.by]), [['r1', 'Tsjerk'], ['r2', 'Kim']],
+    'the reporter answers from an app that hadn\'t seen the reaction yet: it stays');
+  assert.equal(M('ideas', '5', one, { ...one, replies: [...one.replies, { ...r2, by: 'Danielle' }] }), NO_RIGHT, 'not the reporter, no ideas.manage');
+  assert.equal(K('ideas', '5', one, { ...one, replies: [...one.replies, { ...r2, text: '  ' }] }), NO_RIGHT, 'empty');
+  assert.equal(K('ideas', '5', one, { ...one, replies: [...one.replies, { ...r2, text: 'x'.repeat(2001) }] }), NO_RIGHT, 'too long');
+  assert.deepEqual(K('ideas', '5', one, { ...one, replies: [{ ...one.replies[0], text: 'iets anders' }] }).value.replies, one.replies, 'nobody edits a reaction');
+  assert.deepEqual(K('ideas', '5', one, { ...one, replies: [] }).value.replies, one.replies, 'or removes it');
+});
+
 test('assignments need assign or trello.link, and are stamped', () => {
   const e = { id: 1, client: 'X', from: '', to: 'Kim', at: 1, by: 'Iemand' };
   assert.equal(makeAuthorizer(kim, {})('assignLog', '1', undefined, e), NO_RIGHT);

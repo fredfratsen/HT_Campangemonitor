@@ -82,6 +82,8 @@ export const BL_DEF_MONTHS = 12;
 export const BL_PROPOSAL_DAYS = 30;
 
 export const NEWS = [
+  { id: 45, date: '13 nov', tag: 'Nieuw', title: 'Reageren op bugs en ideeën', text: 'Onder Bug of idee melden kun je nu reageren op een melding. De ontwikkelaar kan je zo iets vragen over je melding, en jij kunt daar weer op antwoorden. Reageert iemand, dan krijg je een melding onder Meldingen (en een mail). Meld je een bug, dan vragen we ook of het bij een specifiek restaurant gebeurt. Opgeloste meldingen staan niet meer in de lijst.' },
+  { id: 44, date: '13 nov', tag: 'Verbeterd', title: 'Klantfeedback en campagnewijzigingen aanpassen', text: 'Iets vergeten? Op de campagnepagina staat nu Aanpassen bij de klantfeedback (van deze en vorige week) en bij elke vastgelegde campagnewijziging. In Feedback klant kun je een campagne met ✓ aanklikken en de feedback daar aanpassen; leegmaken en opslaan verwijdert hem.' },
   { id: 43, date: '9 nov', tag: 'Verbeterd', title: 'Na je feedback telt de rest van de vrijdag voor de week erna', text: 'Heb je je wekelijkse feedback voor deze week ingevuld, dan tellen kandidaten die daarna nog binnenkomen, en belletjes daarna, voor de week erna, net als het weekend. Dat gaat per recruiter: had een campagne vrijdagochtend niets om te beoordelen en vul je je andere campagnes in, dan staat die campagne niet ineens open omdat er vrijdagmiddag nog iemand binnenkomt. Vulde je je feedback al eerder in de week in, dan telt de hele vrijdag voor de week erna.' },
   { id: 42, date: '9 nov', tag: 'Verbeterd', title: 'Het weekend telt mee voor de week erna', text: 'Kandidaten die op zaterdag of zondag binnenkomen, en belletjes in het weekend, tellen nu mee voor de week erna. Een telweek loopt dus van zaterdag tot en met vrijdag. Had je vrijdag geen feedback te geven en komen er in het weekend toch kandidaten binnen, dan staat die week maandag niet ineens open als ontbrekende feedback; die kandidaten horen bij de nieuwe week.' },
   { id: 41, date: '5 nov', tag: 'Nieuw', title: 'N.v.t. bij de wekelijkse feedback', text: 'Valt er voor een campagne deze week niets te beoordelen, kies dan bij Wekelijkse feedback recruiter onder de scores 1 tot 10 de grote knop N.v.t. (of druk op N) en sla op. De campagne telt dan als ingevuld: hij staat niet meer open, er gaat geen herinnering voor uit en hij telt niet mee in de gemiddelde kwaliteit. Schrijf er gerust bij waarom, in Feedback recruitment. Je kunt het later nog veranderen in een score.' },
@@ -129,6 +131,8 @@ export const NEWS = [
 ];
 export const IDEA_TYPES = { bug: ['Bug', '#FDECEA', '#D32F2F', 'Wat ging er mis? Wat deed je, en wat verwachtte je?'], idee: ['Idee', '#E7E7F0', '#1B1B63', 'Wat zou je handig vinden?'], verbetering: ['Verbetering', '#FEF3C7', '#B45309', 'Wat werkt nu onhandig, en hoe zou het beter kunnen?'] };
 export const IDEA_STATUS = { nieuw: ['Nieuw', '#5C5C5A'], opgepakt: ['Opgepakt', '#B45309'], opgelost: ['Opgelost', '#1A7A4A'], niet: ['Doen we niet', '#8C8C8A'] };
+// The longest reaction on a bug or idea (characters); the server refuses longer ones.
+export const REPLY_MAX = 2000;
 // The columns of the Dev's board (Dev › Bugs & ideeën), in order; '' is a report nobody sorted yet. Only the Dev sees them.
 export const IDEA_PRIO = { '': ['Ongesorteerd', '#5C5C5A'], bespreken: ['Te bespreken', '#1B1B63'], p1: ['Prio 1', '#D32F2F'], p2: ['Prio 2', '#B45309'], p3: ['Prio 3', '#8A6D00'], nice: ['Nice-to-have', '#1A7A4A'] };
 // Historie & analyse is parked for now: hidden from the menu and not reachable. Set to true to bring it back.

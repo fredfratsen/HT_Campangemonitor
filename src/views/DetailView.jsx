@@ -3,7 +3,7 @@ import Button from '../components/Button.jsx';
 import { CtlPicker } from '../components/CtlDialog.jsx';
 
 export default function DetailView({ v }) {
-  const { act, addAction, ask, askQuestion, backLabel, canActions, canAsk, canCtl, d, goBack, setActCtl, setActText, setActType, setActWeek, setAskText, setAskTo, showTrello, zone } = v;
+  const { act, actTypes, addAction, ask, askQuestion, backLabel, canActions, canAsk, canCtl, d, goBack, setActCtl, setActText, setActType, setActWeek, setAskText, setAskTo, showTrello, zone } = v;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -124,15 +124,24 @@ export default function DetailView({ v }) {
                       {s.canFill ? <button onClick={s.fill} style={{ border: '1px solid #E4E1DE', background: '#FFFFFF', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', color: '#1D1D1B' }}>Nu invullen</button> : null}
                     </div> : null}
                   {s.expired ? <div style={{ fontSize: '14px', color: '#8C8C8A' }}>Geen feedback ingevuld · vervallen</div> : null}
-                  {s.hasFb ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '12px' }}>
+                  {s.hasFb || s.hasKlant ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '12px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#5C5C5A' }}><span style={{ width: '7px', height: '7px', borderRadius: '2px', background: '#1B1B63' }} />Recruitment</span>
                         <span style={{ fontSize: '14px', lineHeight: '1.5', textWrap: 'pretty' }}>{s.rec}</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '500', letterSpacing: '.06em', textTransform: 'uppercase', color: '#5C5C5A' }}><span style={{ width: '7px', height: '7px', borderRadius: '2px', background: '#FB8915' }} />Klant</span>
-                        <span style={{ fontSize: '14px', lineHeight: '1.5', textWrap: 'pretty', color: s.klantColor }}>{s.klant}</span>
+                        {s.kEditing ? <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <textarea value={s.kEditText} onChange={s.setKEditText} rows="4" autoFocus aria-label={`Feedback klant week ${s.wl}`} style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '8px 10px', fontSize: '14px', lineHeight: '1.5', resize: 'vertical' }} />
+                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Button variant="primary" size="sm" onClick={s.saveKEdit}>Opslaan</Button>
+                              <button onClick={s.cancelKEdit} className="link-btn">Annuleren</button>
+                            </div>
+                          </div>
+                          : <span style={{ fontSize: '14px', lineHeight: '1.5', textWrap: 'pretty', whiteSpace: 'pre-wrap', color: s.klantColor }}>{s.klant}</span>}
+                        {s.hasKlant && s.klantBy && !s.kEditing ? <span style={{ fontSize: '12px', color: '#8C8C8A' }}>door {s.klantBy}</span> : null}
                         {s.canAddKlant ? <button onClick={s.addKlant} style={{ alignSelf: 'flex-start', border: '0', background: 'none', padding: '0', fontSize: '13px', fontWeight: '500', color: '#1B1B63', cursor: 'pointer' }}>+ Klantfeedback toevoegen</button> : null}
+                        {s.canEditKlant ? <button onClick={s.editKlant} style={{ alignSelf: 'flex-start', border: '0', background: 'none', padding: '0', fontSize: '13px', fontWeight: '500', color: '#1B1B63', cursor: 'pointer' }}>Aanpassen</button> : null}
                       </div>
                     </div> : null}
                   {s.hasReasons ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', borderTop: '1px solid #F5F2ED', paddingTop: '10px' }}>
@@ -200,10 +209,23 @@ export default function DetailView({ v }) {
               </div> : null}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {d.actions.map((a, i) => <div key={i} style={{ padding: '10px 0', borderTop: '1px solid #F5F2ED', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Week {a.wl} · {a.type}</span>
-                  <span style={{ fontSize: '13px', lineHeight: '1.45' }}>{a.text}</span>
-                  <span style={{ fontSize: '12px', color: a.effFg }}>{a.eff}</span>
-                  {a.ctl ? <span style={{ fontSize: '12px', fontWeight: '600', color: '#1B1B63' }}>{a.ctl}</span> : null}
+                  {a.editing ? <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Week {a.wl}</span>
+                      <select value={a.eType} onChange={a.setEType} aria-label="Soort wijziging" style={{ height: '38px', border: '1px solid #E4E1DE', borderRadius: '8px', padding: '0 8px', fontSize: '13px', background: '#FFFFFF' }}>
+                        {actTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <textarea value={a.eText} onChange={a.setEText} rows="3" autoFocus aria-label="Wat is er aangepast?" style={{ border: '1px solid #E4E1DE', borderRadius: '8px', padding: '8px 10px', fontSize: '13px', lineHeight: '1.45', resize: 'vertical' }} />
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <Button variant="primary" size="sm" onClick={a.saveEdit}>Opslaan</Button>
+                        <button onClick={a.cancelEdit} className="link-btn">Annuleren</button>
+                      </div>
+                    </div> : <>
+                      <span style={{ fontSize: '12px', color: '#8C8C8A' }}>Week {a.wl} · {a.type}</span>
+                      <span style={{ fontSize: '13px', lineHeight: '1.45', whiteSpace: 'pre-wrap' }}>{a.text}</span>
+                      <span style={{ fontSize: '12px', color: a.effFg }}>{a.eff}</span>
+                      {a.ctl ? <span style={{ fontSize: '12px', fontWeight: '600', color: '#1B1B63' }}>{a.ctl}</span> : null}
+                      {a.canEdit ? <button onClick={a.edit} style={{ alignSelf: 'flex-start', border: '0', background: 'none', padding: '2px 0 0', fontSize: '12px', fontWeight: '500', color: '#1B1B63', cursor: 'pointer' }}>Aanpassen</button> : null}
+                    </>}
                 </div>)}
               {d.noActions ? <div style={{ fontSize: '13px', color: '#8C8C8A', borderTop: '1px solid #F5F2ED', paddingTop: '10px' }}>Nog geen wijzigingen vastgelegd.</div> : null}
             </div>

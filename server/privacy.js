@@ -40,6 +40,7 @@ export function createPrivacy({ accounts, store, audit, blacklist, candidates })
       toewijzingen: Object.values(D.assignLog || {}).filter(e => e.mode !== 'demo' && (eq(names, e.to) || eq(names, e.from) || eq(names, e.by))),
       ideeen: Object.values(D.ideas || {}).filter(i => eq(names, i.by)),
       stemmen: Object.values(D.ideas || {}).filter(i => (i.voters || []).some(v => eq(names, v))).map(i => ({ id: i.id, tekst: i.text })),
+      reacties: Object.values(D.ideas || {}).flatMap(i => (i.replies || []).filter(r => eq(names, r.by)).map(r => ({ melding: i.id, op: r.at, tekst: r.text }))),
       auditlog: await audit.query({ person: a.id, limit: 5000 }),
     };
   }
@@ -69,7 +70,7 @@ export function createPrivacy({ accounts, store, audit, blacklist, candidates })
       for (const doc of ['live.mkt', 'mktDemo']) for (const k of Object.keys(D[doc] || {})) D[doc][k] = sub(D[doc][k]);
       for (const e of Object.values(D.assignLog || {})) { e.from = sub(e.from); e.to = sub(e.to); e.by = sub(e.by); }
       for (const m of Object.values(D.inbox || {})) { m.from = sub(m.from); m.to = sub(m.to); }
-      for (const i of Object.values(D.ideas || {})) { i.by = sub(i.by); if (i.voters) i.voters = i.voters.map(sub); }
+      for (const i of Object.values(D.ideas || {})) { i.by = sub(i.by); if (i.voters) i.voters = i.voters.map(sub); for (const r of i.replies || []) r.by = sub(r.by); }
       if (D.seen) delete D.seen[a.id];
     });
     blacklist.rename(names, pseudonym);

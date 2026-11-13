@@ -5,12 +5,12 @@
 import React, { useEffect, useState } from 'react';
 import Button from '../components/Button.jsx';
 import { api, fmtDateTime } from '../lib/api.js';
-import { IDEA_TYPES, IDEA_STATUS, IDEA_PRIO } from '../lib/constants.js';
+import { IDEA_TYPES, IDEA_STATUS, IDEA_PRIO, REPLY_MAX } from '../lib/constants.js';
 import { Section, Badge, Notice, Err, useAction, input, select, row, linkBtn, dangerBtn } from './settings/ui.jsx';
 
 const OPEN = new Set(['nieuw', 'opgepakt']);
 const FILTERS = [['open', 'Open', x => OPEN.has(x.status)], ['done', 'Afgehandeld', x => !OPEN.has(x.status)], ['all', 'Alles', () => true]];
-const KIND = { bug: 'een bug', idee: 'een idee', verbetering: 'een verbetering', test: 'de testmail', status: 'een nieuwe status' };
+const KIND = { bug: 'een bug', idee: 'een idee', verbetering: 'een verbetering', test: 'de testmail', status: 'een nieuwe status', reactie: 'een reactie' };
 const small = { ...select, width: '100%', height: '30px', fontSize: '12px', padding: '0 6px' };
 
 function MailSettings({ d }) {
@@ -49,26 +49,50 @@ function MailSettings({ d }) {
 
 function Card({ x, d, dragging, onDrag }) {
   const [open, setOpen] = useState(false);
-  const T = IDEA_TYPES[x.type] || ['Melding', '#F5F2ED', '#3C3C3A'], votes = (x.voters || []).length;
+  const [reply, setReply] = useState(null); // the reaction being written, or null
+  const T = IDEA_TYPES[x.type] || ['Melding', '#F5F2ED', '#3C3C3A'], votes = (x.voters || []).length, replies = x.replies || [];
+  // The reporter reacted last: waiting for an answer.
+  const theirTurn = replies.length > 0 && replies[replies.length - 1].by === x.by && x.by !== d.author;
   const remove = () => { if (window.confirm(`Deze melding van ${x.by} verwijderen? Dat kan niet ongedaan worden.`)) { d.removeIdea(x.id); d.flash('Melding verwijderd'); } };
+  const send = () => { if (d.replyIdea(x.id, reply)) setReply(null); };
   return (
-    <article draggable onDragStart={e => { e.dataTransfer.setData('text/plain', String(x.id)); e.dataTransfer.effectAllowed = 'move'; onDrag(x.id); }} onDragEnd={() => onDrag(null)}
-      style={{ background: x.status === 'nieuw' && !x.prio ? '#FFF8E0' : '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px', cursor: 'grab', opacity: dragging ? 0.4 : 1, boxShadow: '0 1px 2px rgba(29,29,27,.04)' }}>
+    <article draggable={reply == null} onDragStart={e => { e.dataTransfer.setData('text/plain', String(x.id)); e.dataTransfer.effectAllowed = 'move'; onDrag(x.id); }} onDragEnd={() => onDrag(null)}
+      style={{ background: x.status === 'nieuw' && !x.prio ? '#FFF8E0' : '#FFFFFF', border: '1px solid #E4E1DE', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px', cursor: reply == null ? 'grab' : 'auto', opacity: dragging ? 0.4 : 1, boxShadow: '0 1px 2px rgba(29,29,27,.04)' }}>
       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 7px', borderRadius: '6px', background: T[1], color: T[2] }}>{T[0]}</span>
-        {votes ? <span style={{ fontSize: '11px', fontWeight: 600, color: '#1B1B63' }}>+{votes}</span> : null}
+        <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {replies.length ? <span title={theirTurn ? `${x.by} reageerde als laatste` : 'Reacties'} style={{ fontSize: '11px', fontWeight: 600, padding: theirTurn ? '1px 6px' : 0, borderRadius: '6px', background: theirTurn ? '#FEF3C7' : 'transparent', color: theirTurn ? '#B45309' : '#5C5C5A' }}>💬 {replies.length}</span> : null}
+          {votes ? <span style={{ fontSize: '11px', fontWeight: 600, color: '#1B1B63' }}>+{votes}</span> : null}
+        </span>
       </div>
       <div style={{ fontSize: '12px', color: '#5C5C5A' }}><b style={{ color: '#1D1D1B' }}>{x.by}</b> · {x.at}</div>
       <div style={{ fontSize: '13px', lineHeight: 1.45, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', ...(open ? {} : { display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }) }}>{x.text}</div>
+      {x.client ? <div style={{ fontSize: '12px', color: '#5C5C5A' }}>Bij <b style={{ color: '#1D1D1B' }}>{x.client}</b></div> : null}
       {open ? <div style={{ fontSize: '12px', color: '#8C8C8A' }}>{x.page ? `Gemeld op ${x.page}` : null}{votes ? `${x.page ? ' · ' : ''}+1 van ${x.voters.join(', ')}` : null}</div> : null}
+      {open && replies.length ? <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderLeft: '2px solid #E4E1DE', paddingLeft: '8px' }}>
+          {replies.map((r, i) => <div key={i} style={{ fontSize: '12px', lineHeight: 1.45 }}>
+              <div style={{ color: '#8C8C8A' }}><b style={{ color: '#3C3C3A' }}>{r.by}</b> · {r.at}</div>
+              <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.text}</div>
+            </div>)}
+        </div> : null}
+      {open && reply != null ? <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <textarea value={reply} onChange={e => setReply(e.target.value)} rows={3} maxLength={REPLY_MAX} placeholder={`Reactie aan ${x.by}`} aria-label="Je reactie" autoFocus style={{ ...input, height: 'auto', padding: '6px 8px', fontSize: '12px', lineHeight: 1.45, resize: 'vertical' }} />
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <Button variant="primary" size="sm" onClick={send}>Versturen</Button>
+            <button onClick={() => setReply(null)} style={{ ...linkBtn, fontSize: '12px' }}>Annuleren</button>
+          </div>
+        </div> : null}
       <select value={x.prio || ''} onChange={e => d.setPrio(x.id, e.target.value)} aria-label="Groep" style={small}>
         {Object.entries(IDEA_PRIO).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}
       </select>
       <select value={x.status} onChange={e => d.setIdea(x.id, { status: e.target.value })} aria-label="Status" style={{ ...small, color: (IDEA_STATUS[x.status] || [])[1] }}>
         {Object.entries(IDEA_STATUS).map(([k, v]) => <option key={k} value={k}>{v[0]}</option>)}
       </select>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-        <button onClick={() => setOpen(!open)} style={{ ...linkBtn, fontSize: '12px' }}>{open ? 'Minder' : 'Meer'}</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={() => { setOpen(!open); if (open) setReply(null); }} style={{ ...linkBtn, fontSize: '12px' }}>{open ? 'Minder' : 'Meer'}</button>
+          {reply == null ? <button onClick={() => { setOpen(true); setReply(''); }} style={{ ...linkBtn, fontSize: '12px' }}>Reageren</button> : null}
+        </span>
         {open ? <button onClick={remove} style={{ ...dangerBtn, fontSize: '12px' }}>Verwijderen</button> : null}
       </div>
     </article>

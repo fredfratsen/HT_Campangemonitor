@@ -5,7 +5,7 @@ import { CUR, FB_START, MON, wl, range, rangeLong, todayLong, stamp, isoDate, mo
 import { checkinQueue, openWeeks, needsFeedback, openByRecruiter, fbDone } from './lib/checkin.js';
 import {
   RENAME, STAT, MONITOR, MONITOR_KEYS, HALT, REMIND_GAP_MS, DEF_RULES, TR_EXTRA, TR_INACTIVE, MON_FIELDS,
-  NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED, REASONS
+  NEWS, IDEA_TYPES, IDEA_STATUS, VIEW_NAMES, ACT_TYPES, HISTORY_ENABLED, REASONS, REPLY_MAX
 } from './lib/constants.js';
 import { STAGES, CALL_STAGES, MAX_ATTEMPTS, STAGE_RANK, SCREENING, stageName, calledToday, cleanScreening, screeningMissing, screeningText, waitingSince, workdaysSince, openQuestions, CLIENT_WAIT_DAYS } from './lib/ats.js';
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
@@ -90,7 +90,8 @@ export default class App extends React.Component {
       hist: { status: 'all', rec: 'all', period: '12' },
       act: { type: 'Advertentie', text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, reply: null, upd: null, fbBar: lsGet(FB_BAR_KEY, false),
       toast: null, asg: { tab: 'open', q: '', sel: {}, rec: '', mkt: '', exp: {}, who: NOBODY }, liveExp: {}, liveFocus: null, mktDemo: null, seen: null, panel: null,
-      assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', filter: 'all' }, trShowInactive: false,
+      assignLog: null, inbox: null, ideas: null, newsSeen: lsGet(NEWS_KEY, 0), idea: { type: 'bug', text: '', client: '', filter: 'all', focus: null }, ideaReply: null, trShowInactive: false,
+      kEdit: null, actEdit: null,
       source: lsGet(SRC_KEY, null), live: null, boardList: null, boardData: {}, sync: { state: 'idle' }, demoCampaigns: null, trIgnored: null, meta: null,
       blSum: null, actieView: lsGet(ACTIE_VIEW_KEY, 'cards'), liveSort: lsGet(LIVE_SORT_KEY, LIVE_SORTS[0][0]), confirm: null, ctlDlg: null,
       atsInfo: null, bord: BORD0, celebrate: null, bugCharge: null
@@ -845,11 +846,16 @@ export default class App extends React.Component {
       const upd = { panel: st.panel === p ? null : p, navOpen: false };
       if (p === 'inbox' && !me.isPreview) upd.inbox = st.inbox.map(n => mineN.includes(n) && !n.read ? { ...n, read: true } : n);
       if (p === 'news') { upd.newsSeen = NEWS[0].id; lsSet(NEWS_KEY, NEWS[0].id); }
+      if (p === 'idea') upd.idea = { ...st.idea, focus: null };
       this.setState(upd);
     };
     const I = st.idea, saveIdeas = ideas => this.setState({ ideas });
     const canSet = me.rights.has('ideas.manage');
-    const shown = st.ideas.filter(x => I.filter === 'all' || (I.filter === 'open' ? (x.status === 'nieuw' || x.status === 'opgepakt') : x.type === I.filter));
+    // Solved reports leave this list (for everyone); the Dev still finds them on the board under Afgehandeld.
+    const listed = st.ideas.filter(x => x.status !== 'opgelost');
+    const shown = listed.filter(x => I.filter === 'all' || (I.filter === 'open' ? (x.status === 'nieuw' || x.status === 'opgepakt') : x.type === I.filter));
+    const restaurants = [...new Set(st.campaigns.filter(c => c.id !== 'none').map(c => c.client))].sort((a, b) => a.localeCompare(b, 'nl'));
+    const R = st.ideaReply;
     const pill = (on) => ({ bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#1D1D1B' : '#5C5C5A', sh: on ? '0 1px 4px rgba(29,29,27,.07)' : 'none' });
     return {
       hasPanel: !!P, isInbox: P === 'inbox', isNews: P === 'news', isIdea: P === 'idea',
@@ -860,7 +866,7 @@ export default class App extends React.Component {
       inbox: {
         unread: mineN.filter(n => !n.read).length, hasUnread: mineN.some(n => !n.read), empty: mineN.length === 0,
         items: mineN.map(n => {
-          const qa = n.kind === 'question' || n.kind === 'answer' || n.kind === 'update' || n.kind === 'klantvraag', isQ = n.kind === 'question', replying = !!st.reply && st.reply.id === n.id;
+          const qa = n.kind === 'question' || n.kind === 'answer' || n.kind === 'update' || n.kind === 'klantvraag' || n.kind === 'idea', isQ = n.kind === 'question', replying = !!st.reply && st.reply.id === n.id;
           return { from: `Van ${n.from}`, at: n.at, title: n.title, bg: n.read ? '#FFFFFF' : '#FFF8E0',
             lines: (n.items || []).map((t, j) => n.kind === 'reminder' ? fbLine(t, feedbackWeek(sentAt(n))) : { t, fg: qa && j === 0 ? '#1D1D1B' : '#5C5C5A' }),
             ...(n.kind === 'blacklist'
@@ -874,28 +880,40 @@ export default class App extends React.Component {
             // About one client (n.client): the whole notification opens it.
             canClient: !!n.client && n.kind !== 'klantvraag', openClient: e => { e.stopPropagation(); this.openClient(n.client, me); },
             // A question of a client: the whole notification opens the candidate on the Bord.
-            canBord: n.kind === 'klantvraag' && !!n.link && this.viewOk('bord', me), openBord: e => { e.stopPropagation(); this.openBordLink(n); } };
+            canBord: n.kind === 'klantvraag' && !!n.link && this.viewOk('bord', me), openBord: e => { e.stopPropagation(); this.openBordLink(n); },
+            // A reaction on a bug or idea: opens it in Bug of idee melden, while it is still listed there.
+            canIdea: n.kind === 'idea' && listed.some(x => x.id === n.idea), openIdea: () => this.showIdea(n.idea) };
         })
       },
       news: { hasNew: st.newsSeen < NEWS[0].id, items: NEWS.map(n => ({ ...n, tagBg: n.tag === 'Nieuw' ? '#FFF8E0' : '#E7E7F0', tagFg: n.tag === 'Nieuw' ? '#B45309' : '#1B1B63' })) },
       idea: {
         text: I.text, placeholder: IDEA_TYPES[I.type][3], page: VIEW_NAMES[st.view] || st.view, empty: shown.length === 0, mailsBack: !!(st.config && st.config.mail),
         types: Object.entries(IDEA_TYPES).map(([k, v]) => ({ label: v[0], ...pill(I.type === k), onClick: () => this.setState(s => ({ idea: { ...s.idea, type: k } })) })),
+        // A bug asks whether it happens at one restaurant: '' not answered yet, '-' no, or the client's name.
+        isBug: I.type === 'bug', client: I.client, restaurants, setClient: e => { const v = e.target.value; this.setState(s => ({ idea: { ...s.idea, client: v } })); },
         filters: [['all', 'Alles'], ['open', 'Open'], ['bug', 'Bugs'], ['idee', 'Ideeën'], ['verbetering', 'Verbeteringen']].map(([k, l]) => ({ label: l,
-          n: k === 'all' ? st.ideas.length : k === 'open' ? st.ideas.filter(x => x.status === 'nieuw' || x.status === 'opgepakt').length : st.ideas.filter(x => x.type === k).length,
+          n: k === 'all' ? listed.length : k === 'open' ? listed.filter(x => x.status === 'nieuw' || x.status === 'opgepakt').length : listed.filter(x => x.type === k).length,
           bg: I.filter === k ? '#F5F2ED' : '#FFFFFF', border: I.filter === k ? '#C0BDB9' : '#E4E1DE', onClick: () => this.setState(s => ({ idea: { ...s.idea, filter: k } })) })),
-        items: shown.map(x => { const T = IDEA_TYPES[x.type], S = IDEA_STATUS[x.status], voted = (x.voters || []).includes(au);
-          return { type: T[0], tBg: T[1], tFg: T[2], by: x.by, at: x.at, page: x.page, text: x.text, status: x.status, statusLabel: S[0], sFg: S[1], canSet, showStatus: !canSet,
-            votes: (x.voters || []).length, vBg: voted ? '#1B1B63' : '#FFFFFF', vBorder: voted ? '#1B1B63' : '#E4E1DE', vFg: voted ? '#FFFFFF' : '#1D1D1B',
+        items: shown.map(x => { const T = IDEA_TYPES[x.type], S = IDEA_STATUS[x.status], voted = (x.voters || []).includes(au), replying = !!R && R.id === x.id;
+          return { id: x.id, type: T[0], tBg: T[1], tFg: T[2], by: x.by, at: x.at, page: x.page, text: x.text, client: x.client || '', status: x.status, statusLabel: S[0], sFg: S[1], canSet, showStatus: !canSet,
+            focus: I.focus === x.id, votes: (x.voters || []).length, vBg: voted ? '#1B1B63' : '#FFFFFF', vBorder: voted ? '#1B1B63' : '#E4E1DE', vFg: voted ? '#FFFFFF' : '#1D1D1B',
             setStatus: e => { const v = e.target.value; saveIdeas(this.state.ideas.map(y => y.id === x.id ? { ...y, status: v } : y)); },
-            vote: () => saveIdeas(this.state.ideas.map(y => y.id !== x.id ? y : { ...y, voters: voted ? y.voters.filter(n => n !== au) : [...(y.voters || []), au] })) }; })
+            vote: () => saveIdeas(this.state.ideas.map(y => y.id !== x.id ? y : { ...y, voters: voted ? y.voters.filter(n => n !== au) : [...(y.voters || []), au] })),
+            // Reactions: the reporter and whoever handles bugs and ideas talk to each other here.
+            replies: (x.replies || []).map(r => ({ by: r.by, at: r.at, text: r.text, mine: r.by === au })),
+            canReply: !me.isPreview && !replying && (canSet || x.by === au), replying, replyText: replying ? R.text : '', replyMax: REPLY_MAX,
+            startReply: () => this.setState({ ideaReply: { id: x.id, text: '' } }), cancelReply: () => this.setState({ ideaReply: null }),
+            setReplyText: e => { const v = e.target.value; this.setState(s => ({ ideaReply: { ...s.ideaReply, text: v } })); },
+            sendReply: () => { if (this.replyIdea(x.id, this.state.ideaReply.text)) this.setState({ ideaReply: null }); } }; })
       },
       setIdeaText: e => { const v = e.target.value; this.setState(s => ({ idea: { ...s.idea, text: v } })); },
       submitIdea: () => {
         if (!I.text.trim()) { this.flash('Beschrijf eerst wat je wilt melden'); return; }
-        saveIdeas([{ id: Date.now(), type: I.type, text: I.text.trim(), by: au, at: stamp(), page: VIEW_NAMES[st.view] || st.view, status: 'nieuw', voters: [] }, ...st.ideas]);
-        this.setState(s => ({ idea: { ...s.idea, text: '', filter: 'all' } })); this.flash('Bedankt, je melding is doorgestuurd naar de ontwikkelaar');
-        if (I.type === 'bug') this.bugCharge();
+        const bug = I.type === 'bug';
+        if (bug && !I.client) { this.flash('Geef aan of het bij een specifiek restaurant gebeurt'); return; }
+        saveIdeas([{ id: Date.now(), type: I.type, text: I.text.trim(), ...(bug && I.client !== '-' ? { client: I.client } : {}), by: au, at: stamp(), page: VIEW_NAMES[st.view] || st.view, status: 'nieuw', voters: [] }, ...st.ideas]);
+        this.setState(s => ({ idea: { ...s.idea, text: '', client: '', filter: 'all' } })); this.flash('Bedankt, je melding is doorgestuurd naar de ontwikkelaar');
+        if (bug) this.bugCharge();
       }
     };
   }
@@ -1077,7 +1095,7 @@ export default class App extends React.Component {
     const ok = this.viewOk(nav.view), view = ok ? nav.view : this.homeView();
     if (!ok) this._navReplace = true; // for example a screen you no longer see after "Bekijk als"
     this.setState(s => ({ view, sel: nav.sel || s.sel, back: nav.back || s.back, navOpen: false,
-      ...(view === 'detail' ? { act: { ...s.act, text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, upd: null } : {}) }), () => window.scrollTo(0, nav.y || 0));
+      ...(view === 'detail' ? { act: { ...s.act, text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, upd: null, kEdit: null, actEdit: null } : {}) }), () => window.scrollTo(0, nav.y || 0));
     if (view === 'checkin') this.enterCheckin();
     if (view === 'klant') this.enterKlant();
     if (view === 'bord') this.enterBord(nav.bord);
@@ -1127,22 +1145,25 @@ export default class App extends React.Component {
   loadKlant(id) { const c = this.state.campaigns.find(x => x.id === id); this.setState({ kform: { id, klant: c.weeks[c.weeks.length - 1].klant || '' } }); }
   saveKlant() {
     const k = this.state.kform; if (!k) return;
-    if (!k.klant.trim()) { this.skipKlant(); return; }
+    // Saved before: it can be changed, or emptied to remove it.
+    const old = this.state.campaigns.find(c => c.id === k.id), had = old.weeks[old.weeks.length - 1].klant || '', text = k.klant.trim();
+    if (!text && !had) { this.skipKlant(); return; }
+    if (text === had) { this.flash('Niets veranderd'); return; }
     const campaigns = this.state.campaigns.map(c => {
       if (c.id !== k.id) return c;
-      const ws = c.weeks.slice(); ws[ws.length - 1] = { ...ws[ws.length - 1], klant: k.klant.trim(), klantBy: this.author() };
+      const ws = c.weeks.slice(); ws[ws.length - 1] = { ...ws[ws.length - 1], klant: text, klantBy: text ? this.author() : undefined };
       return { ...c, weeks: ws };
     });
     const c = campaigns.find(x => x.id === k.id);
     this.setState({ campaigns }, () => {
-      this.flash(`Klantfeedback opgeslagen · ${c.client}`);
+      this.flash(`Klantfeedback ${!text ? 'verwijderd' : had ? 'aangepast' : 'opgeslagen'} · ${c.client}`);
       const next = this.klantQueue().find(x => x.id !== k.id && !x.weeks[x.weeks.length - 1].klant && matchesQ(x, this.state.kQ));
       this.loadKlant(next ? next.id : k.id);
     });
   }
 
   // ── Wekelijkse feedback recruiter ────────────────────────────────────
-  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, upd: null })); window.scrollTo(0, 0); }
+  open(id) { this.setState(s => ({ view: 'detail', sel: id, back: s.view === 'detail' ? s.back : s.view, act: { ...s.act, text: '', w: CUR, ctl: '' }, ask: { to: '', text: '' }, upd: null, kEdit: null, actEdit: null })); window.scrollTo(0, 0); }
   flash(t) { this.setState({ toast: t }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: null }), 2400); }
   /** The items { c, w, late, open } on Wekelijkse feedback recruiter: last week's open ones first (lib/checkin.js). */
   queue(st = this.state) {
@@ -1190,6 +1211,24 @@ export default class App extends React.Component {
     this.setState({ campaigns, act: { ...a, text: '', ctl: '' } });
     if (days) this.putMon(c, 'check', { days, act: id });
     this.flash(`Campagnewijziging vastgelegd${days ? ` · controle ${dayShort(ctlDate(days))}` : ''}`);
+  }
+  /** Saves the edit of a recorded campaign change (Aanpassen under Acties & campagnewijzigingen). */
+  saveActEdit() {
+    const e = this.state.actEdit; if (!e) return;
+    if (!e.text.trim()) { this.flash('Beschrijf eerst de wijziging'); return; }
+    const c = this.state.campaigns.find(x => x.id === e.cid), was = c && c.actions.find(a => a.id === e.id);
+    if (!was || (was.type === e.type && was.text === e.text.trim())) { this.setState({ actEdit: null }); return; }
+    this.setState(s => ({ actEdit: null, campaigns: s.campaigns.map(c => c.id !== e.cid ? c : { ...c, actions: c.actions.map(a => a.id === e.id ? { ...a, type: e.type, text: e.text.trim() } : a) }) }));
+    this.flash('Campagnewijziging aangepast');
+  }
+  /** Saves the edit of a week's client feedback (Aanpassen on the campaign page); empty removes it. */
+  saveKlantEdit() {
+    const k = this.state.kEdit; if (!k) return;
+    const text = k.text.trim(), c = this.state.campaigns.find(x => x.id === k.id), was = c && c.weeks.find(x => x.w === k.w);
+    if (!was || text === (was.klant || '')) { this.setState({ kEdit: null }); return; }
+    this.setState(s => ({ kEdit: null, campaigns: s.campaigns.map(c => c.id !== k.id ? c
+      : { ...c, weeks: c.weeks.map(w => w.w !== k.w ? w : { ...w, klant: text, klantBy: text ? this.author() : undefined }) }) }));
+    this.flash(text ? 'Klantfeedback aangepast' : 'Klantfeedback verwijderd');
   }
   /** Changes this week's entry of campaign id; fn(week, campaign) returns the fields to set. */
   setWeek(id, fn) {
@@ -1481,8 +1520,16 @@ export default class App extends React.Component {
         missing: seeMiss && !fbDone(w) && w.w >= FB_START && !selC.inactive && !halt && fbOpenWeek(w.w) && needsFeedback(w),
         expired: seeMiss && !fbDone(w) && w.w >= FB_START && !selC.inactive && !fbOpenWeek(w.w) && needsFeedback(w),
         missText: `Recruiter heeft voor deze week nog geen feedback ingevuld.${w.w < CUR ? ` Dat kan nog tot en met ${dueTxt(w.w)}.` : ''}`, hasFb: fbDone(w), rec: w.rec || '—',
-        klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A',
+        klant: w.klant || 'Nog geen terugkoppeling van klant', klantColor: w.klant ? '#1D1D1B' : '#8C8C8A', hasKlant: !!w.klant, klantBy: w.klantBy || '',
         canFill: canFb && fbOpenWeek(w.w) && !off, canAddKlant: can('feedback.client') && !w.klant && w.w === CUR && !off, addKlant: () => this.startKlant(selC.id),
+        // Client feedback can still be changed afterwards (something forgotten), this week and last week; empty removes it.
+        ...(() => {
+          const editing = !!st.kEdit && st.kEdit.id === selC.id && st.kEdit.w === w.w;
+          return { canEditKlant: can('feedback.client') && !!w.klant && w.w >= CUR - 1 && !selC.ended && selC.id !== 'none' && !editing, kEditing: editing,
+            kEditText: editing ? st.kEdit.text : '', editKlant: () => this.setState({ kEdit: { id: selC.id, w: w.w, text: w.klant } }),
+            setKEditText: e => { const v = e.target.value; this.setState(s => ({ kEdit: { ...s.kEdit, text: v } })); },
+            saveKEdit: () => this.saveKlantEdit(), cancelKEdit: () => this.setState({ kEdit: null }) };
+        })(),
         note: w.note, hasNote: !!w.note, needsAction: w.needsAction, showTr: !!this.showTrello(),
         upd: w.upd || '', hasUpd: !!w.upd, updBy: w.updBy || 'marketeer',
         monTag: MONITOR[w.mon] ? `${MONITOR[w.mon].label}${w.monBy ? ` · ${w.monBy}` : ''}${w.ctl ? ` · controle ${dayShort(w.ctl)}` : ''}` : '', monFg: MONITOR[w.mon] ? MONITOR[w.mon].fg : '', monBg: MONITOR[w.mon] ? MONITOR[w.mon].bg : '',
@@ -1496,7 +1543,13 @@ export default class App extends React.Component {
         if (e.qB != null && e.qA != null) { const dq = e.qA - e.qB; eff = `Kwaliteit ${nl(e.qB)} → ${nl(e.qA)} · instroom ${nl(e.lB)} → ${nl(e.lA)} p/w`; effFg = dq > 0 ? '#1A7A4A' : dq < 0 ? '#D32F2F' : '#5C5C5A'; }
         // The change the open controle belongs to says when it comes, or came, up again.
         const ctl = dd.ctl && dd.ctl.act === a.id ? `${dd.ctl.due ? 'Controle sinds' : 'Controle op'} ${dayShort(dd.ctl.at)}` : '';
-        return { ...a, wl: wl(a.w), eff, effFg, ctl };
+        // Aanpassen: the type and text of a change already recorded, for when something was forgotten.
+        const E = st.actEdit, editing = !!E && E.cid === selC.id && E.id === a.id;
+        return { ...a, wl: wl(a.w), eff, effFg, ctl, canEdit: can('campaign.changes') && !!a.id && !editing, editing,
+          eType: editing ? E.type : a.type, eText: editing ? E.text : '', edit: () => this.setState({ actEdit: { cid: selC.id, id: a.id, type: a.type, text: a.text } }),
+          setEType: e => { const v = e.target.value; this.setState(s => ({ actEdit: { ...s.actEdit, type: v } })); },
+          setEText: e => { const v = e.target.value; this.setState(s => ({ actEdit: { ...s.actEdit, text: v } })); },
+          saveEdit: () => this.saveActEdit(), cancelEdit: () => this.setState({ actEdit: null }) };
       }),
       noActions: selC.actions.length === 0,
       weekOpts: ws.slice().reverse().map(w => ({ v: w.w, l: 'Week ' + wl(w.w) })),
@@ -1592,7 +1645,8 @@ export default class App extends React.Component {
       const cw = kC.weeks[kC.weeks.length - 1], pw = kC.weeks[kC.weeks.length - 2];
       kc = { client: kC.client, vac: kC.vac, rec: kC.inactive ? 'Niet actief' : kC.rec, leads: cw.leads, qText: cw.q != null ? `kwaliteit ${cw.q}/10` : cw.nvt ? 'kwaliteit n.v.t.' : 'nog geen score',
         recText: cw.rec || (kC.inactive ? 'Niet actief: geen recruiterfeedback.' : this.seesMissing(kC, me) ? `${kC.rec} heeft nog geen feedback ingevuld.` : 'Geen recruiterfeedback deze week.'), recColor: cw.rec ? '#1D1D1B' : '#8C8C8A',
-        prevKlant: pw && pw.klant ? `“${pw.klant}”` : 'geen' };
+        prevKlant: pw && pw.klant ? `“${pw.klant}”` : 'geen',
+        saved: cw.klant ? `Opgeslagen${cw.klantBy ? ` door ${cw.klantBy}` : ''}. Pas het hier aan en sla opnieuw op; leegmaken en opslaan verwijdert het.` : '' };
     }
     return {
       wk: { n: wl(CUR), today: todayLong(), range: rangeLong(CUR), histRange: `Week ${wl(hw[0])} – ${wl(CUR)}` },
@@ -1714,10 +1768,30 @@ export default class App extends React.Component {
   }
   /** Open bugs and ideas the Dev hasn't put in a group yet (Dev › Bugs & ideeën). */
   unsortedIdeas() { return this.state.ideas.filter(x => !x.prio && (x.status === 'nieuw' || x.status === 'opgepakt')).length; }
+  /**
+   * Adds a reaction to bug or idea id. The server notifies the reporter and whoever reacted before (Meldingen, and
+   * mail; see api.js). Returns false when there is nothing to send.
+   */
+  replyIdea(id, text) {
+    const t = (text || '').trim();
+    if (!t) { this.flash('Schrijf eerst je reactie'); return false; }
+    const r = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), by: this.author(), at: stamp(), text: t.slice(0, REPLY_MAX) };
+    this.setState(s => ({ ideas: s.ideas.map(x => x.id === id ? { ...x, replies: [...(x.replies || []), r] } : x) }));
+    this.flash('Reactie verstuurd');
+    return true;
+  }
+  /** Bug of idee melden, with report id in sight (from a notification about a reaction on it). */
+  showIdea(id) {
+    this.setState(s => ({ panel: 'idea', idea: { ...s.idea, filter: 'all', focus: id } }), () => {
+      const el = document.getElementById('idea-' + id);
+      if (el) el.scrollIntoView({ block: 'center' });
+    });
+  }
   devVals() {
     const st = this.state;
     return {
-      ideas: st.ideas, email: st.account.email, isLocal: this.sync.mode === 'local', flash: t => this.flash(t),
+      ideas: st.ideas, email: st.account.email, isLocal: this.sync.mode === 'local', flash: t => this.flash(t), author: this.author(),
+      replyIdea: (id, text) => this.replyIdea(id, text),
       canIntegrations: st.account.rights.includes('integrations'), goIntegrations: () => { this.setState({ settingsTab: 'integrations' }); this.go('settings'); },
       setIdea: (id, p) => this.setState(s => ({ ideas: s.ideas.map(x => x.id === id ? { ...x, ...p } : x) })),
       // '' is Ongesorteerd: the field goes, so the report looks like a new one.

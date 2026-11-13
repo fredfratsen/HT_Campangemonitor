@@ -3,7 +3,7 @@
 // allow, a reason to reject, or { value } to store a corrected value: author fields (recBy, klantBy, by,
 // from) are always set to the person who is logged in, so nobody can save under someone else's name.
 import { rightsOf } from '../src/lib/permissions.js';
-import { DEF_RULES, RENAME, REMIND_GAP_MS, MON_FIELDS as MON_KEYS } from '../src/lib/constants.js';
+import { DEF_RULES, RENAME, REMIND_GAP_MS, REPLY_MAX, MON_FIELDS as MON_KEYS } from '../src/lib/constants.js';
 import { feedbackWeek, fbOpenWeek, wl } from '../src/lib/weeks.js';
 
 export const NO_RIGHT = 'Je hebt geen rechten voor deze wijziging.';
@@ -71,6 +71,19 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
   /** The value v with whoever is logged in as the one who paused or stopped it, when its halt changed from before. */
   const stampHalt = (before, v) => v && v.halt && !same(before && before.halt, v.halt) && v.halt.by !== actor.name ? { ...v, halt: { ...v.halt, by: actor.name } } : v;
   const result = (after, value) => value === after ? '' : { value };
+  /**
+   * Reactions on a bug or idea: the reporter and whoever has ideas.manage add them, one after the other. The new ones
+   * (an id the server doesn't have yet) go after what is stored, with the actor as author, so a reaction sent from an
+   * app that hadn't seen the latest one yet never removes it. Returns the replies to store, or a reason.
+   */
+  function replies(before, after) {
+    const old = before.replies || [], ids = new Set(old.map(r => String(r.id)));
+    const fresh = (after.replies || []).filter(r => r && !ids.has(String(r.id)));
+    if (!fresh.length) return old; // nobody removes or edits a reaction
+    if (before.by !== actor.name && !has('ideas.manage')) return NO_RIGHT;
+    if (fresh.some(r => typeof r.text !== 'string' || !r.text.trim() || r.text.length > REPLY_MAX)) return NO_RIGHT;
+    return [...old, ...fresh.map(r => ({ id: r.id, by: actor.name, at: String(r.at || ''), text: r.text.trim() }))];
+  }
   /** An answer needs no right: it replies to a question that was sent to you, and goes back to who asked it. */
   function isAnswer(a) {
     const q = (docs.inbox || {})[String(a.re)];
@@ -178,15 +191,18 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
       if (changed.length && changed.every(k => k === 'read' || k === 'answered') && mine.has(before.to)) return '';
       return need(has('dev'));
     },
-    // The status is for ideas.manage; the group on the Dev's board (prio) and deleting only for the Dev.
+    // The status is for ideas.manage; the group on the Dev's board (prio) and deleting only for the Dev. Reacting
+    // (replies) is for the reporter and ideas.manage; see replies().
     ideas(key, before, after) {
       if (before === undefined) {
         const value = { ...after, by: actor.name, voters: (after.voters || []).filter(n => n === actor.name) };
         if (!has('ideas.manage')) value.status = 'nieuw';
         if (!has('dev')) delete value.prio;
+        delete value.replies;
         return same(value, after) ? '' : { value };
       }
       if (after === undefined) return need(has('dev'));
+      let value = after;
       for (const k of keysOf(before, after)) {
         if (same(before[k], after[k])) continue;
         if (k === 'voters') {
@@ -194,9 +210,15 @@ export function makeAuthorizer(actor, docs, now = Date.now()) {
           const diff = [...a].filter(n => !b.has(n)).concat([...b].filter(n => !a.has(n)));
           if (diff.every(n => n === actor.name)) continue; // your own +1
         }
+        if (k === 'replies') {
+          const r = replies(before, after);
+          if (typeof r === 'string') return r;
+          value = { ...value, replies: r };
+          continue;
+        }
         if (!has(k === 'prio' ? 'dev' : 'ideas.manage')) return NO_RIGHT;
       }
-      return '';
+      return result(after, value);
     },
     // Each person's "last seen" times: only your own.
     seen: key => need(key === actor.id),

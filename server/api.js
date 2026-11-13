@@ -78,11 +78,14 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     // sees it missed a change and fetches it.
     const news = announceResumed(r.applied, store.docs, req.account.name);
     if (news.length) store.patch(news);
+    const notes = [];
     for (const a of r.applied) {
       if (a.doc !== 'ideas' || !a.after) continue;
-      if (a.before === undefined) mailIdea(req, a.after);
-      else if (a.before.status !== a.after.status && STATUS_LINE[a.after.status]) mailReporter(req, a.after);
+      if (a.before === undefined) { mailIdea(req, a.after); continue; }
+      if (a.before.status !== a.after.status && STATUS_LINE[a.after.status]) mailReporter(req, a.after);
+      for (const x of newReplies(a.before, a.after)) { notes.push(...replyNotes(a.before, a.after, x)); mailReply(req, a.after, x); }
     }
+    if (notes.length) store.patch([{ doc: 'inbox', set: Object.fromEntries(notes.map(n => [String(n.id), n])) }]);
     if (r.rejected.length && Date.now() - (lastDenied.get(req.account.id) || 0) > 60000) {
       lastDenied.set(req.account.id, Date.now());
       audit.log('data.denied', { actor: req.account, details: { wijzigingen: r.rejected.slice(0, 10).map(x => `${x.doc}/${x.key}`) } });
@@ -269,7 +272,44 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     mailer.send({ to, kind: idea.type, subject: `${type} van ${idea.by}: ${ideaLine(idea)}`, text: [
       `${idea.by} meldde een ${type.toLowerCase()} in de Campagnemonitor${idea.page ? `, op het scherm ${idea.page}` : ''}:`, '',
       ideaText(idea), '',
+      ...(idea.client ? [`Bij restaurant: ${idea.client}`, ''] : []),
       `Bekijken en afhandelen: ${linkUrl(req, '/#ideeen')} (Dev › Bugs & ideeën)`,
+    ].join('\n') });
+  }
+  /** The account that reported idea, to mail it at its login address: not yourself, and only with a mail server. */
+  function reporterOf(req, idea) {
+    const by = String(idea.by || '').toLowerCase();
+    const to = accounts.live().find(a => a.status === 'active' && a.email && a.name.toLowerCase() === by);
+    return to && to.id !== req.account.id && secrets.get('smtp') ? to : null;
+  }
+  // Reactions on a report (replies, see authorize.js): the new ones in after, by id.
+  const newReplies = (before, after) => { const ids = new Set((before.replies || []).map(x => String(x.id))); return (after.replies || []).filter(x => !ids.has(String(x.id))); };
+  /** Notifications about reaction x: to the reporter and everyone who reacted before, not to whoever wrote it. */
+  function replyNotes(before, idea, x) {
+    const type = ideaType(idea).toLowerCase();
+    const to = [...new Set([idea.by, ...(before.replies || []).map(y => y.by)])].filter(n => n && n !== x.by);
+    return to.map(n => ({ id: Date.now() + Math.random(), to: n, from: x.by, at: stamp(), read: false, kind: 'idea', idea: idea.id,
+      title: n === idea.by ? `Reactie op je ${type}` : `Reactie op de ${type} van ${idea.by}`, items: [x.text, `Melding: ${ideaLine(idea)}`] }));
+  }
+  /**
+   * A reaction by mail too: to the reporter when someone else reacts (as with a new status), and to the address the
+   * Dev set when the reporter reacts (as with a new report).
+   */
+  function mailReply(req, idea, x) {
+    const type = ideaType(idea).toLowerCase();
+    if (x.by !== idea.by) {
+      const to = reporterOf(req, idea);
+      if (to) mailer.send({ to: to.email, kind: 'reactie', subject: `Reactie op je ${type}: ${ideaLine(idea)}`, text: [
+        `Hoi ${to.name},`, '', `${x.by} reageerde op je ${type} in de Campagnemonitor:`, '', x.text, '',
+        `Je meldde${idea.at ? ` op ${idea.at}` : ''}:`, '', ideaText(idea), '',
+        `Terugreageren kan in de app onder Bug of idee melden: ${linkUrl(req, '/#ideeen')}`,
+      ].join('\n') });
+      return;
+    }
+    const to = accounts.settings.ideaMailTo;
+    if (to) mailer.send({ to, kind: 'reactie', subject: `Reactie van ${x.by} op ${type}: ${ideaLine(idea)}`, text: [
+      `${x.by} reageerde op de ${type} “${ideaLine(idea)}”:`, '', x.text, '',
+      `Bekijken en reageren: ${linkUrl(req, '/#ideeen')} (Dev › Bugs & ideeën)`,
     ].join('\n') });
   }
   // Whoever reported it hears when it is picked up, solved or won't be done, at the address they log in with. Not
@@ -280,9 +320,8 @@ export function apiRouter({ accounts, audit, secrets, store, privacy, trello, bl
     niet: who => `Er is besloten dit niet te doen. Vragen erover? Stel ze gerust aan ${who}.`,
   };
   function mailReporter(req, idea) {
-    const by = String(idea.by || '').toLowerCase();
-    const to = accounts.live().find(a => a.status === 'active' && a.email && a.name.toLowerCase() === by);
-    if (!to || to.id === req.account.id || !secrets.get('smtp')) return;
+    const to = reporterOf(req, idea);
+    if (!to) return;
     const type = ideaType(idea).toLowerCase(), status = IDEA_STATUS[idea.status][0], who = req.account.name;
     mailer.send({ to: to.email, kind: 'status', subject: `Je ${type}: ${status} – ${ideaLine(idea)}`, text: [
       `Hoi ${to.name},`, '',
