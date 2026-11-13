@@ -11,7 +11,7 @@ import { STAGES, CALL_STAGES, MAX_ATTEMPTS, STAGE_RANK, SCREENING, stageName, ca
 import { boardStats, boardFunctions, liveCampaigns, linkKey } from './lib/boardStats.js';
 import { groupByClient, callList, recruiterSees, trelloCreated, LIVE_SORTS } from './lib/clientGroups.js';
 import { clientTarget } from './lib/clientLink.js';
-import { statusToday, nextStatus, msToMidnight } from './lib/liveStatus.js';
+import { statusToday, nextStatus, msToMidnight, afterDone } from './lib/liveStatus.js';
 import { startHalt, waitsForAds, haltLabel, haltLine } from './lib/halt.js';
 import { ofPeople, pickPerson, NOBODY } from './lib/assignFilter.js';
 import { clientFunctions, isOpen, newFns, addWith, withTrelloNames } from './lib/assignFunctions.js';
@@ -1836,11 +1836,13 @@ export default class App extends React.Component {
     // Added: when the client was last assigned to me; without that in the log, when its Trello board was made (that's earlier).
     const added = {};
     log.forEach(e => { if (e.to === me.rec && e.at > (added[e.client] || 0)) added[e.client] = e.at; });
+    // Ermee bezig / Done per client, today only. Anyone can set it, also in Bekijk als (under their own name).
+    const status = this.state.live.status || {};
     // One row per client (Trello board): recruiters call per board. A client with several functions folds open.
     const sort = this.state.liveSort, groups = groupByClient(mine.map(c => {
       // Wekelijkse controle is the marketeer's to-do; for the recruiter it is a campaign without signals, like Check.
-      // noFb: nothing open and this week needs no feedback (no new candidates, not called).
-      const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = callList(c), cw = c.weeks[c.weeks.length - 1], open = openWeeks(c).length > 0;
+      // noFb: nothing open and this week needs no feedback (no new candidates, not called). Done: 0 to call until midnight.
+      const ms = monitor(c, health(c, R)).s, { nieuw, contact, gebeld } = afterDone(callList(c), status[c.boardId || c.client], now), cw = c.weeks[c.weeks.length - 1], open = openWeeks(c).length > 0;
       return { id: c.id, key: c.boardId || c.client, client: c.client, vac: c.vac, mkt: this.mktOf(c), nieuw, contact, gebeld, total: nieuw + contact, open, ats: !!c.ats,
         noFb: !c.halt && !open && !fbDone(cw) && !needsFeedback(cw),
         rank: MONITOR[ms === 'goed' ? 'check' : ms].rank, tag: c.halt ? haltLabel(c.halt) : '', added: added[c.client] || trelloCreated(c.boardId) };
@@ -1855,8 +1857,6 @@ export default class App extends React.Component {
       fbText: off ? 'Niet nodig' : !openN ? '✓ Ingevuld' : openN === n ? 'Open' : `${openN} van ${n} open`, fbOpen: openN > 0, fbFg: off ? '#8C8C8A' : '#1A7A4A',
       fill: e => { e.stopPropagation(); this.startCheckin(openId); }
     });
-    // Ermee bezig / Done per client, today only. Anyone can set it, also in Bekijk als (under their own name).
-    const status = this.state.live.status || {};
     const rows = groups.map(g => {
       const ev = recent[g.client], mineEv = ev && ev.to === me.rec, multi = g.fns.length > 1, on = multi && !!exp[g.key];
       const e = status[g.key], st = statusToday(e, now);
@@ -2089,7 +2089,7 @@ export default class App extends React.Component {
       setClient: e => { const f = list.find(y => y.boardId === e.target.value); if (f) this.openBord(f.id); },
       search: { q: B.q, set: e => this.setBord({ q: e.target.value }), clear: () => this.setBord({ q: '' }),
         text: !q ? '' : foundN ? `${foundN} ${foundN === 1 ? 'kandidaat' : 'kandidaten'} gevonden voor “${B.q.trim()}”` : `Geen kandidaat gevonden voor “${B.q.trim()}” op dit bord` },
-      tabs: fns.map(f => { const n = callList(f); return { id: f.id, label: f.vac, n: n.nieuw + n.contact, on: f.id === c.id, onClick: () => this.openBord(f.id) }; }),
+      tabs: fns.map(f => { const n = afterDone(callList(f), status, now); return { id: f.id, label: f.vac, n: n.nieuw + n.contact, on: f.id === c.id, onClick: () => this.openBord(f.id) }; }),
       status: { client: c.client, st: sNow, stBy: sNow ? status.by : '', stAt: sNow ? hhmm(status.at) : '',
         setSt: () => { const n = nextStatus(sNow); this.setLiveStatus(c.boardId, n); if (n === 'done') this.celebrate(c.client); } },
       celebrate: st.celebrate,

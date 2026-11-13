@@ -10,6 +10,14 @@ export function statusToday(e, now = Date.now()) {
   return new Date(e.at).toDateString() === new Date(now).toDateString() ? e.s : '';
 }
 
+/**
+ * Today's call list n ({ nieuw, contact, gebeld }) of a client with status entry e: once it's Done today, nothing is
+ * left to call until midnight, not even candidates that come in later; gebeld (called today) still shows.
+ */
+export function afterDone(n, e, now = Date.now()) {
+  return statusToday(e, now) === 'done' ? { ...n, nieuw: 0, contact: 0 } : n;
+}
+
 /** What a click on the toggle makes of status s: nothing → bezig → done → nothing. */
 export const nextStatus = s => ORDER[(ORDER.indexOf(s) + 1) % ORDER.length];
 

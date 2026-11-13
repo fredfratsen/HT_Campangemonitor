@@ -22,7 +22,10 @@ Everyone logs in with a personal account. What you see and can do depends on you
   always the same size; who set it and when shows on hover. The colour covers the client and all its functions, so colleagues who help out see
   who is on what without messaging each other. Anyone can set it, also through *Bekijk als* (under their own
   name), and it shows up on everyone's screen within a second. It is for today: at midnight every client starts
-  blank again. Stored per Trello board in `live.status`.
+  blank again. Stored per Trello board in `live.status`. **Done** also puts the client's call list on 0 until
+  midnight (*Nieuw bellen*, *Contactpogingen*, *Vandaag te bellen* and the Bord tabs), all functions included, even for
+  cards still in Contactpoging or candidates that come in later that day; *vandaag gebeld* still shows (`afterDone`
+  in `src/lib/liveStatus.js`).
   One row per client (Trello board) with its Recruitment Marketeer and how much feedback is still open; a client
   with several functions folds open to one row per function. Open feedback links straight to the check-in. A card
   that got the Trello button *Geen gehoor* or a *TBA afspraak* today is off the list until midnight, so the numbers

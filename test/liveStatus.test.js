@@ -2,7 +2,7 @@
 // it was set, and the toggle steps through nothing → bezig → done → nothing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { statusToday, nextStatus, msToMidnight } from '../src/lib/liveStatus.js';
+import { statusToday, nextStatus, msToMidnight, afterDone } from '../src/lib/liveStatus.js';
 
 // Local times, like the browser that shows the status.
 const at = (d, h, m = 0, s = 0, ms = 0) => new Date(2026, 9, d, h, m, s, ms).getTime();
@@ -28,6 +28,15 @@ test('the toggle goes nothing → Ermee bezig → Done → nothing', () => {
   assert.equal(nextStatus(''), 'bezig');
   assert.equal(nextStatus('bezig'), 'done');
   assert.equal(nextStatus('done'), '');
+});
+
+test('Done today puts the call list on 0 until midnight; Ermee bezig or an old Done does not', () => {
+  const n = { nieuw: 4, contact: 7, gebeld: 3 }, done = { s: 'done', by: 'Kim', at: at(20, 11) };
+  assert.deepEqual(afterDone(n, done, at(20, 11)), { nieuw: 0, contact: 0, gebeld: 3 }, 'what was called today still shows');
+  assert.deepEqual(afterDone(n, done, at(20, 23, 59, 59, 999)), { nieuw: 0, contact: 0, gebeld: 3 }, 'new candidates later that day too');
+  assert.deepEqual(afterDone(n, done, at(21, 0, 0)), n, 'from midnight on everything counts again');
+  assert.deepEqual(afterDone(n, { ...done, s: 'bezig' }, at(20, 12)), n, 'Ermee bezig keeps the numbers');
+  assert.deepEqual(afterDone(n, undefined, at(20, 12)), n);
 });
 
 test('time to the next midnight, for clearing the colours while the screen is open', () => {
