@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../WenC_Klantportaal"
+		},
+		{
+			"path": "../HT_Ad-studio"
+		},
+		{
+			"path": "../WC_monorepo"
+		}
+	],
+	"settings": {}
+}
