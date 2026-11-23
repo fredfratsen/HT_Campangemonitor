@@ -4,5 +4,6 @@ import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/app.css';
 import App from './App.jsx';
+import OutdatedNotice from './components/OutdatedNotice.jsx';
 
-createRoot(document.getElementById('root')).render(<App startView="week" showTrello />);
+createRoot(document.getElementById('root')).render(<><App startView="week" showTrello /><OutdatedNotice /></>);
